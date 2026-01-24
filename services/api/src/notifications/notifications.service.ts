@@ -4,13 +4,21 @@ import { Injectable } from '@nestjs/common';
 export class NotificationsService {
   // Internal service methods (not REST endpoints)
 
-  async notifyUser(userId: string, message: string, data: Record<string, unknown>) {
+  async notifyUser(
+    userId: string,
+    message: string,
+    _data: Record<string, unknown>,
+  ) {
     // TODO: Send push notification to user
     // Via Firebase/OneSignal
     console.log(`Notify user ${userId}: ${message}`);
   }
 
-  async notifySeller(sellerId: string, message: string, data: Record<string, unknown>) {
+  async notifySeller(
+    sellerId: string,
+    message: string,
+    _data: Record<string, unknown>,
+  ) {
     // TODO: Send push notification to seller
     // Via Firebase/OneSignal
     console.log(`Notify seller ${sellerId}: ${message}`);

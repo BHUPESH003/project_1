@@ -1,20 +1,34 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
+import { UserRole } from '@repo/types';
+import { GetOrdersDto } from './dto/get-orders.dto';
+import { ReassignSellerDto } from './dto/reassign-seller.dto';
+import { ReassignDeliveryDto } from './dto/reassign-delivery.dto';
+import { CancelOrderDto } from './dto/cancel-order.dto';
 
 /**
  * Admin Controller - MVP Scope
- * 
+ *
  * API Contract v1 endpoints:
  * - GET /v1/admin/orders (view all orders)
  * - POST /v1/admin/orders/:id/reassign-seller (manual seller reassignment)
  * - POST /v1/admin/orders/:id/reassign-delivery (manual delivery reassignment)
  * - POST /v1/admin/orders/:id/cancel (cancel/refund order)
- * 
+ *
  * Purpose:
  * - Operational oversight
  * - Manual intervention for failed states
  * - Crisis management
- * 
+ *
  * Removed:
  * - getDashboard() - Not in API contract, analytics not in MVP
  * - getStatistics() - Not in API contract, analytics not in MVP
@@ -29,13 +43,13 @@ export class AdminController {
    * GET /v1/admin/orders
    * View all orders with filters
    * Purpose: Operational oversight
-   * TODO: Add query params for status, date range filters
+   * Requires ADMIN role
    */
   @Get('orders')
-  getOrders(
-    // TODO: Use @Query decorator for filters
-  ) {
-    return this.adminService.getOrders();
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  getOrders(@Query() query: GetOrdersDto) {
+    return this.adminService.getOrders(query);
   }
 
   /**
@@ -43,9 +57,15 @@ export class AdminController {
    * Manually reassign seller to order
    * Purpose: Handle seller rejection or unavailability
    * Payload: { seller_id }
+   * Requires ADMIN role
    */
   @Post('orders/:id/reassign-seller')
-  reassignSeller(@Param('id') id: string, @Body() reassignDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  reassignSeller(
+    @Param('id') id: string,
+    @Body() reassignDto: ReassignSellerDto,
+  ) {
     return this.adminService.reassignSeller(id, reassignDto);
   }
 
@@ -54,9 +74,15 @@ export class AdminController {
    * Manually reassign delivery partner
    * Purpose: Handle delivery failures
    * Payload: { provider, tracking_id }
+   * Requires ADMIN role
    */
   @Post('orders/:id/reassign-delivery')
-  reassignDelivery(@Param('id') id: string, @Body() deliveryDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  reassignDelivery(
+    @Param('id') id: string,
+    @Body() deliveryDto: ReassignDeliveryDto,
+  ) {
     return this.adminService.reassignDelivery(id, deliveryDto);
   }
 
@@ -65,9 +91,12 @@ export class AdminController {
    * Cancel order and process refund
    * Purpose: Handle escalations, quality issues
    * Payload: { reason, refund_amount }
+   * Requires ADMIN role
    */
   @Post('orders/:id/cancel')
-  cancelOrder(@Param('id') id: string, @Body() cancelDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  cancelOrder(@Param('id') id: string, @Body() cancelDto: CancelOrderDto) {
     return this.adminService.cancelOrder(id, cancelDto);
   }
 

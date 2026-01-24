@@ -3,18 +3,18 @@ import { DeliveryService } from './delivery.service';
 
 /**
  * Delivery Controller - MVP Scope (INTERNAL ONLY)
- * 
+ *
  * API Contract v1 endpoints:
  * - POST /v1/internal/delivery/assign (assign delivery to order)
  * - POST /v1/internal/delivery/webhook (delivery status updates)
- * 
+ *
  * Purpose:
  * - Integration with third-party delivery aggregators
  * - NOT exposed to user or seller apps
  * - Internal system-to-system communication
- * 
+ *
  * Delivery is triggered automatically when seller marks "ready for pickup"
- * 
+ *
  * Removed:
  * - All generic CRUD operations
  * - Public endpoints

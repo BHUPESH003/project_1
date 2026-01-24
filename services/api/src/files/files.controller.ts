@@ -1,23 +1,23 @@
-import { Controller, Post, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post } from '@nestjs/common';
 import { FilesService } from './files.service';
 
 /**
  * Files Controller - MVP Scope
- * 
+ *
  * ⚠️ NO FILE ENDPOINTS IN API CONTRACT v1
- * 
+ *
  * File handling in MVP:
  * - User uploads file during order creation
  * - File URL is part of order_payload
  * - File storage handled by external service (S3/CloudFront)
- * 
+ *
  * This module may handle:
  * - Presigned URL generation (internal)
  * - File validation (internal)
  * - Temporary storage coordination
- * 
+ *
  * NOT exposed as public CRUD API
- * 
+ *
  * Removed:
  * - All public file CRUD operations
  * - File listing (privacy concern)
@@ -61,7 +61,7 @@ export class FilesController {
  * A: YES
  *    - getPresignedUrl() - Enables secure file upload
  *    - validateFile() - Ensures order quality and security
- * 
+ *
  * Note: These are internal coordination endpoints, not in API Contract v1
  * May be moved to order flow directly in future
  */

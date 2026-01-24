@@ -1,31 +1,56 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
+import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
+import { UserRole } from '@repo/types';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { SelectSellerDto } from './dto/select-seller.dto';
+import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
+import { ConfirmOrderDto } from './dto/confirm-order.dto';
+import { RejectOrderDto } from './dto/reject-order.dto';
+import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
 
 /**
  * Orders Controller - MVP Scope
- * 
+ *
  * API Contract v1 endpoints (USER APP):
  * - POST /v1/orders (create draft order)
  * - POST /v1/orders/:id/select-seller (assign seller to order)
  * - POST /v1/orders/:id/delivery-quote (get delivery pricing)
  * - POST /v1/orders/:id/confirm (confirm & pay)
  * - GET /v1/orders/:id (track order)
- * 
+ *
  * API Contract v1 endpoints (SELLER APP):
  * - GET /v1/seller/orders (list incoming/historical orders)
  * - POST /v1/seller/orders/:id/accept (seller accepts order)
  * - POST /v1/seller/orders/:id/reject (seller rejects order)
  * - POST /v1/seller/orders/:id/ready (mark ready for pickup)
- * 
+ *
  * Order State Machine:
- * CREATED → SELLER_SELECTED → PAID → SELLER_ACCEPTED → PREPARING → 
+ * CREATED → SELLER_SELECTED → PAID → SELLER_ACCEPTED → PREPARING →
  * READY_FOR_PICKUP → PICKED_UP → DELIVERED
- * 
+ *
  * Removed:
  * - Generic update() - State changes must follow state machine
  * - Generic delete() - Orders never deleted, only cancelled via admin
  * - findAll() without filters - Too broad, violates role-based access
  */
+@ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
@@ -37,7 +62,14 @@ export class OrdersController {
    * Response: { order_id, status: "CREATED" }
    */
   @Post()
-  create(@Body() createOrderDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new draft order', description: 'Creates a draft order with CREATED status. Requires USER role.' })
+  @ApiResponse({ status: 201, description: 'Order created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  create(@Body() createOrderDto: CreateOrderDto) {
     return this.ordersService.create(createOrderDto);
   }
 
@@ -47,6 +79,14 @@ export class OrdersController {
    * Returns: { order_id, status, seller: {...}, delivery: {...} }
    */
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER, UserRole.SELLER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get order details', description: 'Retrieves order details for tracking. Available to USER, SELLER, and ADMIN roles.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order details retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
   }
@@ -58,7 +98,16 @@ export class OrdersController {
    * Transitions: CREATED → SELLER_SELECTED
    */
   @Post(':id/select-seller')
-  selectSeller(@Param('id') id: string, @Body() sellerDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Select seller for order', description: 'Assigns a seller to the order. Transitions order from CREATED to SELLER_SELECTED status.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Seller selected successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order or seller not found' })
+  selectSeller(@Param('id') id: string, @Body() sellerDto: SelectSellerDto) {
     return this.ordersService.selectSeller(id, sellerDto);
   }
 
@@ -69,7 +118,19 @@ export class OrdersController {
    * Response: { delivery_fee, provider }
    */
   @Post(':id/delivery-quote')
-  getDeliveryQuote(@Param('id') id: string, @Body() locationDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get delivery quote', description: 'Calculates delivery pricing for the order based on drop location.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Delivery quote retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  getDeliveryQuote(
+    @Param('id') id: string,
+    @Body() locationDto: DeliveryQuoteDto,
+  ) {
     return this.ordersService.getDeliveryQuote(id, locationDto);
   }
 
@@ -80,7 +141,16 @@ export class OrdersController {
    * Transitions: SELLER_SELECTED → PAID
    */
   @Post(':id/confirm')
-  confirmOrder(@Param('id') id: string, @Body() paymentDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm and pay for order', description: 'Confirms the order and processes payment. Transitions order from SELLER_SELECTED to PAID status.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order confirmed and payment processed' })
+  @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  confirmOrder(@Param('id') id: string, @Body() paymentDto: ConfirmOrderDto) {
     return this.ordersService.confirmOrder(id, paymentDto);
   }
 
@@ -98,10 +168,15 @@ export class OrdersController {
    * Query params: status (PENDING, COMPLETED, etc.)
    */
   @Get('seller/orders')
-  getSellerOrders(
-    // TODO: Use @Query decorator for status filter
-  ) {
-    return this.ordersService.getSellerOrders();
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List seller orders', description: 'Retrieves list of orders for the authenticated seller. Can be filtered by status.' })
+  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED', 'CANCELLED'], description: 'Filter by order status' })
+  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getSellerOrders(@Query() query: GetSellerOrdersDto) {
+    return this.ordersService.getSellerOrders(query);
   }
 
   /**
@@ -110,6 +185,15 @@ export class OrdersController {
    * Transitions: PAID → SELLER_ACCEPTED
    */
   @Post('seller/orders/:id/accept')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Accept order', description: 'Seller accepts the order. Transitions order from PAID to SELLER_ACCEPTED status.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order accepted successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid state transition' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
   acceptOrder(@Param('id') id: string) {
     return this.ordersService.acceptOrder(id);
   }
@@ -121,7 +205,16 @@ export class OrdersController {
    * Transitions: PAID → SELLER_REJECTED (failure state)
    */
   @Post('seller/orders/:id/reject')
-  rejectOrder(@Param('id') id: string, @Body() rejectDto: Record<string, unknown>) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reject order', description: 'Seller rejects the order. Transitions order from PAID to SELLER_REJECTED status.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order rejected successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid state transition' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  rejectOrder(@Param('id') id: string, @Body() rejectDto: RejectOrderDto) {
     return this.ordersService.rejectOrder(id, rejectDto);
   }
 
@@ -131,6 +224,15 @@ export class OrdersController {
    * Transitions: PREPARING → READY_FOR_PICKUP
    */
   @Post('seller/orders/:id/ready')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark order ready for pickup', description: 'Seller marks the order as ready for pickup. Transitions order from PREPARING to READY_FOR_PICKUP status.' })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order marked as ready for pickup' })
+  @ApiResponse({ status: 400, description: 'Invalid state transition' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
   markReady(@Param('id') id: string) {
     return this.ordersService.markReady(id);
   }

@@ -3,23 +3,23 @@ import { UsersService } from './users.service';
 
 /**
  * Users Controller - MVP Scope
- * 
+ *
  * ⚠️ NO USER CRUD IN API CONTRACT v1
- * 
+ *
  * Users are created automatically during OTP verification in auth module.
- * 
+ *
  * API Contract v1 does NOT include:
  * - User profile management
  * - User CRUD operations
  * - User listing
- * 
+ *
  * Removed all endpoints:
  * - create() - Users auto-created via auth
  * - findAll() - Not in contract, violates privacy
  * - findOne() - Not needed in MVP
  * - update() - Not needed in MVP
  * - remove() - Dangerous, not in contract
- * 
+ *
  * TODO: In future versions, may add:
  * - GET /v1/users/me (self profile)
  * - PATCH /v1/users/me (update self profile)

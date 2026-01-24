@@ -7,7 +7,18 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ApiResponse, errorResponse } from '@/common/dto/api-response.dto';
 
+/**
+ * HTTP Exception Filter
+ *
+ * Catches all exceptions and formats them in the standard API response format:
+ * {
+ *   "code": number,
+ *   "data": null,
+ *   "message": string
+ * }
+ */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -22,24 +33,47 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+    let message = 'Internal server error';
+    let errorData: unknown = null;
 
-    const errorResponse = {
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-      method: request.method,
-      message: typeof message === 'string' ? message : message,
-    };
+    if (exception instanceof HttpException) {
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
+        const responseObj = exceptionResponse as {
+          message?: string | string[];
+          error?: string;
+          [key: string]: unknown;
+        };
+        if (Array.isArray(responseObj.message)) {
+          message = responseObj.message.join(', ');
+        } else if (responseObj.message) {
+          message = responseObj.message;
+        } else if (responseObj.error) {
+          message = responseObj.error;
+        }
+        // Include additional error details if present
+        errorData = responseObj;
+      }
+    } else if (exception instanceof Error) {
+      message = exception.message;
+    }
+
+    const errorResponseData: ApiResponse<null> = errorResponse(
+      message,
+      status,
+      errorData,
+    );
 
     this.logger.error(
-      `${request.method} ${request.url}`,
+      `${request.method} ${request.url} - ${status} - ${message}`,
       exception instanceof Error ? exception.stack : 'Unknown error',
     );
 
-    response.status(status).json(errorResponse);
+    response.status(status).json(errorResponseData);
   }
 }

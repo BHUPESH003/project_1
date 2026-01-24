@@ -19,8 +19,11 @@ node_modules/
 .env.test.local
 .env.production
 .env.production.local
+.env.dev
+.env.prod
 
-# Keep .env.example files
+# Keep template files (no secrets)
+!env.*.template
 !.env.example
 !**/.env.example
 

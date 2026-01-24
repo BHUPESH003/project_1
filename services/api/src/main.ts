@@ -4,7 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters';
+import { HttpExceptionFilter } from '@/common/filters';
+import { TransformInterceptor } from '@/common/interceptors';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -47,6 +48,10 @@ async function bootstrap() {
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
+  // Global response transform interceptor
+  // Ensures all responses follow the standard format: { code, data, message }
+  app.useGlobalInterceptors(new TransformInterceptor());
+
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('API Documentation')
@@ -55,17 +60,39 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('docs', app, document);
 
   // Graceful shutdown
   app.enableShutdownHooks();
+
+  // Handle graceful shutdown
+  // PrismaService handles cleanup via OnModuleDestroy lifecycle hook
+  process.on('SIGTERM', () => {
+    void (async () => {
+      logger.log('SIGTERM received, shutting down gracefully...');
+      await app.close();
+      process.exit(0);
+    })();
+  });
+
+  process.on('SIGINT', () => {
+    void (async () => {
+      logger.log('SIGINT received, shutting down gracefully...');
+      await app.close();
+      process.exit(0);
+    })();
+  });
 
   // Start server
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);
 
-  logger.log(`🚀 Application is running on: http://localhost:${port}/${apiPrefix}`);
-  logger.log(`📚 Swagger documentation: http://localhost:${port}/${apiPrefix}/docs`);
+  logger.log(
+    `🚀 Application is running on: http://localhost:${port}/${apiPrefix}`,
+  );
+  logger.log(
+    `📚 Swagger documentation: http://localhost:${port}/docs`,
+  );
 }
 
 bootstrap();

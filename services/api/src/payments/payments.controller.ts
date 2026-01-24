@@ -3,19 +3,19 @@ import { PaymentsService } from './payments.service';
 
 /**
  * Payments Controller - MVP Scope (INTERNAL)
- * 
+ *
  * ⚠️ NO STANDALONE PAYMENT ENDPOINTS IN API CONTRACT
- * 
+ *
  * Payment flow is embedded within order flow:
  * - POST /v1/orders/:id/confirm handles payment
- * 
+ *
  * This module handles:
  * - Payment gateway integration (internal)
  * - Payment webhooks (internal)
  * - Payment verification (internal)
- * 
+ *
  * NOT exposed as public API endpoints
- * 
+ *
  * Removed:
  * - All public CRUD operations
  * - Payment creation endpoint (embedded in order confirm)

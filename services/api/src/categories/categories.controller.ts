@@ -3,19 +3,19 @@ import { CategoriesService } from './categories.service';
 
 /**
  * Categories Controller - MVP Scope
- * 
+ *
  * API Contract v1 endpoint:
  * - GET /v1/categories (read-only, public)
- * 
+ *
  * Returns static category list with status (ACTIVE / COMING_SOON)
  * Only "Printing" is ACTIVE in MVP
- * 
+ *
  * Removed:
  * - create() - Categories managed by admin/config, not via API
  * - update() - No dynamic category updates in MVP
  * - remove() - Categories never deleted, only status changed
  * - findOne() - Not needed, list is small and static
- * 
+ *
  * Categories are:
  * - Static configuration
  * - No user-created categories
@@ -28,7 +28,7 @@ export class CategoriesController {
   /**
    * GET /v1/categories
    * Returns list of all categories with their status
-   * 
+   *
    * Example response:
    * [
    *   { id: "printing", name: "Printing", status: "ACTIVE" },

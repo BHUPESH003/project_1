@@ -15,7 +15,10 @@ export class UsersService {
   }
 
   update(id: string, updateUserDto: Record<string, unknown>) {
-    return { message: `Update user #${id} - to be implemented`, data: updateUserDto };
+    return {
+      message: `Update user #${id} - to be implemented`,
+      data: updateUserDto,
+    };
   }
 
   remove(id: string) {
