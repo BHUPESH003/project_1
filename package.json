@@ -1,0 +1,9 @@
+{
+  "name": "local-commerce-platform",
+  "private": true,
+  "packageManager": "pnpm@latest",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "clean": "pnpm -r run clean"
+  }
+}
