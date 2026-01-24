@@ -1,4 +1,5 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiHeader, ApiQuery } from '@nestjs/swagger';
 import { DeliveryService } from './delivery.service';
 
 /**
@@ -28,23 +29,59 @@ export class DeliveryController {
    * POST /v1/internal/delivery/assign
    * System assigns delivery partner to order
    * Triggered when order reaches READY_FOR_PICKUP state
-   * Payload: { order_id }
-   * Response: { provider: "DUNZO", tracking_id: "D123" }
+   * 
+   * @param assignDto - Assignment request { orderId }
    */
   @Post('assign')
-  assignDelivery(@Body() assignDto: Record<string, unknown>) {
-    return this.deliveryService.assignDelivery(assignDto);
+  @ApiTags('Delivery (Internal)')
+  @ApiOperation({ 
+    summary: 'Assign delivery to order', 
+    description: 'Assigns a delivery partner to an order. Called automatically when order reaches READY_FOR_PICKUP state.' 
+  })
+  @ApiResponse({ status: 200, description: 'Delivery assigned successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or invalid order state' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  assignDelivery(@Body() assignDto: { orderId: string }) {
+    return this.deliveryService.assignDelivery(assignDto.orderId);
   }
 
   /**
    * POST /v1/internal/delivery/webhook
    * Webhook for delivery partner status updates
-   * Payload: { order_id, status: "PICKED_UP" | "DELIVERED" | etc }
-   * Updates order state accordingly
+   * 
+   * CRITICAL: This endpoint must be idempotent.
+   * Duplicate webhooks are safely ignored.
+   * Order state transitions happen via Order State Machine.
+   * 
+   * @param webhookDto - Webhook payload (provider-specific format)
+   * @param signature - Webhook signature for verification (from header)
+   * @param provider - Delivery provider name (optional, defaults to configured provider)
    */
   @Post('webhook')
-  deliveryWebhook(@Body() webhookDto: Record<string, unknown>) {
-    return this.deliveryService.handleWebhook(webhookDto);
+  @ApiTags('Delivery (Internal)')
+  @ApiOperation({ 
+    summary: 'Delivery provider webhook', 
+    description: 'Receives delivery status updates from delivery provider. Idempotent - duplicate webhooks are safely ignored. Order state transitions via Order State Machine.' 
+  })
+  @ApiHeader({ 
+    name: 'x-uber-signature', 
+    required: false, 
+    description: 'Webhook signature for verification' 
+  })
+  @ApiQuery({ 
+    name: 'provider', 
+    required: false, 
+    description: 'Delivery provider name (e.g., UBER_DIRECT)', 
+    example: 'UBER_DIRECT' 
+  })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid webhook payload' })
+  deliveryWebhook(
+    @Body() webhookDto: Record<string, unknown>,
+    @Headers('x-uber-signature') signature?: string,
+    @Query('provider') provider?: string,
+  ) {
+    return this.deliveryService.handleWebhook(webhookDto, signature, provider);
   }
 
   // ❌ REMOVED: All CRUD operations - delivery is internal service integration

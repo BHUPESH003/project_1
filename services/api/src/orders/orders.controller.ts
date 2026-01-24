@@ -6,6 +6,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -69,8 +70,11 @@ export class OrdersController {
   @ApiResponse({ status: 201, description: 'Order created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  create(@Body() createOrderDto: CreateOrderDto) {
-    return this.ordersService.create(createOrderDto);
+  create(
+    @Body() createOrderDto: CreateOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.create(req.user.id, createOrderDto);
   }
 
   /**
@@ -107,8 +111,12 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order or seller not found' })
-  selectSeller(@Param('id') id: string, @Body() sellerDto: SelectSellerDto) {
-    return this.ordersService.selectSeller(id, sellerDto);
+  selectSeller(
+    @Param('id') id: string,
+    @Body() sellerDto: SelectSellerDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.selectSeller(id, req.user.id, sellerDto);
   }
 
   /**
@@ -130,8 +138,9 @@ export class OrdersController {
   getDeliveryQuote(
     @Param('id') id: string,
     @Body() locationDto: DeliveryQuoteDto,
+    @Request() req: { user: { id: string } },
   ) {
-    return this.ordersService.getDeliveryQuote(id, locationDto);
+    return this.ordersService.getDeliveryQuote(id, req.user.id, locationDto);
   }
 
   /**
@@ -150,8 +159,12 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  confirmOrder(@Param('id') id: string, @Body() paymentDto: ConfirmOrderDto) {
-    return this.ordersService.confirmOrder(id, paymentDto);
+  confirmOrder(
+    @Param('id') id: string,
+    @Body() paymentDto: ConfirmOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.confirmOrder(id, req.user.id, paymentDto);
   }
 
   /**
@@ -175,8 +188,14 @@ export class OrdersController {
   @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED', 'CANCELLED'], description: 'Filter by order status' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getSellerOrders(@Query() query: GetSellerOrdersDto) {
-    return this.ordersService.getSellerOrders(query);
+  getSellerOrders(
+    @Query() query: GetSellerOrdersDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    // Get seller ID from user ID
+    // Note: In Sprint 2, we assume user.id is the seller's userId
+    // In future, we may need to look up seller by userId
+    return this.ordersService.getSellerOrders(req.user.id, query);
   }
 
   /**
@@ -194,8 +213,12 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  acceptOrder(@Param('id') id: string) {
-    return this.ordersService.acceptOrder(id);
+  acceptOrder(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    // Get seller ID from user ID
+    return this.ordersService.acceptOrder(id, req.user.id);
   }
 
   /**
@@ -214,8 +237,13 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  rejectOrder(@Param('id') id: string, @Body() rejectDto: RejectOrderDto) {
-    return this.ordersService.rejectOrder(id, rejectDto);
+  rejectOrder(
+    @Param('id') id: string,
+    @Body() rejectDto: RejectOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    // Get seller ID from user ID
+    return this.ordersService.rejectOrder(id, req.user.id, rejectDto);
   }
 
   /**
@@ -233,8 +261,12 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  markReady(@Param('id') id: string) {
-    return this.ordersService.markReady(id);
+  markReady(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    // Get seller ID from user ID
+    return this.ordersService.markReady(id, req.user.id);
   }
 
   // ❌ REMOVED: findAll() - Too broad, violates role-based filtering

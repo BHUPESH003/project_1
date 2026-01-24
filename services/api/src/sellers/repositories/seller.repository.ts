@@ -114,8 +114,6 @@ export class SellerRepository {
       };
     }
 
-    // TODO: Add location-based filtering when lat/lng provided
-
     const sellers = await this.prismaService.prisma.seller.findMany({
       where,
       include: {
@@ -142,7 +140,30 @@ export class SellerRepository {
         createdAt: 'desc',
       },
     });
-    return sellers.map((s) => this.mapToEntity(s));
+
+    let result = sellers.map((s) => this.mapToEntity(s));
+
+    // If location provided, calculate distance and sort by proximity
+    if (filters?.lat && filters?.lng) {
+      result = result
+        .map((seller) => {
+          const sellerLat = Number(seller.latitude);
+          const sellerLng = Number(seller.longitude);
+          const distance = this.calculateDistance(
+            filters.lat!,
+            filters.lng!,
+            sellerLat,
+            sellerLng,
+          );
+          return {
+            ...seller,
+            distanceKm: distance,
+          };
+        })
+        .sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
+    }
+
+    return result;
   }
 
   /**
@@ -207,6 +228,44 @@ export class SellerRepository {
       data,
     });
     return this.mapToEntity(seller);
+  }
+
+  /**
+   * Calculate distance between two coordinates using Haversine formula
+   * @param lat1 - Latitude of point 1
+   * @param lng1 - Longitude of point 1
+   * @param lat2 - Latitude of point 2
+   * @param lng2 - Longitude of point 2
+   * @returns Distance in kilometers
+   */
+  private calculateDistance(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLng = this.toRadians(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRadians(lat1)) *
+        Math.cos(this.toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    return Math.round(distance * 100) / 100; // Round to 2 decimal places
+  }
+
+  /**
+   * Convert degrees to radians
+   */
+  private toRadians(degrees: number): number {
+    return degrees * (Math.PI / 180);
   }
 
   /**

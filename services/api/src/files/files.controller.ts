@@ -1,5 +1,8 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FilesService } from './files.service';
+import { PresignedUrlDto } from './dto/presigned-url.dto';
+import { ValidateFileDto } from './dto/validate-file.dto';
 
 /**
  * Files Controller - MVP Scope
@@ -34,8 +37,12 @@ export class FilesController {
    * Internal coordination endpoint
    */
   @Post('presigned-url')
-  getPresignedUrl() {
-    return this.filesService.getPresignedUrl();
+  @ApiTags('Files (Internal)')
+  @ApiOperation({ summary: 'Get presigned URL for file upload', description: 'Generates a presigned S3 URL for direct file upload. Used by frontend before order creation.' })
+  @ApiResponse({ status: 200, description: 'Presigned URL generated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid file size or type' })
+  getPresignedUrl(@Body() dto: PresignedUrlDto) {
+    return this.filesService.getPresignedUrl(dto);
   }
 
   /**
@@ -45,8 +52,12 @@ export class FilesController {
    * Internal validation endpoint
    */
   @Post('validate')
-  validateFile() {
-    return this.filesService.validateFile();
+  @ApiTags('Files (Internal)')
+  @ApiOperation({ summary: 'Validate uploaded file', description: 'Validates file after upload. Checks size, type, and creates file record in database.' })
+  @ApiResponse({ status: 200, description: 'File validated successfully' })
+  @ApiResponse({ status: 400, description: 'File validation failed' })
+  validateFile(@Body() dto: ValidateFileDto) {
+    return this.filesService.validateFile(dto);
   }
 
   // ❌ REMOVED: upload() - Direct S3 upload via presigned URLs

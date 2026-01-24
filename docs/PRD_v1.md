@@ -135,21 +135,31 @@ A **category‑agnostic local order coordination platform** that allows:
 
 ### 4.3 Order Creation (Category‑Agnostic)
 
-**Printing Flow Requirements**
+**Category-Specific Requirements**
 
-*   Upload file (PDF / DOC / IMG)
+*   **File upload is OPTIONAL and category-dependent**
     
-*   Auto detect pages
+    *   Printing requires file upload (PDF / DOC / IMG)
+        
+    *   Future categories (e.g., stationery) may not require files
+        
+    *   Category handlers define file requirements
     
-*   User can edit:
+*   **Printing Flow Requirements** (example for first category)
     
-    *   Pages
+    *   Upload file (PDF / DOC / IMG)
         
-    *   Copies
+    *   Auto detect pages
         
-    *   Color/B&W
+    *   User can edit:
         
-*   Optional instructions
+        *   Pages
+            
+        *   Copies
+            
+        *   Color/B&W
+            
+    *   Optional instructions
     
 
 * * *
@@ -364,25 +374,37 @@ A **category‑agnostic local order coordination platform** that allows:
 8\. Order Lifecycle (State Machine)
 -----------------------------------
 
+**Success Flow (Enforced Server-Side)**
+
 nginx
 
 Copy code
 
-`CREATED → PAID → SELLER_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERED`
+`CREATED → SELLER_SELECTED → PAID → SELLER_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERED`
 
-**Failure States**
+**Failure States (Terminal States)**
 
-*   SELLER\_REJECTED
+*   SELLER\_REJECTED (seller rejects order; user can select different seller)
     
-*   DELIVERY\_FAILED
+*   ORDER\_EXPIRED (timeout; enforcement may be implemented later, but state exists)
     
-*   USER\_CANCELLED (before pickup)
+*   DELIVERY\_FAILED (delivery partner fails to complete)
+    
+*   USER\_CANCELLED (user cancels before pickup)
     
 ### Order Flow Rules
 
 *   Sellers going Offline cannot receive new orders
     
 *   Sellers must complete already accepted orders
+    
+*   **Each Order maps to exactly ONE seller** (no multi-seller orders)
+    
+*   **If seller rejects, user can select a different seller** for the same order request (fallback allowed)
+    
+*   **State transitions are guarded** - invalid transitions throw errors
+    
+*   **Order state history is tracked** on every transition
     
 * * *
 
@@ -425,9 +447,15 @@ Copy code
     
 *   Seller analytics
     
-*   Multiple live categories
+*   Multiple live categories (only Printing is live in MVP v1)
     
 *   Subscriptions
+    
+*   **Multi-seller checkout** (placing orders from multiple sellers in one transaction - designed for future, not MVP v1)
+    
+*   **AI-based seller selection or pricing decisions** (explicitly out of scope)
+    
+*   **Category-specific logic via hardcoded if/else** (must use pluggable category handlers)
     
 
 * * *

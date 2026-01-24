@@ -15,6 +15,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { FilesModule } from './files/files.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     FilesModule,
     AdminModule,
     NotificationsModule,
+    QueueModule, // Queue infrastructure (must be loaded early)
   ],
   controllers: [AppController],
   providers: [AppService],

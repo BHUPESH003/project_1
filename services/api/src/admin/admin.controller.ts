@@ -6,6 +6,7 @@ import {
   Body,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
@@ -48,8 +49,11 @@ export class AdminController {
   @Get('orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  getOrders(@Query() query: GetOrdersDto) {
-    return this.adminService.getOrders(query);
+  getOrders(
+    @Query() query: GetOrdersDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.getOrders(query, req.user.id);
   }
 
   /**
@@ -65,8 +69,9 @@ export class AdminController {
   reassignSeller(
     @Param('id') id: string,
     @Body() reassignDto: ReassignSellerDto,
+    @Request() req: { user: { id: string } },
   ) {
-    return this.adminService.reassignSeller(id, reassignDto);
+    return this.adminService.reassignSeller(id, reassignDto, req.user.id);
   }
 
   /**
@@ -82,8 +87,9 @@ export class AdminController {
   reassignDelivery(
     @Param('id') id: string,
     @Body() deliveryDto: ReassignDeliveryDto,
+    @Request() req: { user: { id: string } },
   ) {
-    return this.adminService.reassignDelivery(id, deliveryDto);
+    return this.adminService.reassignDelivery(id, deliveryDto, req.user.id);
   }
 
   /**
@@ -96,8 +102,12 @@ export class AdminController {
   @Post('orders/:id/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  cancelOrder(@Param('id') id: string, @Body() cancelDto: CancelOrderDto) {
-    return this.adminService.cancelOrder(id, cancelDto);
+  cancelOrder(
+    @Param('id') id: string,
+    @Body() cancelDto: CancelOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.cancelOrder(id, cancelDto, req.user.id);
   }
 
   // ❌ REMOVED: getDashboard() - Analytics not in MVP

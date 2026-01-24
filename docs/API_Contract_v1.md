@@ -326,19 +326,23 @@ Copy code
 7️⃣ ORDER STATE MACHINE (ENFORCED)
 ==================================
 
+**Success Flow (Enforced Server-Side)**
+
 nginx
 
 Copy code
 
 `CREATED → SELLER_SELECTED → PAID → SELLER_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERED`
 
-Failure:
+**Failure States (Terminal States)**
 
-*   SELLER\_REJECTED
+*   SELLER\_REJECTED (seller rejects order; user can select different seller)
     
-*   DELIVERY\_FAILED
+*   ORDER\_EXPIRED (timeout; enforcement may be implemented later, but state exists)
     
-*   USER\_CANCELLED (before pickup)
+*   DELIVERY\_FAILED (delivery partner fails to complete)
+    
+*   USER\_CANCELLED (user cancels before pickup)
     
 
 * * *
@@ -355,4 +359,14 @@ Failure:
 *   Categories add data, not new flows
     
 *   Seller availability is authoritative for order routing
+    
+*   **Each Order maps to exactly ONE seller_id** (no Order can have multiple sellers)
+    
+*   **Delivery is optional per order** (Order.delivery_id may be null for pickup-only orders)
+    
+*   **File upload is optional and category-dependent** (categories define their own file requirements)
+    
+*   **Seller actions are role-restricted** (only SELLER role can accept/reject/mark-ready)
+    
+*   **Multi-seller checkout** (future API v2): One checkout request may result in multiple independent Orders (one per seller)
     

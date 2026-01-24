@@ -30,18 +30,25 @@ export class SellersService {
 
     this.logger.log(`Found ${sellers.length} available sellers`);
 
-    return sellers.map((seller) => ({
-      id: seller.id,
-      shopName: seller.shopName,
-      address: seller.address,
-      latitude: seller.latitude,
-      longitude: seller.longitude,
-      pricePerPage: seller.pricePerPage,
-      prepTimeMinutes: seller.prepTimeMinutes,
-      status: seller.status,
-      user: seller.user,
-      categories: seller.categories?.map((sc) => sc.category) ?? [],
-    }));
+    return sellers.map((seller) => {
+      const result: any = {
+        seller_id: seller.id,
+        shop_name: seller.shopName,
+        address: seller.address,
+        price_breakdown: {
+          per_page: seller.pricePerPage ? Number(seller.pricePerPage) : 0,
+        },
+        prep_time_min: seller.prepTimeMinutes,
+        status: seller.status,
+      };
+
+      // Include distance if calculated
+      if ('distanceKm' in seller) {
+        result.distance_km = Math.round((seller as any).distanceKm * 100) / 100;
+      }
+
+      return result;
+    });
   }
 
   /**

@@ -8,6 +8,6 @@ import { AuthModule } from '@/auth/auth.module';
   imports: [AuthModule],
   controllers: [SellersController],
   providers: [SellersService, SellerRepository],
-  exports: [SellersService],
+  exports: [SellersService, SellerRepository], // Export repository for use in OrdersModule
 })
 export class SellersModule {}

@@ -122,7 +122,29 @@ Each module:
 
 *   Order payload is opaque JSON
     
-*   Category logic lives in validation layer, not flow
+*   Category-specific logic is implemented via **pluggable Category Handlers** (not if/else statements)
+    
+*   OrdersService is category-agnostic and calls handler methods
+    
+*   Adding a new category = implement new handler, register in CategoryRegistry
+    
+*   No category-specific if/else logic in core order flow
+
+### 🔹 Order-Seller Relationship
+
+*   **Each Order maps to exactly ONE seller** (Order.seller_id is required, non-nullable)
+    
+*   **No single Order can depend on multiple sellers**
+    
+*   Multi-seller checkout (future) is handled by **splitting** one checkout request into multiple independent Orders
+
+### 🔹 Delivery Responsibility
+
+*   **Delivery is OPTIONAL per order** (Order.delivery_id may be null for pickup-only orders)
+    
+*   **Sellers may handle delivery directly** (self-delivery) OR via platform-coordinated third-party aggregators
+    
+*   Delivery responsibility is determined per-order (not per-seller globally)
     
 
 * * *
@@ -142,15 +164,15 @@ CREATED
 → DELIVERED
 
 
-**Failure States**
+**Failure States (Terminal States)**
 
-*   SELLER\_REJECTED
+*   SELLER\_REJECTED (seller rejects order; user can select different seller)
     
-*   ORDER\_EXPIRED (timeout)
+*   ORDER\_EXPIRED (timeout; enforcement may be implemented later, but state exists)
     
-*   DELIVERY\_FAILED
+*   DELIVERY\_FAILED (delivery partner fails to complete)
     
-*   USER\_CANCELLED (pre‑pickup)
+*   USER\_CANCELLED (user cancels before pickup)
     
 
 No frontend can skip or invent states.
@@ -216,11 +238,15 @@ Use cases:
 
 ### v1 (MVP)
 
-*   Adapter pattern
+*   **Delivery is OPTIONAL per order** (pickup-only orders exist)
+    
+*   **Sellers may handle delivery directly** (self-delivery) OR via platform-coordinated third-party aggregators
+    
+*   Adapter pattern for third-party aggregators
     
 *   One interface, multiple providers
     
-
+    
 scss
 
 Copy code
@@ -308,6 +334,12 @@ No wallet. No split payments.
 *   Inventory management
     
 *   Analytics pipelines
+    
+*   **AI-based seller selection or pricing decisions** (explicitly out of scope for MVP)
+    
+*   **Category-specific if/else logic in core services** (must use Category Handler pattern)
+    
+*   **Multi-seller checkout** (designed for future, not MVP v1)
     
 
 * * *
