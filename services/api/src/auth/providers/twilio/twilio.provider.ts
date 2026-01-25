@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import twilio from 'twilio';
+import { Twilio } from 'twilio';
 import {
   OtpProvider,
   OtpProviderType,
@@ -21,7 +21,7 @@ import {
 @Injectable()
 export class TwilioProvider implements OtpProvider {
   private readonly logger = new Logger(TwilioProvider.name);
-  private client: ReturnType<typeof twilio> | null = null; // Twilio client (lazy initialization)
+  private client: Twilio | null = null; // Twilio client (lazy initialization)
   private fromNumber: string = '';
 
   constructor(private configService: ConfigService) {
@@ -44,7 +44,6 @@ export class TwilioProvider implements OtpProvider {
     const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
     const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
     this.fromNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER', '');
-
     if (!accountSid || !authToken) {
       throw new Error(
         'Twilio configuration missing: TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required',
@@ -57,7 +56,7 @@ export class TwilioProvider implements OtpProvider {
       );
     }
 
-    this.client = twilio(accountSid, authToken);
+    this.client = new Twilio(accountSid, authToken);
     this.logger.log('Twilio provider initialized');
   }
 

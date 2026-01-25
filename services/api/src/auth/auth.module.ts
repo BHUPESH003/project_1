@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpProviderRegistry } from './providers/registry/otp-provider.registry';
 import { TwilioProvider } from './providers/twilio/twilio.provider';
+import { InfobipProvider } from './providers/infobip/infobip.provider';
 import { OtpService } from './services/otp.service';
 import { JwtService } from './services/jwt.service';
 import { OtpRepository } from './repositories/otp.repository';
@@ -57,8 +58,7 @@ import { JWT_CONFIG, getConfigValue } from '@/constants';
     JwtService,
     OtpRepository, // Repository for OTP operations
     OtpProviderRegistry,
-    // Register OTP provider here
-    // To change provider, replace TwilioProvider with your provider
+    // Register OTP providers
     {
       provide: TwilioProvider,
       useFactory: (configService: ConfigService) => {
@@ -66,17 +66,40 @@ import { JWT_CONFIG, getConfigValue } from '@/constants';
       },
       inject: [ConfigService],
     },
-    // Register provider in registry
+    {
+      provide: InfobipProvider,
+      useFactory: (configService: ConfigService) => {
+        return new InfobipProvider(configService);
+      },
+      inject: [ConfigService],
+    },
+    // Register provider in registry based on config
     {
       provide: 'OTP_PROVIDER_REGISTRATION',
       useFactory: (
+        configService: ConfigService,
         registry: OtpProviderRegistry,
         twilioProvider: TwilioProvider,
+        infobipProvider: InfobipProvider,
       ) => {
-        registry.register(twilioProvider);
+        const providerType = configService.get<string>('OTP_PROVIDER', 'twilio').toLowerCase();
+
+        switch (providerType) {
+          case 'twilio':
+            registry.register(twilioProvider);
+            break;
+          case 'infobip':
+            registry.register(infobipProvider);
+            break;
+          default:
+            // Default to Twilio if invalid provider specified
+            registry.register(twilioProvider);
+            break;
+        }
+
         return true;
       },
-      inject: [OtpProviderRegistry, TwilioProvider],
+      inject: [ConfigService, OtpProviderRegistry, TwilioProvider, InfobipProvider],
     },
   ],
   exports: [AuthService, JwtService],

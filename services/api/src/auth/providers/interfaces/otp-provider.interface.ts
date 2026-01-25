@@ -10,6 +10,7 @@
 export enum OtpProviderType {
   TWILIO = 'TWILIO',
   AWS_SNS = 'AWS_SNS',
+  INFOBIP = 'INFOBIP',
   // Add new providers here
 }
 

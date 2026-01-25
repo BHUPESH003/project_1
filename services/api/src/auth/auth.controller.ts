@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 /**
  * Auth Controller - MVP Scope
@@ -35,15 +36,27 @@ export class AuthController {
 
   /**
    * POST /v1/auth/verify-otp
-   * Verifies OTP and returns JWT token
+   * Verifies OTP and returns JWT token pair
    */
   @Post('verify-otp')
-  @ApiOperation({ summary: 'Verify OTP', description: 'Verifies the OTP code and returns a JWT token for authentication. The token is required for protected endpoints.' })
-  @ApiResponse({ status: 200, description: 'OTP verified successfully. Returns JWT token.' })
+  @ApiOperation({ summary: 'Verify OTP', description: 'Verifies the OTP code and returns JWT access and refresh tokens for authentication.' })
+  @ApiResponse({ status: 200, description: 'OTP verified successfully. Returns JWT tokens.' })
   @ApiResponse({ status: 400, description: 'Invalid OTP code or phone number' })
   @ApiResponse({ status: 401, description: 'Invalid or expired OTP code' })
   verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
     return this.authService.verifyOtp(verifyOtpDto);
+  }
+
+  /**
+   * POST /v1/auth/refresh-token
+   * Refreshes access token using refresh token
+   */
+  @Post('refresh-token')
+  @ApiOperation({ summary: 'Refresh Access Token', description: 'Exchanges a valid refresh token for a new access token. Refresh tokens have longer expiration (7 days by default).' })
+  @ApiResponse({ status: 200, description: 'New access token generated successfully.' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshToken(refreshTokenDto.refreshToken);
   }
 
   // ❌ REMOVED: login, register, logout - not in API Contract v1

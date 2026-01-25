@@ -69,13 +69,15 @@ export class AuthService {
   }
 
   /**
-   * Verify OTP and return JWT token
+   * Verify OTP and return JWT token pair
    * @param dto - VerifyOtpDto containing phone and OTP code
-   * @returns JWT token and user info
+   * @returns JWT access token, refresh token, and user info
    */
   async verifyOtp(dto: VerifyOtpDto): Promise<{
-    token: string;
-    expiresIn: number;
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
     user: {
       id: string;
       phone: string;
@@ -102,8 +104,8 @@ export class AuthService {
       this.logger.log(`New user created: ${user.id} (${dto.phone})`);
     }
 
-    // Generate JWT token
-    const tokenResponse = this.jwtService.generateToken(
+    // Generate JWT token pair (access + refresh)
+    const tokenResponse = this.jwtService.generateTokenPair(
       user.id,
       user.phone,
       user.role,
@@ -112,8 +114,53 @@ export class AuthService {
     this.logger.log(`User authenticated: ${user.id} (${dto.phone})`);
 
     return {
-      token: tokenResponse.token,
-      expiresIn: tokenResponse.expiresIn,
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken,
+      accessTokenExpiresIn: tokenResponse.accessTokenExpiresIn,
+      refreshTokenExpiresIn: tokenResponse.refreshTokenExpiresIn,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        role: user.role,
+      },
+    };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   * @param refreshToken - Valid refresh token
+   * @returns New access token and expiration info
+   */
+  async refreshToken(refreshToken: string): Promise<{
+    accessToken: string;
+    accessTokenExpiresIn: number;
+    user: {
+      id: string;
+      phone: string;
+      role: UserRole;
+    };
+  }> {
+    // Verify refresh token
+    const payload = this.jwtService.verifyRefreshToken(refreshToken);
+
+    if (!payload) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Verify user still exists
+    const user = await this.userRepository.findById(payload.sub);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Generate new access token
+    const newAccessToken = this.jwtService.generateAccessTokenFromRefresh(payload);
+
+    this.logger.log(`Access token refreshed for user ${user.id} (${user.phone})`);
+
+    return {
+      accessToken: newAccessToken.token,
+      accessTokenExpiresIn: newAccessToken.expiresIn,
       user: {
         id: user.id,
         phone: user.phone,

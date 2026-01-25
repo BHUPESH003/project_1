@@ -25,6 +25,8 @@ export const OTP_CONFIG = {
 export const JWT_CONFIG = {
   DEFAULT_EXPIRATION_SECONDS: 3600, // 1 hour
   DEFAULT_EXPIRATION_STRING: '3600s', // String format for JWT module
+  DEFAULT_REFRESH_EXPIRATION_SECONDS: 604800, // 7 days
+  DEFAULT_REFRESH_EXPIRATION_STRING: '604800s', // String format for JWT module
 } as const;
 
 /**
