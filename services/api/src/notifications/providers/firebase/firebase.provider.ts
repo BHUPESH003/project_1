@@ -10,8 +10,9 @@
  * - No Firebase-specific fields leak outside this adapter
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as admin from 'firebase-admin';
 import {
   NotificationProvider,
   PushNotificationRequest,
@@ -30,10 +31,21 @@ interface FirebaseConfig {
   apiKey?: string; // Optional for REST API
 }
 
+/**
+ * Firebase Configuration
+ */
+interface FirebaseConfig {
+  projectId: string;
+  privateKey: string;
+  clientEmail: string;
+  apiKey?: string; // Optional for REST API
+}
+
 @Injectable()
-export class FirebaseProvider implements NotificationProvider {
+export class FirebaseProvider implements NotificationProvider, OnModuleInit {
   private readonly logger = new Logger(FirebaseProvider.name);
   private readonly config: FirebaseConfig;
+  private firebaseApp!: admin.app.App;
 
   constructor(private readonly configService: ConfigService) {
     // Load Firebase configuration from environment
@@ -53,6 +65,23 @@ export class FirebaseProvider implements NotificationProvider {
     );
   }
 
+  async onModuleInit() {
+    // Initialize Firebase Admin SDK
+    if (!admin.apps.length) {
+      this.firebaseApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: this.config.projectId,
+          privateKey: this.config.privateKey.replace(/\\n/g, '\n'),
+          clientEmail: this.config.clientEmail,
+        }),
+        projectId: this.config.projectId,
+      });
+      this.logger.log('Firebase Admin SDK initialized successfully');
+    } else {
+      this.firebaseApp = admin.app();
+    }
+  }
+
   getProviderName(): string {
     return 'FIREBASE';
   }
@@ -65,27 +94,37 @@ export class FirebaseProvider implements NotificationProvider {
     );
 
     try {
-      // TODO: Sprint 4 - Integrate with Firebase Admin SDK
-      // For MVP, this is stubbed
-      // const admin = require('firebase-admin');
-      // const message = {
-      //   notification: {
-      //     title: request.title,
-      //     body: request.body,
-      //   },
-      //   data: request.data || {},
-      //   token: await this.getUserFcmToken(request.userId),
-      // };
-      // const response = await admin.messaging().send(message);
+      // Get FCM token for user
+      const fcmToken = await this.getUserFcmToken(request.userId);
+      if (!fcmToken) {
+        this.logger.warn(`No FCM token found for user ${request.userId}`);
+        return {
+          success: false,
+          error: 'No FCM token available for user',
+        };
+      }
 
-      // Stubbed implementation for MVP
+      // Send push notification via Firebase Admin SDK
+      const message: admin.messaging.Message = {
+        notification: {
+          title: request.title,
+          body: request.body,
+        },
+        data: request.data ? Object.fromEntries(
+          Object.entries(request.data).map(([k, v]) => [k, String(v)])
+        ) : {},
+        token: fcmToken,
+      };
+
+      const response = await admin.messaging().send(message);
+
       this.logger.log(
-        `[STUB] Firebase push notification sent to user ${request.userId}: ${request.title} - ${request.body}`,
+        `Firebase push notification sent successfully to user ${request.userId}, messageId: ${response}`,
       );
 
       return {
         success: true,
-        messageId: `firebase-${Date.now()}-${request.userId}`,
+        messageId: response,
       };
     } catch (error) {
       // Log error but don't throw - notifications are non-critical

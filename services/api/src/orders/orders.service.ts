@@ -226,7 +226,7 @@ export class OrdersService {
 
   /**
    * Get delivery quote (USER APP)
-   * Sprint 2: Stubbed pricing logic
+   * Uses real delivery provider APIs for accurate pricing
    */
   async getDeliveryQuote(
     orderId: string,
@@ -264,37 +264,47 @@ export class OrdersService {
       throw new NotFoundException('Seller not found');
     }
 
-    // Sprint 2: Stubbed delivery fee calculation
-    // Future: Use delivery provider to get real quote
-    const sellerLat = Number(seller.latitude);
-    const sellerLng = Number(seller.longitude);
-    const distance = this.calculateDistance(
-      sellerLat,
-      sellerLng,
-      locationDto.dropLocation.lat,
-      locationDto.dropLocation.lng,
-    );
+    // Get real delivery quote from provider
+    try {
+      const quote = await this.deliveryService.getQuote(
+        {
+          latitude: Number(seller.latitude),
+          longitude: Number(seller.longitude),
+          address: seller.address,
+        },
+        {
+          latitude: locationDto.dropLocation.lat,
+          longitude: locationDto.dropLocation.lng,
+          address: locationDto.dropLocation.address || 'Delivery Address',
+        },
+        orderId,
+      );
 
-    // Simple pricing: ₹30 base + ₹5 per km
-    const deliveryFee = Math.max(30, 30 + distance * 5);
+      const deliveryFee = quote.fee;
 
-    // Update order with delivery location
-    await this.orderRepository.update(orderId, {
-      dropLatitude: locationDto.dropLocation.lat,
-      dropLongitude: locationDto.dropLocation.lng,
-      dropAddress: locationDto.dropLocation.address,
-      deliveryFee: deliveryFee,
-    });
+      // Update order with delivery location and fee
+      await this.orderRepository.update(orderId, {
+        dropLatitude: locationDto.dropLocation.lat,
+        dropLongitude: locationDto.dropLocation.lng,
+        dropAddress: locationDto.dropLocation.address,
+        deliveryFee: deliveryFee,
+      });
 
-    this.logger.log(
-      `Delivery quote for order ${orderId}: ₹${deliveryFee} (distance: ${distance}km)`,
-    );
+      this.logger.log(
+        `Real delivery quote for order ${orderId}: ₹${deliveryFee} via ${quote.provider} (${quote.estimatedDurationMinutes}min)`,
+      );
 
-    return {
-      delivery_fee: deliveryFee,
-      provider: 'AUTO', // Sprint 2: Stubbed
-      distance_km: Math.round(distance * 100) / 100,
-    };
+      return {
+        delivery_fee: deliveryFee,
+        provider: quote.provider,
+        distance_km: 0, // Not needed with real quotes
+      };
+    } catch (error) {
+      // If delivery quote fails, surface the error - don't guess pricing
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get delivery quote';
+      this.logger.error(`Failed to get delivery quote for order ${orderId}:`, errorMessage);
+      throw new BadRequestException(`Unable to get delivery pricing: ${errorMessage}`);
+    }
   }
 
   /**

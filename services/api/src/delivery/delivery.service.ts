@@ -160,6 +160,40 @@ export class DeliveryService {
   }
 
   /**
+   * Get delivery quote
+   *
+   * Gets delivery cost estimate from provider.
+   * Used for pricing display before delivery assignment.
+   */
+  async getQuote(
+    pickup: { latitude: number; longitude: number; address: string },
+    drop: { latitude: number; longitude: number; address: string },
+    orderId: string,
+  ): Promise<{ fee: number; provider: string; estimatedDurationMinutes: number }> {
+    // Get default adapter (Uber Direct for MVP)
+    const adapter = this.adapterRegistry.getDefaultAdapter();
+
+    // Request quote from adapter
+    const quoteRequest: DeliveryQuoteRequest = {
+      pickup,
+      drop,
+      orderId,
+    };
+
+    const quote = await adapter.getQuote(quoteRequest);
+
+    this.logger.log(
+      `Delivery quote for order ${orderId}: ₹${quote.estimatedFee} (${quote.estimatedDurationMinutes}min) via ${quote.provider}`,
+    );
+
+    return {
+      fee: quote.estimatedFee,
+      provider: quote.provider,
+      estimatedDurationMinutes: quote.estimatedDurationMinutes,
+    };
+  }
+
+  /**
    * Handle delivery webhook
    *
    * Processes webhook from delivery provider.

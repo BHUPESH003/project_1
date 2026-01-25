@@ -10,8 +10,9 @@
  * - No Twilio-specific fields leak outside this adapter
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Twilio } from 'twilio';
 import {
   NotificationProvider,
   PushNotificationRequest,
@@ -29,11 +30,20 @@ interface TwilioConfig {
   fromNumber: string; // Twilio phone number
 }
 
+/**
+ * Twilio Configuration
+ */
+interface TwilioConfig {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string; // Twilio phone number
+}
+
 @Injectable()
-export class TwilioNotificationProvider implements NotificationProvider {
+export class TwilioNotificationProvider implements NotificationProvider, OnModuleInit {
   private readonly logger = new Logger(TwilioNotificationProvider.name);
   private readonly config: TwilioConfig;
-  private twilioClient: any; // Twilio client (lazy loaded)
+  private twilioClient!: Twilio;
 
   constructor(private readonly configService: ConfigService) {
     // Load Twilio configuration from environment
@@ -50,6 +60,12 @@ export class TwilioNotificationProvider implements NotificationProvider {
     this.logger.log(
       `TwilioNotificationProvider initialized (account: ${this.config.accountSid.substring(0, 8)}...)`,
     );
+  }
+
+  async onModuleInit() {
+    // Initialize Twilio client
+    this.twilioClient = new Twilio(this.config.accountSid, this.config.authToken);
+    this.logger.log('Twilio client initialized successfully');
   }
 
   getProviderName(): string {
@@ -78,30 +94,20 @@ export class TwilioNotificationProvider implements NotificationProvider {
     );
 
     try {
-      // Lazy load Twilio client
-      if (!this.twilioClient) {
-        // For MVP, use stubbed implementation
-        // TODO: Sprint 4 - Integrate with real Twilio SDK
-        // const twilio = require('twilio');
-        // this.twilioClient = twilio(this.config.accountSid, this.config.authToken);
-        this.twilioClient = { stub: true };
-      }
+      // Send SMS via Twilio API
+      const message = await this.twilioClient.messages.create({
+        body: request.message,
+        from: this.config.fromNumber,
+        to: request.phoneNumber,
+      });
 
-      // TODO: Sprint 4 - Real Twilio API call
-      // const message = await this.twilioClient.messages.create({
-      //   body: request.message,
-      //   from: this.config.fromNumber,
-      //   to: request.phoneNumber,
-      // });
-
-      // Stubbed implementation for MVP
       this.logger.log(
-        `[STUB] Twilio SMS sent to ${request.phoneNumber}: ${request.message.substring(0, 50)}...`,
+        `Twilio SMS sent successfully to ${request.phoneNumber}, messageId: ${message.sid}`,
       );
 
       return {
         success: true,
-        messageId: `twilio-${Date.now()}-${request.phoneNumber}`,
+        messageId: message.sid,
       };
     } catch (error) {
       // Log error but don't throw - notifications are non-critical

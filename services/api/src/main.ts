@@ -7,8 +7,61 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@/common/filters';
 import { TransformInterceptor } from '@/common/interceptors';
 
+/**
+ * Validate required environment variables for production readiness
+ */
+function validateEnvironment() {
+  const logger = new Logger('EnvironmentValidation');
+  const requiredVars = [
+    // Database
+    'DATABASE_URL',
+    // Auth
+    'JWT_SECRET',
+    // Payments
+    'PAYTM_MERCHANT_ID',
+    'PAYTM_MERCHANT_KEY',
+    // Delivery
+    'UBER_CLIENT_ID',
+    'UBER_CLIENT_SECRET',
+    'UBER_WEBHOOK_SECRET',
+    // Notifications
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_CLIENT_EMAIL',
+    'TWILIO_ACCOUNT_SID',
+    'TWILIO_AUTH_TOKEN',
+    'TWILIO_FROM_NUMBER',
+    // File Storage
+    'S3_BUCKET_NAME',
+    'AWS_REGION',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    // Queues
+    'REDIS_URL',
+  ];
+
+  const missingVars: string[] = [];
+
+  for (const varName of requiredVars) {
+    if (!process.env[varName]) {
+      missingVars.push(varName);
+    }
+  }
+
+  if (missingVars.length > 0) {
+    logger.error(`❌ MISSING REQUIRED ENVIRONMENT VARIABLES: ${missingVars.join(', ')}`);
+    logger.error('🚨 SYSTEM CANNOT START - PRODUCTION INTEGRATIONS REQUIRE THESE VARIABLES');
+    process.exit(1);
+  }
+
+  logger.log('✅ All required environment variables are present');
+}
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Validate environment before starting
+  validateEnvironment();
   const app = await NestFactory.create(AppModule);
 
   // Get config service

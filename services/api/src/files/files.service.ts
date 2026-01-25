@@ -4,11 +4,13 @@
  * Handles file upload coordination via S3 presigned URLs.
  * Files are uploaded directly to S3 by frontend, not through API.
  *
- * Sprint 2: Basic S3 integration (stubbed for MVP)
+ * Sprint 3: Real AWS S3 integration with presigned URLs
  */
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FILE_CONFIG } from '@/common/constants';
 
@@ -48,6 +50,7 @@ export class FilesService {
   private readonly logger = new Logger(FilesService.name);
   private readonly s3Bucket: string;
   private readonly s3Region: string;
+  private readonly s3Client: S3Client;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -58,13 +61,23 @@ export class FilesService {
       this.configService.get<string>('S3_BUCKET_NAME') || 'mvp-files-dev';
     this.s3Region =
       this.configService.get<string>('AWS_REGION') || 'ap-south-1';
+
+    // Initialize S3 client
+    this.s3Client = new S3Client({
+      region: this.s3Region,
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID') || '',
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
+      },
+    });
+
+    this.logger.log(`FilesService initialized with S3 bucket: ${this.s3Bucket}`);
   }
 
   /**
    * Generate presigned URL for direct S3 upload
    *
-   * Sprint 2: Stubbed implementation
-   * Future: Integrate AWS SDK for real presigned URLs
+   * Sprint 3: Real AWS S3 presigned URL generation
    */
   async getPresignedUrl(
     request: PresignedUrlRequest,
@@ -82,20 +95,22 @@ export class FilesService {
     const fileExtension = request.fileName.split('.').pop() || 'bin';
     const fileKey = `orders/${request.orderId || 'draft'}/${timestamp}-${randomId}.${fileExtension}`;
 
-    // Sprint 2: Stubbed presigned URL
-    // In production, use AWS SDK:
-    // const s3 = new S3Client({ region: this.s3Region });
-    // const command = new PutObjectCommand({
-    //   Bucket: this.s3Bucket,
-    //   Key: fileKey,
-    //   ContentType: request.mimeType,
-    // });
-    // const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    // Create PutObject command for S3
+    const putObjectCommand = new PutObjectCommand({
+      Bucket: this.s3Bucket,
+      Key: fileKey,
+      ContentType: request.mimeType,
+      ContentLength: request.fileSize,
+      // Add any additional metadata or conditions as needed
+    });
 
-    const uploadUrl = `https://${this.s3Bucket}.s3.${this.s3Region}.amazonaws.com/${fileKey}?presigned=true`;
+    // Generate presigned URL
+    const uploadUrl = await getSignedUrl(this.s3Client, putObjectCommand, {
+      expiresIn: 3600, // 1 hour
+    });
 
     this.logger.log(
-      `Generated presigned URL for file: ${fileKey} (${request.fileSize} bytes)`,
+      `Generated real S3 presigned URL for file: ${fileKey} (${request.fileSize} bytes)`,
     );
 
     return {
