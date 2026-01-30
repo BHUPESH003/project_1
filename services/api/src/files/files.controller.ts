@@ -1,5 +1,6 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Logger, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Request } from 'express';
 import { FilesService } from './files.service';
 import { PresignedUrlDto } from './dto/presigned-url.dto';
 import { ValidateFileDto } from './dto/validate-file.dto';
@@ -28,6 +29,8 @@ import { ValidateFileDto } from './dto/validate-file.dto';
  */
 @Controller('internal/files')
 export class FilesController {
+  private readonly logger = new Logger(FilesController.name);
+
   constructor(private readonly filesService: FilesService) {}
 
   /**
@@ -41,7 +44,11 @@ export class FilesController {
   @ApiOperation({ summary: 'Get presigned URL for file upload', description: 'Generates a presigned S3 URL for direct file upload. Used by frontend before order creation.' })
   @ApiResponse({ status: 200, description: 'Presigned URL generated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid file size or type' })
-  getPresignedUrl(@Body() dto: PresignedUrlDto) {
+  getPresignedUrl(@Body() dto: PresignedUrlDto, @Req() req: Request) {
+    // Log the received DTO for debugging
+    this.logger.log(`Presigned URL request: ${JSON.stringify(dto)}`);
+    this.logger.log(`Request headers: ${JSON.stringify(req.headers)}`);
+    this.logger.log(`Raw body: ${req.body}`);
     return this.filesService.getPresignedUrl(dto);
   }
 

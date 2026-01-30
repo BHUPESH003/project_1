@@ -62,7 +62,9 @@ async function bootstrap() {
 
   // Validate environment before starting
   validateEnvironment();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, // Enable raw body for debugging
+  });
 
   // Get config service
   const configService = app.get(ConfigService);
@@ -70,17 +72,40 @@ async function bootstrap() {
   // Security
   app.use(helmet());
 
+ 
+
   // CORS
-  const corsEnabled = configService.get<boolean>('CORS_ENABLED', true);
-  if (corsEnabled) {
-    const corsOrigins = configService
-      .get<string>('CORS_ORIGINS', 'http://localhost:3000')
-      .split(',');
-    app.enableCors({
-      origin: corsOrigins,
-      credentials: true,
-    });
-  }
+  // const corsEnabled = configService.get<boolean>('CORS_ENABLED', false);
+  // logger.log(`CORS_ENABLED: ${corsEnabled}`);
+  // if (corsEnabled) {
+  //   const corsOrigins = configService
+  //     .get<string>('CORS_ORIGINS', '*')
+  //     .split(',');
+  //   app.enableCors({
+  //     origin: corsOrigins,
+  //     credentials: true,
+  //   });
+  //   logger.log(`CORS enabled for origins: ${corsOrigins.join(', ')}`);
+  // } else {
+  //   logger.log('CORS disabled');
+  // }
+  app.enableCors({
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
+    // Allows requests from:
+    // - file:// (origin === undefined)
+    // - any http/https origin
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    return callback(null, true);
+  },
+  credentials: true,
+});
+
 
   // Global prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api');

@@ -18,7 +18,8 @@
       "@/common/*": ["src/common/*"],
       "@/auth/*": ["src/auth/*"],
       "@/prisma/*": ["src/prisma/*"],
-      "@/constants": ["src/common/constants"]
+      "@/constants": ["src/common/constants"],
+      "@repo/types": ["../../packages/types/src"]
     },
     "incremental": true,
     "skipLibCheck": true,
