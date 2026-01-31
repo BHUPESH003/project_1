@@ -2,16 +2,20 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "node",
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "removeComments": true,
+    "target": "ES2023",
+
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
+
+    "isolatedModules": false,
+    "declaration": false,
+
+    "rootDir": "./src",
     "outDir": "./dist",
+
     "baseUrl": "./",
     "paths": {
       "@/*": ["src/*"],
@@ -19,15 +23,13 @@
       "@/auth/*": ["src/auth/*"],
       "@/prisma/*": ["src/prisma/*"],
       "@/constants": ["src/common/constants"],
-      "@repo/types": ["../../packages/types/src"]
+      "@repo/types": ["../../packages/types/dist"]
     },
-    "incremental": true,
+
+    "incremental": false,
     "skipLibCheck": true,
-    "strictNullChecks": true,
-    "noImplicitAny": true,
-    "strictBindCallApply": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
     "strict": true
-  }
+  },
+  "include": ["src/**/*.ts"]
 }
+

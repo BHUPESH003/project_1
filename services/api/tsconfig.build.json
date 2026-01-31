@@ -1,4 +1,30 @@
 {
-  "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    "isolatedModules": false,
+    "declaration": false,
+    "removeComments": true,
+    "sourceMap": true,
+
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/common/*": ["src/common/*"],
+      "@/auth/*": ["src/auth/*"],
+      "@/prisma/*": ["src/prisma/*"],
+      "@/constants": ["src/common/constants"],
+      "@repo/types": ["../../packages/types/dist"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "test", "dist", "**/*.spec.ts"]
 }
