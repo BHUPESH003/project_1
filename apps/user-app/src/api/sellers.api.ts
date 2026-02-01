@@ -1,60 +1,38 @@
 /**
- * Sellers/Categories API endpoints
- * Fetch categories, seller services, pricing
+ * Sellers API – backend GET /sellers (ONLINE only).
+ * Query: category, lat, lng. Backend does not expose sort; client can sort by price/distance.
  */
 
 import client from './client';
+import { unwrap } from './unwrap';
 
-export interface Category {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
-  isAvailable: boolean;
+export interface SellerListItem {
+  seller_id: string;
+  shop_name: string;
+  address: string;
+  price_breakdown: { per_page: number };
+  prep_time_min: number;
+  status: string;
+  distance_km?: number;
 }
 
-export interface Service {
-  id: string;
-  categoryId: string;
-  sellerId: string;
-  name: string;
-  description: string;
-  basePrice: number;
-  turnaroundTime: string;
-}
+const DEFAULT_SERVICE_RADIUS_KM = 50;
 
 export const sellersApi = {
-  /**
-   * Get all available categories
-   */
-  async getCategories(): Promise<Category[]> {
-    const { data } = await client.get('/categories');
-    return data;
+  async getAvailableSellers(params: {
+    category?: string;
+    lat?: number;
+    lng?: number;
+    maxDistanceKm?: number;
+  }): Promise<SellerListItem[]> {
+    const { lat, lng, ...rest } = params;
+    const maxDistanceKm = params.maxDistanceKm ?? (lat != null && lng != null ? DEFAULT_SERVICE_RADIUS_KM : undefined);
+    const res = await client.get('/sellers', { params: { ...rest, lat, lng, maxDistanceKm } });
+    return unwrap(res) as SellerListItem[];
   },
 
-  /**
-   * Get category details
-   */
-  async getCategory(categoryId: string): Promise<Category> {
-    const { data } = await client.get(`/categories/${categoryId}`);
-    return data;
-  },
-
-  /**
-   * Get services for a category
-   */
-  async getCategoryServices(categoryId: string): Promise<Service[]> {
-    const { data } = await client.get(`/categories/${categoryId}/services`);
-    return data;
-  },
-
-  /**
-   * Search sellers by category
-   */
-  async searchSellers(categoryId: string, query?: string): Promise<any[]> {
-    const { data } = await client.get(`/sellers/search`, {
-      params: { categoryId, query },
-    });
-    return data;
+  async getSeller(id: string) {
+    const res = await client.get(`/sellers/${id}`);
+    return unwrap(res);
   },
 };

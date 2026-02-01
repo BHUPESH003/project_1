@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin: Reassign Delivery Modal</title>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d59f2",
+                        "primary-dark": "#0a46c2",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#101622",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1a2233",
+                        "border-light": "#e5e7eb",
+                        "border-dark": "#2d3748",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-gray-900/40 font-display antialiased overflow-hidden h-screen w-full flex flex-col justify-end items-center sm:justify-center">
+<!-- Modal Background Overlay (Darkened part of the screen) -->
+<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-0"></div>
+<!-- Main Modal Container -->
+<div class="relative z-10 w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] bg-surface-light dark:bg-background-dark rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+<!-- BottomSheetHandle (Mobile only visual cue) -->
+<div class="flex-shrink-0 flex items-center justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing sm:hidden">
+<div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+</div>
+<!-- Header Section -->
+<div class="flex-shrink-0 px-5 pt-4 pb-2">
+<div class="flex items-start justify-between">
+<div>
+<h2 class="text-xl font-bold text-gray-900 dark:text-white leading-tight">Reassign Order #99281</h2>
+<div class="flex items-center gap-2 mt-1.5">
+<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Current Status:</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                            Driver Pending
+                        </span>
+</div>
+</div>
+<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+<span class="material-symbols-outlined text-2xl">close</span>
+</button>
+</div>
+</div>
+<!-- Search Bar -->
+<div class="flex-shrink-0 px-5 py-3 border-b border-border-light dark:border-border-dark">
+<label class="relative flex items-center group">
+<span class="absolute left-3 text-gray-400 group-focus-within:text-primary transition-colors material-symbols-outlined">search</span>
+<input class="w-full bg-gray-100 dark:bg-surface-dark border-none rounded-lg py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-primary focus:bg-white dark:focus:bg-surface-dark transition-all" placeholder="Search name or ID..." type="text"/>
+</label>
+</div>
+<!-- Content Area: Driver List -->
+<div class="flex-1 overflow-y-auto scrollbar-hide bg-gray-50 dark:bg-[#0c101a] p-4 space-y-3">
+<!-- Section Header -->
+<div class="flex items-center justify-between px-1 mb-2">
+<h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Available Partners (5)</h4>
+<button class="text-xs font-medium text-primary hover:text-primary-dark">Sort by Distance</button>
+</div>
+<!-- Driver Card 1 (Selected) -->
+<label class="relative flex flex-col p-4 bg-white dark:bg-surface-dark border-2 border-primary rounded-xl shadow-sm cursor-pointer transition-all">
+<div class="absolute top-3 right-3">
+<input checked="" class="w-5 h-5 text-primary border-gray-300 focus:ring-primary" name="driver" type="radio"/>
+</div>
+<div class="flex items-center gap-3 mb-3">
+<img alt="Driver Avatar" class="w-10 h-10 rounded-full object-cover shadow-sm" data-alt="Avatar of Sarah Chen" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSqD4aFS0ptrxhbKCtvBP3N4gV4IUn640OC7NSKhAvEw_xDLBGFWKin7M7T8uIZULcafo29vkVCHlC159weL6x-S19DMmItOV8VOrdt45kjIEI10nGnp4kxo-h6fecB9jU0e_fU347CsRt2bbEv1ZzBx-oFjVwBBEvhRbBqo6DAhoicdTMKc0YhqQqCKtX1ozkJgXFSfPnLocmLUoX3srN9U6-pBKFeHhcG82MX9R67pD-0ZOUMIXVQ7pyid5qbDlTAmw9modqKVys"/>
+<div>
+<div class="flex items-center gap-2">
+<h3 class="text-sm font-bold text-gray-900 dark:text-white">Sarah Chen</h3>
+<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium">Best Match</span>
+</div>
+<p class="text-xs text-gray-500 dark:text-gray-400 font-mono">ID: #8821 • Bike</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 py-2 border-t border-dashed border-gray-200 dark:border-gray-700">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Distance</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">near_me</span>
+                            0.4mi
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Load</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">inventory_2</span>
+                            Empty
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-green-600 dark:text-green-400 font-bold">Est. Time</span>
+<div class="flex items-center gap-1 text-green-700 dark:text-green-300 font-bold text-sm">
+<span class="material-symbols-outlined text-sm">schedule</span>
+                            4 min
+                        </div>
+</div>
+</div>
+</label>
+<!-- Driver Card 2 -->
+<label class="relative flex flex-col p-4 bg-white dark:bg-surface-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-sm hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer transition-all">
+<div class="absolute top-3 right-3">
+<input class="w-5 h-5 text-primary border-gray-300 focus:ring-primary" name="driver" type="radio"/>
+</div>
+<div class="flex items-center gap-3 mb-3">
+<img alt="Driver Avatar" class="w-10 h-10 rounded-full object-cover shadow-sm" data-alt="Avatar of Mike Ross" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvEBKy3tVmjZboOY7W_lyY6Oh4I0m3fHw8cda2HcIIK0mVYJXFL8do_qOhOzwz3_94VfNrR0uKRnTlXZeNhLOB3-VGDe-ZupGO7dS9yL07sspGr21F0Xo3kiCjAEhe8YYPNQz0JrjPJhnOlYPXNRFD_Q1MVI_wdqsIYJnW_tkL8aMEOn1_k1TwLWLGgMi2itM9aeJ65Fh5jiVM5jXJHd-Uq-SEllojckqdyAKeWi4EsBlpNfDYEpb0IclOH-_buij3lvMEA07bFXCa"/>
+<div>
+<h3 class="text-sm font-bold text-gray-900 dark:text-white">Mike Ross</h3>
+<p class="text-xs text-gray-500 dark:text-gray-400 font-mono">ID: #9102 • Scooter</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 py-2 border-t border-dashed border-gray-200 dark:border-gray-700">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Distance</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">near_me</span>
+                            1.2mi
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Load</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">inventory_2</span>
+                            1 Order
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Est. Time</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">schedule</span>
+                            12 min
+                        </div>
+</div>
+</div>
+</label>
+<!-- Driver Card 3 -->
+<label class="relative flex flex-col p-4 bg-white dark:bg-surface-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-sm hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer transition-all opacity-75">
+<div class="absolute top-3 right-3">
+<input class="w-5 h-5 text-primary border-gray-300 focus:ring-primary" name="driver" type="radio"/>
+</div>
+<div class="flex items-center gap-3 mb-3">
+<img alt="Driver Avatar" class="w-10 h-10 rounded-full object-cover shadow-sm" data-alt="Avatar of Alex V" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxylZCdSeEQ0yIIzhFa0EMakcpf6UB9wESfeRAOEKXKjPYoj2nbtUeiRkC0W3QH3Y0P7YrdY_ZwZDAOkAyqiYMhEY5kVjGnY6QlMHr2pQJ4lvZQVXubkC9AoqNWcrGrPOprpjLlrmIkexdigMRP3ZaDUHM5QYUEt9hJWvUYAe4GngKHPTCeTWxAMzeStqUszO1Wf0XQViMl9r293TvZFinY_90-a4nZDXWkVizkoCcvX7O4gu32wUe1wswd4vqZXA76z3op9BeBKOA"/>
+<div>
+<h3 class="text-sm font-bold text-gray-900 dark:text-white">Alex V.</h3>
+<p class="text-xs text-gray-500 dark:text-gray-400 font-mono">ID: #4402 • Car</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 py-2 border-t border-dashed border-gray-200 dark:border-gray-700">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Distance</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">near_me</span>
+                            2.5mi
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-orange-600 dark:text-orange-400 font-semibold">Load</span>
+<div class="flex items-center gap-1 text-orange-700 dark:text-orange-300 font-medium text-sm">
+<span class="material-symbols-outlined text-sm">inventory_2</span>
+                            High
+                        </div>
+</div>
+<div class="flex flex-col border-l border-gray-100 dark:border-gray-700 pl-3">
+<span class="text-[10px] uppercase text-gray-400 font-semibold">Est. Time</span>
+<div class="flex items-center gap-1 text-gray-900 dark:text-gray-100 font-medium text-sm">
+<span class="material-symbols-outlined text-sm text-gray-400">schedule</span>
+                            18 min
+                        </div>
+</div>
+</div>
+</label>
+<!-- More available hint -->
+<div class="py-4 text-center">
+<button class="text-sm font-medium text-primary hover:text-primary-dark">View 2 more drivers...</button>
+</div>
+<!-- Spacer for bottom safe area -->
+<div class="h-6"></div>
+</div>
+<!-- Sticky Footer Actions -->
+<div class="flex-shrink-0 p-5 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark flex flex-col gap-3">
+<button class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-semibold py-3.5 px-4 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
+<span>Confirm Reassignment</span>
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</button>
+<button class="w-full py-3 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                Cancel
+            </button>
+</div>
+</div>
+</body></html>

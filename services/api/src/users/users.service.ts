@@ -1,27 +1,101 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { UserRepository } from './repositories/user.repository';
+import { UserAddressRepository } from './repositories/user-address.repository';
+import { CreateAddressDto } from './dto/create-address.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 
 @Injectable()
 export class UsersService {
-  create(createUserDto: Record<string, unknown>) {
-    return { message: 'Create user - to be implemented', data: createUserDto };
-  }
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly userAddressRepository: UserAddressRepository,
+  ) {}
 
-  findAll() {
-    return { message: 'Find all users - to be implemented', data: [] };
-  }
-
-  findOne(id: string) {
-    return { message: `Find user #${id} - to be implemented` };
-  }
-
-  update(id: string, updateUserDto: Record<string, unknown>) {
+  async getMe(userId: string) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
     return {
-      message: `Update user #${id} - to be implemented`,
-      data: updateUserDto,
+      id: user.id,
+      phone: user.phone,
+      name: user.name ?? null,
+      email: user.email ?? null,
+      role: user.role,
     };
   }
 
-  remove(id: string) {
-    return { message: `Remove user #${id} - to be implemented` };
+  async updateMe(userId: string, body: { name?: string; email?: string }) {
+    const u = await this.userRepository.update(userId, {
+      ...(body.name !== undefined && { name: body.name }),
+      ...(body.email !== undefined && { email: body.email }),
+    });
+    return {
+      id: u.id,
+      phone: u.phone,
+      name: u.name ?? null,
+      email: u.email ?? null,
+      role: u.role,
+    };
+  }
+
+  async getMyAddresses(userId: string) {
+    const list = await this.userAddressRepository.findByUserId(userId);
+    return list.map((a) => ({
+      id: a.id,
+      label: a.label,
+      addressLine: a.addressLine,
+      latitude: a.latitude,
+      longitude: a.longitude,
+      createdAt: a.createdAt,
+    }));
+  }
+
+  async addAddress(userId: string, dto: CreateAddressDto) {
+    const a = await this.userAddressRepository.create({
+      userId,
+      label: dto.label,
+      addressLine: dto.addressLine,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+    });
+    return {
+      id: a.id,
+      label: a.label,
+      addressLine: a.addressLine,
+      latitude: a.latitude,
+      longitude: a.longitude,
+      createdAt: a.createdAt,
+    };
+  }
+
+  async deleteAddress(userId: string, addressId: string) {
+    const deleted = await this.userAddressRepository.delete(addressId, userId);
+    if (!deleted) {
+      throw new NotFoundException('Address not found');
+    }
+    return { deleted: true };
+  }
+
+  async getNotificationPreferences(userId: string) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      orderUpdates: user.notificationOrderUpdates,
+      promotions: user.notificationPromotions,
+    };
+  }
+
+  async updateNotificationPreferences(userId: string, dto: UpdateNotificationPreferencesDto) {
+    const u = await this.userRepository.update(userId, {
+      ...(dto.orderUpdates !== undefined && { notificationOrderUpdates: dto.orderUpdates }),
+      ...(dto.promotions !== undefined && { notificationPromotions: dto.promotions }),
+    });
+    return {
+      orderUpdates: u.notificationOrderUpdates,
+      promotions: u.notificationPromotions,
+    };
   }
 }

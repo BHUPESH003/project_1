@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Price Breakdown &amp; Confirmation</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d59f2",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#101622",
+                        "surface-dark": "#1b2333", // Slightly lighter than background for cards
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Noto Sans", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-[#111418] dark:text-white font-display overflow-x-hidden antialiased">
+<div class="relative flex h-full min-h-screen w-full flex-col pb-24">
+<!-- TopAppBar -->
+<div class="sticky top-0 z-10 flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between border-b border-[#e5e7eb] dark:border-[#293040]">
+<div class="text-[#111418] dark:text-white flex size-12 shrink-0 items-center justify-start cursor-pointer transition-opacity hover:opacity-70">
+<span class="material-symbols-outlined" style="font-size: 24px;">arrow_back_ios_new</span>
+</div>
+<h2 class="text-[#111418] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">Order Summary</h2>
+</div>
+<!-- Main Content Scrollable Area -->
+<div class="flex-1 px-4 py-6 space-y-6">
+<!-- Service Summary Card (ListItem adaptation) -->
+<div class="flex flex-col gap-4">
+<h3 class="text-[#111418] dark:text-white text-base font-semibold px-1">Service Details</h3>
+<div class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-[#e5e7eb] dark:border-[#293040]">
+<div class="flex items-start gap-4 justify-between">
+<div class="flex items-start gap-4">
+<div class="text-primary dark:text-white flex items-center justify-center rounded-lg bg-primary/10 dark:bg-[#222f49] shrink-0 size-12">
+<span class="material-symbols-outlined" style="font-size: 24px;">print</span>
+</div>
+<div class="flex flex-col justify-center">
+<p class="text-[#111418] dark:text-white text-base font-medium leading-normal line-clamp-1">Document Printing</p>
+<p class="text-[#637588] dark:text-[#90a4cb] text-sm font-normal leading-normal mt-1">50 Pages, Black &amp; White, A4, Bond Paper</p>
+</div>
+</div>
+<div class="shrink-0 flex items-center h-12">
+<span class="text-primary text-sm font-medium cursor-pointer">Edit</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Price Breakdown (DescriptionList adaptation) -->
+<div class="flex flex-col gap-4">
+<h3 class="text-[#111418] dark:text-white text-base font-semibold px-1">Payment Breakdown</h3>
+<div class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-[#e5e7eb] dark:border-[#293040]">
+<!-- Item 1 -->
+<div class="flex justify-between items-center py-3 border-b border-[#e5e7eb] dark:border-[#314368] border-dashed">
+<p class="text-[#637588] dark:text-[#90a4cb] text-sm font-normal">Printing Cost</p>
+<p class="text-[#111418] dark:text-white text-sm font-medium">₹150.00</p>
+</div>
+<!-- Item 2 -->
+<div class="flex justify-between items-center py-3 border-b border-[#e5e7eb] dark:border-[#314368] border-dashed">
+<p class="text-[#637588] dark:text-[#90a4cb] text-sm font-normal">Delivery Fee</p>
+<p class="text-[#111418] dark:text-white text-sm font-medium">₹40.00</p>
+</div>
+<!-- Item 3 -->
+<div class="flex justify-between items-center py-3 border-b border-[#e5e7eb] dark:border-[#314368] border-dashed">
+<div class="flex items-center gap-1">
+<p class="text-[#637588] dark:text-[#90a4cb] text-sm font-normal">Service Tax &amp; Fees</p>
+<span class="material-symbols-outlined text-[#637588] dark:text-[#90a4cb]" style="font-size: 14px;">info</span>
+</div>
+<p class="text-[#111418] dark:text-white text-sm font-medium">₹10.00</p>
+</div>
+<!-- Total -->
+<div class="flex justify-between items-center pt-5 pb-1">
+<p class="text-[#111418] dark:text-white text-lg font-bold">Total Payable</p>
+<p class="text-[#111418] dark:text-white text-2xl font-bold tracking-tight">₹200.00</p>
+</div>
+</div>
+</div>
+<!-- Payment Method -->
+<div class="flex flex-col gap-4">
+<h3 class="text-[#111418] dark:text-white text-base font-semibold px-1">Payment Method</h3>
+<div class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-[#e5e7eb] dark:border-[#293040] flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform">
+<div class="flex items-center gap-3">
+<div class="w-10 h-6 bg-[#e0e0e0] rounded border border-[#bdbdbd] flex items-center justify-center overflow-hidden relative">
+<!-- Abstract geometric pattern for card logo -->
+<div class="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-500" data-alt="Generic bank card logo pattern"></div>
+</div>
+<div class="flex flex-col">
+<p class="text-[#111418] dark:text-white text-sm font-medium">UPI / GPay</p>
+<p class="text-[#637588] dark:text-[#90a4cb] text-xs">•••• 8902</p>
+</div>
+</div>
+<div class="size-5 rounded-full border-2 border-primary flex items-center justify-center">
+<div class="size-2.5 rounded-full bg-primary"></div>
+</div>
+</div>
+</div>
+<!-- Trust Signal -->
+<div class="flex items-center justify-center gap-2 pt-4 opacity-60">
+<span class="material-symbols-outlined text-[#637588] dark:text-[#90a4cb]" style="font-size: 16px;">lock</span>
+<p class="text-[#637588] dark:text-[#90a4cb] text-xs font-medium">Payments are secure and encrypted</p>
+</div>
+</div>
+<!-- Sticky Bottom Action Bar -->
+<div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-background-dark border-t border-[#e5e7eb] dark:border-[#293040] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
+<button class="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-base py-4 px-6 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2">
+<span>Confirm &amp; Pay ₹200</span>
+<span class="material-symbols-outlined" style="font-size: 20px;">arrow_forward</span>
+</button>
+</div>
+</div>
+</body></html>

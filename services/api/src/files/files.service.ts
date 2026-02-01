@@ -31,6 +31,7 @@ export interface PresignedUrlResponse {
   uploadUrl: string;
   fileKey: string;
   expiresIn: number; // Seconds until URL expires
+  publicUrl?: string; // Final URL after upload (for order payload)
   headers?: Record<string, string>; // Required headers for upload
 }
 
@@ -113,10 +114,12 @@ export class FilesService {
       `Generated real S3 presigned URL for file: ${fileKey} (${request.fileSize} bytes)`,
     );
 
+    const publicUrl = `https://${this.s3Bucket}.s3.${this.s3Region}.amazonaws.com/${fileKey}`;
     return {
       uploadUrl,
       fileKey,
-      expiresIn: 3600, // 1 hour
+      expiresIn: 3600,
+      publicUrl,
       headers: {
         'Content-Type': request.mimeType,
       },

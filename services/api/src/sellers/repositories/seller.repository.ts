@@ -94,6 +94,7 @@ export class SellerRepository {
     categoryId?: string;
     lat?: number;
     lng?: number;
+    maxDistanceKm?: number;
   }): Promise<SellerEntity[]> {
     const where: {
       status: SellerStatus;
@@ -143,8 +144,9 @@ export class SellerRepository {
 
     let result = sellers.map((s) => this.mapToEntity(s));
 
-    // If location provided, calculate distance and sort by proximity
-    if (filters?.lat && filters?.lng) {
+    // If location provided, calculate distance, optionally filter by radius, and sort by proximity
+    if (filters?.lat != null && filters?.lng != null) {
+      const maxKm = filters.maxDistanceKm ?? 50;
       result = result
         .map((seller) => {
           const sellerLat = Number(seller.latitude);
@@ -160,6 +162,7 @@ export class SellerRepository {
             distanceKm: distance,
           };
         })
+        .filter((s) => (s as any).distanceKm <= maxKm)
         .sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
     }
 

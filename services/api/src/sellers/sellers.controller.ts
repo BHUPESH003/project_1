@@ -54,6 +54,7 @@ export class SellersController {
   @ApiQuery({ name: 'category', required: false, description: 'Category ID to filter sellers', example: 'cat-printing-123' })
   @ApiQuery({ name: 'lat', required: false, description: 'Latitude for location-based filtering', example: 28.6139 })
   @ApiQuery({ name: 'lng', required: false, description: 'Longitude for location-based filtering', example: 77.2090 })
+  @ApiQuery({ name: 'maxDistanceKm', required: false, description: 'Max radius in km when lat/lng provided (default 50)', example: 50 })
   @ApiResponse({ status: 200, description: 'List of available sellers retrieved successfully' })
   findAvailableSellers(@Query() query: FindAvailableSellersDto) {
     return this.sellersService.findAvailableSellers(query);

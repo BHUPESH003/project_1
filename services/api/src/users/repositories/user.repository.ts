@@ -13,6 +13,8 @@ export interface UserEntity {
   email: string | null;
   name: string | null;
   role: UserRole;
+  notificationOrderUpdates: boolean;
+  notificationPromotions: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,6 +89,8 @@ export class UserRepository implements IBaseRepository<UserEntity> {
       email: string | null;
       name: string | null;
       role: UserRole;
+      notificationOrderUpdates?: boolean;
+      notificationPromotions?: boolean;
     }>,
   ): Promise<UserEntity> {
     const user = await this.prismaService.prisma.user.update({
@@ -108,12 +112,14 @@ export class UserRepository implements IBaseRepository<UserEntity> {
     email: string | null;
     name: string | null;
     role: unknown;
+    notificationOrderUpdates: boolean;
+    notificationPromotions: boolean;
     createdAt: Date;
     updatedAt: Date;
   }): UserEntity {
     return {
       ...user,
-      role: user.role as UserRole, // Type assertion for enum compatibility
+      role: user.role as UserRole,
     };
   }
 

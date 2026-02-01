@@ -26,6 +26,7 @@ export class SellersService {
       categoryId: query.category,
       lat: query.lat,
       lng: query.lng,
+      maxDistanceKm: query.maxDistanceKm,
     });
 
     this.logger.log(`Found ${sellers.length} available sellers`);

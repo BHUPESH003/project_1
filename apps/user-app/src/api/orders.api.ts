@@ -1,77 +1,123 @@
 /**
- * Orders API endpoints
- * Fetch orders, order details, status tracking
+ * Orders API – backend contract v1.
+ * Create draft, select seller, delivery quote, confirm, track, list my orders.
  */
 
 import client from './client';
+import { unwrap } from './unwrap';
 
-export interface Order {
-  id: string;
-  referenceNumber: string;
-  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
-  sellerId: string;
-  sellerName: string;
-  category: string;
+/** Backend order status – from OrderStatus enum. */
+export type OrderStatus =
+  | 'CREATED'
+  | 'SELLER_SELECTED'
+  | 'PAID'
+  | 'SELLER_ACCEPTED'
+  | 'PREPARING'
+  | 'READY_FOR_PICKUP'
+  | 'PICKED_UP'
+  | 'DELIVERED'
+  | 'SELLER_REJECTED'
+  | 'ORDER_EXPIRED'
+  | 'DELIVERY_FAILED'
+  | 'USER_CANCELLED';
+
+export interface OrderListItem {
+  order_id: string;
+  status: OrderStatus;
+  seller: { id: string; shopName: string; address: string } | null;
+  category: { id: string; name: string } | null;
+  pricing: { itemCost: number | null; deliveryFee: number | null; totalAmount: number | null };
   createdAt: string;
   updatedAt: string;
-  totalAmount: number;
-  items: OrderItem[];
-  shippingAddress?: string;
-  estimatedDelivery?: string;
 }
 
-export interface OrderItem {
+export interface OrderStateHistoryItem {
   id: string;
-  description: string;
-  quantity: number;
-  price: number;
-  specifications?: Record<string, string>;
+  fromStatus: string | null;
+  toStatus: string;
+  triggeredBy: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface OrderDetail {
+  order_id: string;
+  status: OrderStatus;
+  seller: { id: string; shopName: string; address: string } | null;
+  delivery: unknown;
+  pricing: { itemCost: number | null; deliveryFee: number | null; totalAmount: number | null };
+  createdAt: string;
+  updatedAt: string;
+  stateHistory?: OrderStateHistoryItem[];
+}
+
+/** Response from POST /orders/:id/confirm – payment intent for UPI. */
+export interface ConfirmOrderResponse {
+  order_id: string;
+  status: string;
+  total_amount: number;
+  payment: {
+    payment_id: string;
+    status: string;
+    payment_intent: {
+      orderId: string;
+      amount: number;
+      currency: string;
+      gatewayOrderId: string;
+      paymentData?: {
+        upi?: { paymentUrl?: string; qrCode?: string };
+        [key: string]: unknown;
+      };
+    };
+  };
+  message?: string;
+}
+
+export interface CreateOrderPayload {
+  categoryId: string;
+  orderPayload: {
+    fileUrl?: string;
+    pages?: number;
+    copies?: number;
+    color?: boolean;
+    notes?: string;
+    [key: string]: unknown;
+  };
 }
 
 export const ordersApi = {
-  /**
-   * Get all orders for current user
-   */
-  async getOrders(
-    page: number = 1,
-    limit: number = 10
-  ): Promise<{
-    orders: Order[];
-    total: number;
-    page: number;
-  }> {
-    const { data } = await client.get('/orders', {
-      params: { page, limit },
+  async getMyOrders(): Promise<OrderListItem[]> {
+    const res = await client.get('/orders');
+    return unwrap(res) as OrderListItem[];
+  },
+
+  async getOrder(orderId: string): Promise<OrderDetail> {
+    const res = await client.get(`/orders/${orderId}`);
+    return unwrap(res) as OrderDetail;
+  },
+
+  async createOrder(payload: CreateOrderPayload): Promise<{ order_id: string; status: string }> {
+    const res = await client.post('/orders', payload);
+    return unwrap(res) as { order_id: string; status: string };
+  },
+
+  async selectSeller(orderId: string, sellerId: string) {
+    const res = await client.post(`/orders/${orderId}/select-seller`, { sellerId });
+    return unwrap(res);
+  },
+
+  async getDeliveryQuote(orderId: string, dropLocation: { lat: number; lng: number }) {
+    const res = await client.post(`/orders/${orderId}/delivery-quote`, {
+      dropLocation,
     });
-    return data;
+    return unwrap(res);
   },
 
-  /**
-   * Get single order details
-   */
-  async getOrder(orderId: string): Promise<Order> {
-    const { data } = await client.get(`/orders/${orderId}`);
-    return data;
-  },
-
-  /**
-   * Create new order
-   * TODO: This will be used in checkout flow
-   */
-  async createOrder(payload: any): Promise<Order> {
-    const { data } = await client.post('/orders', payload);
-    return data;
-  },
-
-  /**
-   * Track order status
-   */
-  async trackOrder(orderId: string): Promise<{
-    status: Order['status'];
-    lastUpdate: string;
-    estimatedDelivery?: string;
-  }> {
-    const { data } = await client.get(`/orders/${orderId}/track`);
-    return data;
+  async confirmOrder(
+    orderId: string,
+    paymentMethod: 'UPI' | 'CASH' | 'CARD' = 'UPI',
+  ): Promise<ConfirmOrderResponse> {
+    const res = await client.post(`/orders/${orderId}/confirm`, { paymentMethod });
+    return unwrap(res) as ConfirmOrderResponse;
   },
 };

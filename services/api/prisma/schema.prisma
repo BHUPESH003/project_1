@@ -117,18 +117,43 @@ model User {
   name      String?
   email     String?
   
+  // Notification preferences (Phase 4G)
+  notificationOrderUpdates Boolean @default(true)
+  notificationPromotions   Boolean @default(false)
+  
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   // Relations
-  orders    Order[]       @relation("UserOrders")
-  seller    Seller?       // One-to-one: User can be a Seller
-  otps      Otp[]         // OTP history
+  orders    Order[]        @relation("UserOrders")
+  seller    Seller?        // One-to-one: User can be a Seller
+  otps      Otp[]          // OTP history
+  addresses UserAddress[]  // Saved delivery addresses
   
   @@index([phone])
   @@index([role])
   @@map("users")
+}
+
+// ========================================
+// USER ADDRESS MODEL (Phase 4G)
+// ========================================
+// Saved delivery addresses for the user app
+
+model UserAddress {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String   // e.g. "Home", "Office"
+  addressLine String
+  latitude    Decimal? @db.Decimal(10, 8)
+  longitude   Decimal? @db.Decimal(11, 8)
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("user_addresses")
 }
 
 // ========================================

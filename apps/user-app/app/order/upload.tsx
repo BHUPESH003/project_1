@@ -1,0 +1,232 @@
+/**
+ * Upload file – expo-document-picker, presigned URL, S3 upload, then options.
+ */
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { Loader } from '@/components/Loader';
+import { colors } from '@/constants/colors';
+import { spacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { filesApi } from '@/api/files.api';
+import { useOrderDraftStore } from '@/store/order-draft.store';
+
+const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+];
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export default function UploadScreen() {
+  const router = useRouter();
+  const [file, setFile] = useState<{
+    name: string;
+    size: number;
+    mimeType: string;
+    uri: string;
+  } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setDraftFile = useOrderDraftStore((s) => s.setFile);
+
+  const pickFile = async () => {
+    setError(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ALLOWED_TYPES,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const f = result.assets[0];
+      if (f.size && f.size > MAX_SIZE_BYTES) {
+        setError(`File must be under ${formatSize(MAX_SIZE_BYTES)}`);
+        return;
+      }
+      setFile({
+        name: f.name,
+        size: f.size ?? 0,
+        mimeType: f.mimeType ?? 'application/octet-stream',
+        uri: f.uri,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to pick file');
+    }
+  };
+
+  const onContinue = async () => {
+    if (!file) {
+      setError('Please select a file');
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const presigned = await filesApi.getPresignedUrl({
+        fileName: file.name,
+        mimeType: file.mimeType,
+        fileSize: file.size,
+      });
+      const publicUrl = presigned.publicUrl ?? presigned.uploadUrl;
+      const uploadUrl = presigned.uploadUrl;
+      const headers: Record<string, string> = {
+        ...(presigned.headers ?? {}),
+        'Content-Type': file.mimeType,
+      };
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers,
+        body: blob,
+      });
+      if (!putRes.ok) {
+        throw new Error(`Upload failed: ${putRes.status}`);
+      }
+      setDraftFile({
+        fileKey: presigned.fileKey,
+        publicUrl,
+        fileName: file.name,
+        sizeBytes: file.size,
+        mimeType: file.mimeType,
+      });
+      router.push('/order/options');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setError(null);
+    setDraftFile(null);
+  };
+
+  return (
+    <ScreenWrapper>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <MaterialIcons name="close" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.title}>New Print Order</Text>
+        <View style={styles.placeholder} />
+      </View>
+      <View style={styles.content}>
+        <TouchableOpacity
+          style={styles.uploadZone}
+          onPress={pickFile}
+          activeOpacity={0.9}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <Loader />
+          ) : (
+            <View style={styles.uploadIconWrap}>
+              <MaterialIcons name="cloud-upload" size={32} color={file ? colors.primary : colors.textMuted} />
+            </View>
+          )}
+          <Text style={styles.uploadTitle}>{file ? 'File selected' : 'Upload File'}</Text>
+          <Text style={styles.uploadSubtitle}>
+            {file ? `${file.name} • ${formatSize(file.size)}` : 'Tap to pick PDF, DOC, or image'}
+          </Text>
+        </TouchableOpacity>
+        {file && !uploading && (
+          <View style={styles.fileRow}>
+            <View style={styles.fileIcon}>
+              <MaterialIcons name="picture-as-pdf" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+              <Text style={styles.fileSize}>{formatSize(file.size)}</Text>
+            </View>
+            <TouchableOpacity onPress={clearFile}>
+              <MaterialIcons name="delete" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </View>
+      <View style={styles.footer}>
+        <PrimaryButton
+          label={uploading ? 'Uploading…' : 'Continue'}
+          onPress={onContinue}
+          disabled={!file || uploading}
+        />
+      </View>
+    </ScreenWrapper>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxs,
+  },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { ...typography.sectionHeader, color: colors.textPrimary },
+  placeholder: { width: 40 },
+  content: { flex: 1, paddingTop: spacing.md },
+  uploadZone: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.borderDark,
+    backgroundColor: colors.surfaceDark,
+  },
+  uploadIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  uploadTitle: { ...typography.primary, color: colors.textPrimary, marginBottom: spacing.xxs },
+  uploadSubtitle: { ...typography.meta, color: colors.textMuted },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  fileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileInfo: { flex: 1 },
+  fileName: { ...typography.secondary, color: colors.textPrimary },
+  fileSize: { ...typography.meta, color: colors.textMuted, marginTop: 2 },
+  errorText: { ...typography.secondary, color: colors.error, marginTop: spacing.sm },
+  footer: { paddingVertical: spacing.lg },
+});

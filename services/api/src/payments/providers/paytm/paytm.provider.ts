@@ -180,9 +180,17 @@ export class PaytmProvider implements PaymentProvider {
           paymentData,
         },
       };
-    } catch (error) {
-      this.logger.error(`Paytm order creation failed for order ${request.orderId}:`, error);
-      throw new BadRequestException('Failed to initiate Paytm payment');
+    } catch (error: any) {
+      const paytmMsg = error?.response?.data?.RESPMSG ?? error?.response?.data?.message ?? error?.message;
+      const paytmResult = error?.response?.data?.RESULT;
+      this.logger.error(
+        `Paytm order creation failed for order ${request.orderId}: RESULT=${paytmResult ?? 'N/A'} RESPMSG=${paytmMsg ?? 'N/A'}`,
+        error?.response?.data ?? error,
+      );
+      // Common causes: wrong PAYTM_MERCHANT_ID/PAYTM_MERCHANT_KEY, PAYTM_WEBSITE (WEBSTAGING vs WEBPROD), CALLBACK_URL not whitelisted
+      throw new BadRequestException(
+        paytmMsg ? `Paytm: ${paytmMsg}` : 'Failed to initiate Paytm payment. Check PAYTM_MERCHANT_ID, PAYTM_MERCHANT_KEY, PAYTM_WEBSITE and PAYTM_CALLBACK_URL.',
+      );
     }
   }
 
