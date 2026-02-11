@@ -14,6 +14,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OrderStatus, SellerStatus, PaymentMethod } from '@repo/types';
 import { OrderRepository } from './repositories/order.repository';
 import { OrderStateMachineService } from './state-machine';
@@ -43,6 +44,7 @@ export class OrdersService {
     @Inject(forwardRef(() => DeliveryService))
     private readonly deliveryService: DeliveryService,
     private readonly queueService: QueueService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -97,6 +99,34 @@ export class OrdersService {
   }
 
   /**
+   * List orders for current user (USER APP) – orders history
+   */
+  async findAllForUser(userId: string) {
+    const orders = await this.orderRepository.findByUserId(userId);
+    return orders.map((order) => ({
+      order_id: order.id,
+      status: order.status,
+      seller: order.seller
+        ? {
+            id: order.seller.id,
+            shopName: order.seller.shopName,
+            address: order.seller.address,
+          }
+        : null,
+      category: order.category
+        ? { id: order.category.id, name: order.category.name }
+        : null,
+      pricing: {
+        itemCost: order.itemCost,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+      },
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    }));
+  }
+
+  /**
    * Get order details for tracking
    */
   async findOne(orderId: string) {
@@ -120,7 +150,6 @@ export class OrdersService {
         order.status === OrderStatus.PICKED_UP ||
         order.status === OrderStatus.DELIVERED
         ? {
-            // Delivery details will be populated in Sprint 3
             status: 'pending',
           }
         : null,
@@ -131,6 +160,14 @@ export class OrdersService {
       },
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
+      stateHistory: (order.stateHistory ?? []).map((h: { id: string; fromStatus: string | null; toStatus: string; triggeredBy: string | null; reason: string | null; createdAt: Date }) => ({
+        id: h.id,
+        fromStatus: h.fromStatus,
+        toStatus: h.toStatus,
+        triggeredBy: h.triggeredBy,
+        reason: h.reason,
+        createdAt: h.createdAt,
+      })),
     };
   }
 
@@ -337,17 +374,13 @@ export class OrdersService {
       );
     }
 
-    // Verify seller and delivery fee are set
+    // Verify seller is set (deliveryFee may be null for self-pickup)
     if (!order.sellerId) {
       throw new BadRequestException('Seller must be selected');
     }
 
-    if (order.deliveryFee === null) {
-      throw new BadRequestException('Delivery quote must be obtained first');
-    }
-
-    // Calculate total amount
-    const totalAmount = (order.itemCost || 0) + (order.deliveryFee || 0);
+    // Calculate total amount (null deliveryFee = self-pickup, treated as 0)
+    const totalAmount = (order.itemCost || 0) + (order.deliveryFee ?? 0);
 
     // Update order with total amount (if not already set)
     if (!order.totalAmount) {

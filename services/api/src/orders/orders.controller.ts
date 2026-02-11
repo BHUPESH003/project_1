@@ -78,6 +78,21 @@ export class OrdersController {
   }
 
   /**
+   * GET /v1/orders
+   * List orders for current user (USER APP) – orders history.
+   */
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List my orders', description: 'Returns orders for the authenticated user. Requires USER role.' })
+  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findAllForUser(@Request() req: { user: { id: string } }) {
+    return this.ordersService.findAllForUser(req.user.id);
+  }
+
+  /**
    * GET /v1/orders/:id
    * Get order details for tracking (USER APP)
    * Returns: { order_id, status, seller: {...}, delivery: {...} }

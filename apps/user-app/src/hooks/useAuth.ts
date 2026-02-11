@@ -17,7 +17,7 @@ export const useAuth = () => {
     setUser,
     logout,
     clearError,
-    login,
+    requestOtp,
     verifyOtp,
     restoreToken,
   } = useAuthStore();
@@ -25,20 +25,17 @@ export const useAuth = () => {
   const isAuthenticated = !!token && !!user;
 
   return {
-    // State
     token,
     refreshToken,
     user,
     isLoading,
     error,
     isAuthenticated,
-
-    // Actions
     setToken,
     setUser,
     logout,
     clearError,
-    login,
+    requestOtp,
     verifyOtp,
     restoreToken,
   };

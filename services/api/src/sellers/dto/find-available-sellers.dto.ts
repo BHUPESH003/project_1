@@ -41,4 +41,17 @@ export class FindAvailableSellersDto {
   @Max(180)
   @IsOptional()
   lng?: number; // Longitude for location-based filtering
+
+  @ApiPropertyOptional({ 
+    description: 'Max distance in km (only return sellers within this radius when lat/lng provided). Default 50.', 
+    example: 50, 
+    minimum: 1, 
+    maximum: 500 
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  @Max(500)
+  @IsOptional()
+  maxDistanceKm?: number; // When set with lat/lng, only sellers within this radius
 }

@@ -1,49 +1,106 @@
+/**
+ * OTP verification – verify OTP via API, persist token, then navigate.
+ */
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Button } from '@/components/Button';
-import useAuth from '@/hooks/useAuth';
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { colors } from '@/constants/colors';
+import { spacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { useAuthStore } from '@/store/auth.store';
+
+function maskPhone(phone: string): string {
+  if (phone.length < 6) return phone;
+  return `${phone.slice(0, 4)}****${phone.slice(-2)}`;
+}
 
 export default function VerifyOtpScreen() {
-  const [otp, setOtp] = useState('');
-  const [phone, setPhone] = useState('');
-  const { verifyOtp, isLoading, error } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ phone: string }>();
+  const phone = params.phone ?? '';
+  const [otp, setOtp] = useState('');
+  const { verifyOtp, isLoading, error, clearError } = useAuthStore();
 
   const handleVerify = async () => {
+    if (otp.length !== 6 || !phone) return;
+    clearError();
     try {
       await verifyOtp(phone, otp);
-      // On success, navigate to main tabs
-      router.replace('/(tabs)/home');
-    } catch (e) {}
+      router.replace('/(auth)/permissions');
+    } catch {
+      // Error shown from store
+    }
   };
 
+  const canSubmit = otp.length === 6 && phone.length > 0 && !isLoading;
+
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Verify OTP' }} />
-      <Text>Enter OTP sent to your phone</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="OTP"
-        keyboardType="number-pad"
-        value={otp}
-        onChangeText={setOtp}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Phone number"
-        keyboardType="phone-pad"
-        value={phone}
-        onChangeText={setPhone}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button title="Verify" onPress={handleVerify} isLoading={isLoading} />
-    </View>
+    <ScreenWrapper>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={24}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>Verify OTP</Text>
+          <Text style={styles.subtitle}>Code sent to {maskPhone(phone)}</Text>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          <TextInput
+            style={styles.input}
+            placeholder="Enter 6-digit OTP"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            value={otp}
+            onChangeText={setOtp}
+            maxLength={6}
+            editable={!isLoading}
+          />
+        </View>
+        <View style={[styles.buttonWrap, { paddingBottom: spacing.lg + insets.bottom }]}>
+          <PrimaryButton
+            label={isLoading ? 'Verifying…' : 'Verify'}
+            onPress={handleVerify}
+            disabled={!canSubmit}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, justifyContent: 'center' },
-  input: { borderWidth: 1, padding: 12, borderRadius: 8, marginVertical: 12 },
-  error: { color: 'red', marginBottom: 8 },
+  flex: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', paddingVertical: spacing.lg },
+  title: {
+    ...typography.screenTitle,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    ...typography.secondary,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+  },
+  errorText: {
+    ...typography.secondary,
+    color: colors.error,
+    marginBottom: spacing.sm,
+  },
+  input: {
+    backgroundColor: colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 18,
+    color: colors.textPrimary,
+    letterSpacing: 4,
+    marginBottom: spacing.md,
+  },
+  buttonWrap: {},
 });

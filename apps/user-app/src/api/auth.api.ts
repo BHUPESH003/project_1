@@ -1,62 +1,70 @@
 /**
- * Auth API endpoints
- * Phone login, OTP verification, token refresh
+ * Auth API – backend contract v1.
+ * POST /auth/request-otp, POST /auth/verify-otp, POST /auth/refresh-token.
  */
 
 import client from './client';
+import { unwrap, type ApiResponse } from './unwrap';
 
-interface LoginResponse {
-  requestId: string;
-  expiresIn: number;
+const AUTH_BASE = '/auth';
+
+export interface RequestOtpResponse {
+  success: boolean;
 }
 
-interface VerifyOtpResponse {
-  token: string;
+export interface VerifyOtpResponse {
+  accessToken: string;
   refreshToken: string;
+  accessTokenExpiresIn: number;
+  refreshTokenExpiresIn: number;
   user: {
     id: string;
-    phoneNumber: string;
-    name?: string;
+    phone: string;
+    role: string;
+  };
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  user: {
+    id: string;
+    phone: string;
+    role: string;
   };
 }
 
 export const authApi = {
   /**
-   * Initiate phone login
-   * Backend sends OTP via SMS
+   * Request OTP – backend sends OTP via SMS.
+   * Phone must be E.164 (e.g. +919876543210).
    */
-  async login(phoneNumber: string): Promise<LoginResponse> {
-    const { data } = await client.post('/auth/login', {
-      phoneNumber,
+  async requestOtp(phone: string, role: 'USER' | 'SELLER' | 'ADMIN' = 'USER'): Promise<RequestOtpResponse> {
+    const res = await client.post<ApiResponse<RequestOtpResponse>>(`${AUTH_BASE}/request-otp`, {
+      phone,
+      role,
     });
-    return data;
+    return unwrap(res);
   },
 
   /**
-   * Verify OTP and get auth token
+   * Verify OTP and receive auth tokens.
    */
-  async verifyOtp(phoneNumber: string, otp: string): Promise<VerifyOtpResponse> {
-    const { data } = await client.post('/auth/verify-otp', {
-      phoneNumber,
+  async verifyOtp(phone: string, otp: string): Promise<VerifyOtpResponse> {
+    const res = await client.post<ApiResponse<VerifyOtpResponse>>(`${AUTH_BASE}/verify-otp`, {
+      phone,
       otp,
     });
-    return data;
+    return unwrap(res);
   },
 
   /**
-   * Refresh token when expired
+   * Refresh access token. Backend returns accessToken only (no new refresh token).
    */
-  async refreshToken(refreshToken: string): Promise<{ token: string }> {
-    const { data } = await client.post('/auth/refresh', {
+  async refreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
+    const res = await client.post<ApiResponse<RefreshTokenResponse>>(`${AUTH_BASE}/refresh-token`, {
       refreshToken,
     });
-    return data;
-  },
-
-  /**
-   * Logout - invalidate token server-side
-   */
-  async logout(): Promise<void> {
-    await client.post('/auth/logout');
+    return unwrap(res);
   },
 };

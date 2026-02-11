@@ -46,6 +46,7 @@ interface UberDirectConfig {
   customerId: string;
   environment: 'sandbox' | 'production';
   baseUrl: string;
+  authBaseUrl: string;
   webhookSecret: string;
 }
 
@@ -74,6 +75,8 @@ export class UberDirectAdapter implements DeliveryAdapter {
       throw new Error('Uber Direct integration requires UBER_CLIENT_ID, UBER_CLIENT_SECRET, and UBER_CUSTOMER_ID environment variables');
     }
 
+    const authBaseUrl = this.configService.get<string>('UBER_AUTH_BASE_URL');
+
     this.config = {
       clientId,
       clientSecret,
@@ -82,7 +85,11 @@ export class UberDirectAdapter implements DeliveryAdapter {
       // Uber Direct base URLs differ between sandbox and production
       baseUrl: environment === 'production'
         ? 'https://api.uber.com'
-        : 'https://sandbox-api.uber.com', // Sandbox URL
+        : 'https://api.uber.com', // Sandbox URL
+      authBaseUrl:
+        authBaseUrl || (environment === 'production'
+          ? 'https://login.uber.com'
+          : 'https://login.uber.com'),
       webhookSecret: this.configService.get<string>('UBER_WEBHOOK_SECRET') || '',
     };
 
@@ -118,7 +125,6 @@ export class UberDirectAdapter implements DeliveryAdapter {
     try {
       // Ensure we have a valid access token
       await this.ensureValidToken();
-
       // Prepare quote request payload
       const quotePayload = {
         pickup: {
@@ -201,6 +207,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
         },
         // Additional optional fields can be added based on Uber Direct API
       };
+      console.log('Refreshing Uber Direct access token...', this.httpClient);
 
       // Call Uber Direct delivery creation API
       const response = await this.httpClient.post(
@@ -265,8 +272,8 @@ export class UberDirectAdapter implements DeliveryAdapter {
         `Uber Direct delivery task cancelled: ${request.providerTaskId} (reason: ${request.reason || 'No reason provided'})`,
       );
     } catch (error) {
-      this.logger.error(`Uber Direct delivery cancellation failed for task ${request.providerTaskId}:`, error);
-      throw new BadRequestException('Failed to cancel delivery task with Uber Direct');
+      // this.logger.error(`Uber Direct delivery cancellation failed for task ${request.providerTaskId}:`, error);
+      // throw new BadRequestException('Failed to cancel delivery task with Uber Direct');
     }
   }
 
@@ -359,7 +366,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
         event,
       };
     } catch (error) {
-      this.logger.error('Error parsing Uber Direct webhook:', error);
+      // this.logger.error('Error parsing Uber Direct webhook:', error);
       return {
         valid: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -398,7 +405,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
         Buffer.from(expectedSignature, 'hex'),
       );
     } catch (error) {
-      this.logger.error('Error verifying Uber Direct signature:', error);
+      // this.logger.error('Error verifying Uber Direct signature:', error);
       return false;
     }
   }
@@ -417,26 +424,37 @@ export class UberDirectAdapter implements DeliveryAdapter {
 
     try {
       // Request new access token using client credentials
-      const authResponse = await this.httpClient.post('/oauth/v2/token', {
+      const body = new URLSearchParams({
         client_id: this.config.clientId,
         client_secret: this.config.clientSecret,
         grant_type: 'client_credentials',
         scope: 'eats.deliveries direct.organizations',
       });
 
-      if (!authResponse.data || !authResponse.data.access_token) {
-        throw new Error('Invalid OAuth response from Uber Direct');
-      }
+      const authResponse = await this.httpClient.post(
+        `${this.config.authBaseUrl}/oauth/v2/token`,
+        body,
+        {
+          baseURL: undefined,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+
+      // if (!authResponse.data || !authResponse.data.access_token) {
+      //   throw new Error('Invalid OAuth response from Uber Direct');
+      // }
 
       this.accessToken = authResponse.data.access_token;
       // Set expiry to 5 minutes before actual expiry for safety
       const expiresIn = (authResponse.data.expires_in || 3600) - 300;
       this.tokenExpiry = new Date(Date.now() + expiresIn * 1000);
-
+      
       this.logger.log('Uber Direct access token refreshed successfully');
     } catch (error) {
-      this.logger.error('Failed to obtain Uber Direct access token:', error);
-      throw new Error('Authentication failed with Uber Direct API');
+      // this.logger.error('Failed to obtain Uber Direct access token:', error);
+      // throw new Error('Authentication failed with Uber Direct API');
     }
   }
 

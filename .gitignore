@@ -21,7 +21,7 @@ node_modules/
 .env.production.local
 .env.dev
 .env.prod
-
+deploy.sh
 # Keep template files (no secrets)
 !env.*.template
 !.env.example

@@ -49,18 +49,46 @@ export class JwtService {
     private jwtService: NestJwtService,
     private configService: ConfigService,
   ) {
-    // JWT expiration times from config or environment
-    this.accessTokenExpiresIn = getConfigValue<number>(
-      this.configService,
-      'JWT_EXPIRATION',
+    // JWT expiration times from config or environment (parsed to seconds, minimum 5 min for access)
+    this.accessTokenExpiresIn = this.parseExpirySeconds(
+      this.configService.get<string | number>('JWT_EXPIRATION'),
       JWT_CONFIG.DEFAULT_EXPIRATION_SECONDS,
+      300,
     );
 
-    this.refreshTokenExpiresIn = getConfigValue<number>(
-      this.configService,
-      'JWT_REFRESH_EXPIRATION',
+    this.refreshTokenExpiresIn = this.parseExpirySeconds(
+      this.configService.get<string | number>('JWT_REFRESH_EXPIRATION'),
       JWT_CONFIG.DEFAULT_REFRESH_EXPIRATION_SECONDS,
+      60,
     );
+  }
+
+  /**
+   * Parse expiry from env (e.g. 3600, "3600", "3600s", "1h") to seconds. Enforces minimum.
+   */
+  private parseExpirySeconds(
+    value: string | number | undefined,
+    defaultSeconds: number,
+    minSeconds: number,
+  ): number {
+    if (value === undefined || value === null || value === '') {
+      return defaultSeconds;
+    }
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      return Math.max(minSeconds, value);
+    }
+    const s = String(value).trim().toLowerCase();
+    const match = s.match(/^(\d+)(s|m|h|d)?$/);
+    if (!match) {
+      return defaultSeconds;
+    }
+    let sec = parseInt(match[1], 10);
+    if (Number.isNaN(sec)) return defaultSeconds;
+    const unit = match[2];
+    if (unit === 'm') sec *= 60;
+    else if (unit === 'h') sec *= 3600;
+    else if (unit === 'd') sec *= 86400;
+    return Math.max(minSeconds, sec);
   }
 
   /**
