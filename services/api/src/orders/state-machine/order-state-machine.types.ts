@@ -20,7 +20,7 @@ export const ORDER_STATE_TRANSITIONS: Record<
 > = {
   // Success flow states
   CREATED: [OrderStatus.SELLER_SELECTED, OrderStatus.USER_CANCELLED],
-  SELLER_SELECTED: [OrderStatus.PAID, OrderStatus.USER_CANCELLED],
+  SELLER_SELECTED: [OrderStatus.SELLER_SELECTED, OrderStatus.PAID, OrderStatus.USER_CANCELLED],
   PAID: [
     OrderStatus.SELLER_ACCEPTED,
     OrderStatus.SELLER_REJECTED,

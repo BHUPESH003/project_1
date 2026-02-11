@@ -22,6 +22,7 @@ import { UserRole } from '@repo/types';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
+import { SelectDeliveryProviderDto } from './dto/select-delivery-provider.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
@@ -156,6 +157,61 @@ export class OrdersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.ordersService.getDeliveryQuote(id, req.user.id, locationDto);
+  }
+
+  /**
+   * POST /v1/orders/:id/delivery-quotes
+   * Get ALL available delivery provider quotes (USER APP)
+   * Shows user multiple delivery options with different pricing
+   * Payload: { drop_location: { lat, lng } }
+   * Response: { order_id, options: [{ provider, deliveryFee, estimatedDurationMinutes, ... }] }
+   */
+  @Post(':id/delivery-quotes')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all available delivery quotes',
+    description: 'Fetches delivery quotes from all available providers (Uber Direct, Dunzo, Porter, etc.). User can then select preferred provider.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Delivery quotes retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request data or invalid order state' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  getAllDeliveryQuotes(
+    @Param('id') id: string,
+    @Body() locationDto: DeliveryQuoteDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.getAllDeliveryQuotes(id, req.user.id, locationDto);
+  }
+
+  /**
+   * POST /v1/orders/:id/select-delivery-provider
+   * User selects a delivery provider from available options (USER APP)
+   * Payload: { provider: "UBER_DIRECT" | "DUNZO" | "PORTER" }
+   * Response: { order_id, provider, deliveryFee }
+   */
+  @Post(':id/select-delivery-provider')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select delivery provider',
+    description: 'User selects preferred delivery provider from available options. Must call /delivery-quotes first.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Delivery provider selected successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid provider or invalid order state' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  selectDeliveryProvider(
+    @Param('id') id: string,
+    @Body() providerDto: SelectDeliveryProviderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.selectDeliveryProvider(id, req.user.id, providerDto);
   }
 
   /**

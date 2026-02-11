@@ -14,12 +14,15 @@
 import { DeliveryStatus } from '@repo/types';
 
 /**
- * Location coordinates
+ * Location coordinates and address
  */
 export interface Location {
   latitude: number;
   longitude: number;
   address: string;
+  name?: string; // Optional: location/person name
+  phone?: string; // Optional: contact phone number
+  notes?: string; // Optional: delivery notes
 }
 
 /**

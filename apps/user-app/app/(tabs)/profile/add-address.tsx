@@ -3,7 +3,7 @@
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -17,6 +17,8 @@ import { useLocationStore } from '@/store/location.store';
 export default function AddAddressScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams();
+  const returnTo = (params?.returnTo as string) || null;
   const coords = useLocationStore((s) => s.coords);
   const fetchLocation = useLocationStore((s) => s.fetchLocation);
   const locationLoading = useLocationStore((s) => s.loading);
@@ -28,9 +30,14 @@ export default function AddAddressScreen() {
   const addMutation = useMutation({
     mutationFn: (body: { label: string; addressLine: string; latitude?: number; longitude?: number }) =>
       usersApi.addAddress(body),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      router.back();
+      // If coming from order flow, return to delivery with the new address ID
+      if (returnTo === '/order/delivery' && data?.id) {
+        router.replace(`/order/delivery?selectedAddressId=${data.id}`);
+      } else {
+        router.back();
+      }
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Failed to add address'),
   });

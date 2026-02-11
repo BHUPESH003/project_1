@@ -1,0 +1,1213 @@
+# Complete Application Flow Diagram
+
+## System Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        USER APPLICATION                             │
+│                    (React Native / Expo)                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ Home → Browse Categories → Select Seller → Confirm Order → Pay     │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                   ┌────────────────┼────────────────┐
+                   │                │                │
+            ┌──────▼──────┐  ┌──────▼──────┐  ┌────▼───────┐
+            │  Sellers    │  │  Orders     │  │  Payments  │
+            │   App       │  │   App       │  │   App      │
+            └─────────────┘  └─────────────┘  └────────────┘
+                   │                │                │
+                   └────────────────┼────────────────┘
+                                    │
+                   ┌────────────────▼─────────────────┐
+                   │  API GATEWAY (REST + Real-time) │
+                   │  Base: /v1/                     │
+                   └────────────────┬─────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+   ┌────▼────┐  ┌──────────────┐  ┌▼────────────┐  ┌─────────┐│
+   │  Auth   │  │   Users      │  │   Orders    │  │ Sellers ││
+   │  Module │  │   Module     │  │   Module    │  │ Module  ││
+   └────┬────┘  └──────────────┘  └─┬───────────┘  └─────────┘│
+        │                            │                          │
+   ┌────▼────────────────────────────▼──────────────────────────▼──┐
+   │                      CORE SERVICES LAYER                       │
+   ├──────────────────────────────────────────────────────────────────┤
+   │                                                                  │
+   │  ┌──────────────────────────────────────────────────────────┐  │
+   │  │  STATE MACHINES & BUSINESS LOGIC                        │  │
+   │  ├──────────────────────────────────────────────────────────┤  │
+   │  │  • OrderStateMachine: CREATED → SELLER_SELECTED →       │  │
+   │  │    PAID → SELLER_ACCEPTED → PREPARING → READY →        │  │
+   │  │    PICKED_UP → DELIVERED                                │  │
+   │  │  • PaymentStateMachine: PENDING → AUTHORIZED →          │  │
+   │  │    COMPLETED                                            │  │
+   │  │  • DeliveryStateMachine: ASSIGNED → PICKED_UP →         │  │
+   │  │    IN_TRANSIT → DELIVERED                               │  │
+   │  └──────────────────────────────────────────────────────────┘  │
+   │                                                                  │
+   │  ┌──────────────────────────────────────────────────────────┐  │
+   │  │  DELIVERY ADAPTERS (Provider Abstraction)               │  │
+   │  ├──────────────────────────────────────────────────────────┤  │
+   │  │  ┌─────────────────┐  ┌─────────────────┐              │  │
+   │  │  │ UberDirectAdapt │  │  DunzoAdapter   │              │  │
+   │  │  └─────────────────┘  └─────────────────┘              │  │
+   │  │  ┌─────────────────┐  ┌─────────────────┐              │  │
+   │  │  │ PorterAdapter   │  │ OtherProviders  │              │  │
+   │  │  └─────────────────┘  └─────────────────┘              │  │
+   │  └──────────────────────────────────────────────────────────┘  │
+   │                                                                  │
+   │  ┌──────────────────────────────────────────────────────────┐  │
+   │  │  PAYMENT ADAPTERS (Provider Abstraction)                │  │
+   │  ├──────────────────────────────────────────────────────────┤  │
+   │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │  │
+   │  │  │ PayTmAdapter │  │ RazorpayAdap │  │ StripeAdapt  │  │  │
+   │  │  └──────────────┘  └──────────────┘  └──────────────┘  │  │
+   │  └──────────────────────────────────────────────────────────┘  │
+   │                                                                  │
+   │  ┌──────────────────────────────────────────────────────────┐  │
+   │  │  CATEGORY HANDLERS (Business Logic by Category)         │  │
+   │  ├──────────────────────────────────────────────────────────┤  │
+   │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │  │
+   │  │  │PrintingHandl │  │LaundryHandler│  │OtherHandlers │  │  │
+   │  │  │ calculatePrc │  │ calculatePrc │  │calculatePrice│  │  │
+   │  │  │ validate etc │  │ validate etc │  │validate etc  │  │  │
+   │  │  └──────────────┘  └──────────────┘  └──────────────┘  │  │
+   │  └──────────────────────────────────────────────────────────┘  │
+   │                                                                  │
+   └──────────────────────────────────────────────────────────────────┘
+        │
+   ┌────▼──────────────────────────────────────────────────────┐
+   │           PERSISTENCE LAYER (Prisma ORM)                  │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+   │  │    Users     │  │    Orders    │  │  Payments    │   │
+   │  │   (roles)    │  │  (detailed)  │  │ (trx + logs) │   │
+   │  └──────────────┘  └──────────────┘  └──────────────┘   │
+   │                                                            │
+   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+   │  │   Sellers    │  │ Deliveries   │  │  Files       │   │
+   │  │  (online)    │  │ (providers)  │  │ (metadata)   │   │
+   │  └──────────────┘  └──────────────┘  └──────────────┘   │
+   │                                                            │
+   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+   │  │ Categories   │  │ StateHistory │  │Notifications│   │
+   │  │ (config)     │  │ (audit log)  │  │ (events)    │   │
+   │  └──────────────┘  └──────────────┘  └──────────────┘   │
+   │                                                            │
+   └────┬──────────────────────────────────────────────────────┘
+        │
+   ┌────▼──────────────────────────────────────────────────────┐
+   │         EXTERNAL SERVICES & INFRASTRUCTURE                │
+   ├────────────────────────────────────────────────────────────┤
+   │                                                            │
+   │  ┌────────────────────────────────────────────────────┐  │
+   │  │  DELIVERY PROVIDERS                                │  │
+   │  │  ┌──────────────┐    ┌──────────────┐             │  │
+   │  │  │ Uber Direct  │    │ Dunzo API    │             │  │
+   │  │  │  API v1.0.1  │    │              │             │  │
+   │  │  └──────────────┘    └──────────────┘             │  │
+   │  └────────────────────────────────────────────────────┘  │
+   │                                                            │
+   │  ┌────────────────────────────────────────────────────┐  │
+   │  │  PAYMENT PROVIDERS                                 │  │
+   │  │  ┌──────────────┐    ┌──────────────┐             │  │
+   │  │  │ PayTm        │    │ Razorpay     │             │  │
+   │  │  │ Gateway      │    │ Gateway      │             │  │
+   │  │  └──────────────┘    └──────────────┘             │  │
+   │  └────────────────────────────────────────────────────┘  │
+   │                                                            │
+   │  ┌────────────────────────────────────────────────────┐  │
+   │  │  COMMUNICATION                                     │  │
+   │  │  ┌──────────────┐    ┌──────────────┐             │  │
+   │  │  │ SMS (Twilio) │    │ Notifications│             │  │
+   │  │  │              │    │ (Firebase)   │             │  │
+   │  │  └──────────────┘    └──────────────┘             │  │
+   │  └────────────────────────────────────────────────────┘  │
+   │                                                            │
+   │  ┌────────────────────────────────────────────────────┐  │
+   │  │  STORAGE & QUEUES                                  │  │
+   │  │  ┌──────────────┐    ┌──────────────┐             │  │
+   │  │  │ S3 / Cloud   │    │ Bull Queue / │             │  │
+   │  │  │ Storage      │    │ Redis        │             │  │
+   │  │  └──────────────┘    └──────────────┘             │  │
+   │  └────────────────────────────────────────────────────┘  │
+   │                                                            │
+   │  ┌────────────────────────────────────────────────────┐  │
+   │  │  DATABASE                                          │  │
+   │  │  ┌──────────────────────────────────────────────┐  │  │
+   │  │  │     PostgreSQL (Prisma)                     │  │  │
+   │  │  └──────────────────────────────────────────────┘  │  │
+   │  └────────────────────────────────────────────────────┘  │
+   │                                                            │
+   └────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Detailed Module Flow Diagrams
+
+### 1. AUTHENTICATION FLOW
+
+```
+┌────────────────────────────────────────────────────────┐
+│  USER APP / SELLER APP / ADMIN PANEL                  │
+└───────────────────┬──────────────────────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────┐
+        │  Request OTP         │
+        │  POST /auth/request-otp
+        │  { phone, role }     │
+        └──────────┬───────────┘
+                   │
+        ┌──────────▼───────────┐
+        │  AuthController      │
+        │  requestOtp()        │
+        └──────────┬───────────┘
+                   │
+        ┌──────────▼───────────┐
+        │  AuthService         │
+        │  requestOtp()        │
+        └──────────┬───────────┘
+                   │
+    ┌──────────────┼──────────────┐
+    │              │              │
+    ▼              ▼              ▼
+┌─────────┐  ┌──────────┐  ┌──────────┐
+│ Validate│  │ Generate │  │  Send    │
+│ phone & │  │   OTP    │  │ SMS      │
+│  role   │  │ (6 digit)│  │ (Twilio) │
+└─────────┘  └──────────┘  └──────────┘
+    │              │              │
+    └──────────────┼──────────────┘
+                   │
+        ┌──────────▼───────────┐
+        │ Store OTP in DB      │
+        │ (otps table)         │
+        │ TTL: 10 minutes      │
+        └──────────┬───────────┘
+                   │
+                   ▼
+        ┌──────────────────────┐
+        │  Response            │
+        │  { message, timeout }│
+        └──────────┬───────────┘
+                   │
+                   ▼
+        ┌──────────────────────┐
+        │  Verify OTP          │
+        │  POST /auth/verify-otp
+        │  { phone, otp, role }│
+        └──────────┬───────────┘
+                   │
+        ┌──────────▼───────────┐
+        │  AuthController      │
+        │  verifyOtp()         │
+        └──────────┬───────────┘
+                   │
+        ┌──────────▼───────────┐
+        │  AuthService         │
+        │  verifyOtp()         │
+        └──────────┬───────────┘
+                   │
+    ┌──────────────┼──────────────────────┐
+    │              │                      │
+    ▼              ▼                      ▼
+┌──────────┐  ┌──────────┐         ┌────────────┐
+│Validate  │  │Check if  │         │Create JWT  │
+│OTP match │  │User exist│         │ & refresh  │
+│& not     │  │or create │         │ tokens     │
+│expired   │  │          │         │            │
+└──────────┘  └──────────┘         └────────────┘
+    │              │                      │
+    └──────────────┼──────────────────────┘
+                   │
+        ┌──────────▼──────────────┐
+        │  Response               │
+        │  {                      │
+        │    access_token,        │
+        │    refresh_token,       │
+        │    user: { id, role }   │
+        │  }                      │
+        └──────────┬──────────────┘
+                   │
+                   ▼
+        ┌──────────────────────┐
+        │  App uses JWT for    │
+        │  authenticated calls  │
+        │  Header: Auth Bearer  │
+        └──────────────────────┘
+```
+
+### 2. ORDER CREATION FLOW
+
+```
+┌─────────────────────────────────┐
+│  USER APP - Create Order        │
+│  POST /orders                   │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│  OrdersController.createOrder()         │
+│  { categoryId, files, payload, ... }    │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│  OrdersService.createOrder()            │
+└────────────┬────────────────────────────┘
+             │
+    ┌────────┴────────┬──────────────────┐
+    │                 │                  │
+    ▼                 ▼                  ▼
+┌──────────┐  ┌────────────┐     ┌────────────────┐
+│Validate  │  │Get Category│     │Calculate price │
+│seller &  │  │& handler   │     │via handler     │
+│user      │  │            │     │                │
+└──────────┘  └────────────┘     └────────────────┘
+    │                 │                  │
+    └────────────┬────┴──────────────────┘
+                 │
+        ┌────────▼──────────┐
+        │ Create Order      │
+        │ (CREATED state)   │
+        │ • userId          │
+        │ • categoryId      │
+        │ • orderPayload    │
+        │ • itemCost        │
+        └────────┬──────────┘
+                 │
+        ┌────────▼──────────────┐
+        │ Record initial state  │
+        │ (OrderStateHistory)   │
+        │ FROM: null            │
+        │ TO: CREATED           │
+        └────────┬──────────────┘
+                 │
+        ┌────────▼──────────┐
+        │ Response          │
+        │ {                 │
+        │   order_id,       │
+        │   status,         │
+        │   pricing,        │
+        │   ...             │
+        │ }                 │
+        └────────┬──────────┘
+                 │
+                 ▼
+        ┌────────────────┐
+        │Next: User      │
+        │selects seller  │
+        └────────────────┘
+```
+
+### 3. SELLER SELECTION FLOW
+
+```
+┌──────────────────────────────────────┐
+│  USER APP - Select Seller            │
+│  POST /orders/:id/select-seller      │
+│  { sellerId }                        │
+└────────────┬───────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────────┐
+│  OrdersController.selectSeller()     │
+│  (User must own order)               │
+└────────────┬───────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────────┐
+│  OrdersService.selectSeller()        │
+└────────────┬───────────────────────┘
+             │
+    ┌────────┴──────────┬──────────────┐
+    │                   │              │
+    ▼                   ▼              ▼
+┌─────────┐      ┌────────────┐  ┌──────────┐
+│Validate │      │Check seller│  │Get price │
+│order    │      │is ONLINE & │  │from      │
+│exists & │      │supports    │  │category  │
+│owned by │      │category    │  │handler   │
+│user     │      │            │  │          │
+└─────────┘      └────────────┘  └──────────┘
+    │                   │              │
+    └────────────────┬──┴──────────────┘
+                     │
+            ┌────────▼────────┐
+            │ Update order    │
+            │ • sellerId      │
+            │ • itemCost      │
+            └────────┬────────┘
+                     │
+            ┌────────▼──────────────┐
+            │ STATE TRANSITION      │
+            │ CREATED →             │
+            │ SELLER_SELECTED       │
+            │ (or stay same if      │
+            │  changing seller)     │
+            └────────┬──────────────┘
+                     │
+            ┌────────▼──────────┐
+            │ Record state      │
+            │ history           │
+            └────────┬──────────┘
+                     │
+            ┌────────▼──────────┐
+            │ Response          │
+            │ {                 │
+            │   order_id,       │
+            │   status,         │
+            │   seller: {...},  │
+            │   pricing: {...}  │
+            │ }                 │
+            └────────┬──────────┘
+                     │
+                     ▼
+            ┌────────────────┐
+            │Next: Get       │
+            │delivery quote  │
+            └────────────────┘
+```
+
+### 4. DELIVERY QUOTE & CREATION FLOW
+
+```
+┌────────────────────────────────────────┐
+│ USER APP - Get Delivery Quote         │
+│ POST /orders/:id/delivery-quote       │
+│ { dropLatitude, dropLongitude, ... }  │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────┐
+│ OrdersController.getDeliveryQuote()   │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────┐
+│ OrdersService.getDeliveryQuote()      │
+└──────────┬───────────────────────────┘
+           │
+    ┌──────┴────────┬───────────────────┐
+    │               │                   │
+    ▼               ▼                   ▼
+┌────────┐  ┌───────────────┐  ┌──────────────┐
+│Validate│  │Get preferred  │  │Call delivery │
+│delivery│  │provider from  │  │adapter.      │
+│location│  │config         │  │getQuote()    │
+└────────┘  └───────────────┘  └──────────────┘
+    │               │                   │
+    └───────────────┼───────────────────┘
+                    │
+        ┌───────────▼─────────────┐
+        │ UberDirectAdapter       │
+        │ .getQuote()             │
+        └───────────┬─────────────┘
+                    │
+        ┌───────────▼─────────────────────┐
+        │ 1. Ensure OAuth token valid     │
+        │    ensureValidToken()           │
+        │    - Get from /oauth/token      │
+        │    - Cache with TTL             │
+        └───────────┬─────────────────────┘
+                    │
+        ┌───────────▼─────────────────────┐
+        │ 2. Call Uber API                │
+        │    POST /v1/customers/          │
+        │    {customer_id}/               │
+        │    delivery_quotes              │
+        │                                 │
+        │    Payload:                     │
+        │    {                            │
+        │      pickup_address: JSON str,  │
+        │      dropoff_address: JSON str, │
+        │      pickup_latitude,           │
+        │      pickup_longitude,          │
+        │      dropoff_latitude,          │
+        │      dropoff_longitude,         │
+        │      time windows,              │
+        │      manifest_total_value       │
+        │    }                            │
+        └───────────┬─────────────────────┘
+                    │
+        ┌───────────▼──────────────────┐
+        │ 3. Parse response:           │
+        │    {                         │
+        │      id,                     │
+        │      fee (cents),            │
+        │      duration (seconds),     │
+        │      currency,               │
+        │      expires                 │
+        │    }                         │
+        └───────────┬──────────────────┘
+                    │
+        ┌───────────▼──────────────────┐
+        │ 4. Convert to app format:    │
+        │    {                         │
+        │      estimatedFee (rupees),  │
+        │      estimatedDurationMin,   │
+        │      quoteId,                │
+        │      expiresAt               │
+        │    }                         │
+        └───────────┬──────────────────┘
+                    │
+        ┌───────────▼──────────────────┐
+        │ Save to order:               │
+        │ • dropLatitude               │
+        │ • dropLongitude              │
+        │ • dropAddress                │
+        │ • deliveryFee                │
+        └───────────┬──────────────────┘
+                    │
+        ┌───────────▼──────────────────┐
+        │ Response                     │
+        │ {                            │
+        │   delivery_fee,              │
+        │   delivery_duration_minutes, │
+        │   quote_id                   │
+        │ }                            │
+        └───────────┬──────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────┐
+        │ Next: Confirm order  │
+        │ & make payment       │
+        └──────────────────────┘
+```
+
+### 5. ORDER CONFIRMATION & PAYMENT FLOW
+
+```
+┌────────────────────────────────────────┐
+│ USER APP - Confirm Order & Pay        │
+│ POST /orders/:id/confirm              │
+│ { paymentMethod, ... }                │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────┐
+│ OrdersController.confirmOrder()        │
+│ (Must be SELLER_SELECTED state)       │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────┐
+│ OrdersService.confirmOrder()           │
+└──────────┬───────────────────────────┘
+           │
+    ┌──────┴──────────┬─────────────────┐
+    │                 │                 │
+    ▼                 ▼                 ▼
+┌────────┐    ┌──────────────┐   ┌───────────┐
+│Validate│    │Lock order &  │   │Get total  │
+│order   │    │seller (check │   │amount:    │
+│state & │    │seller still  │   │itemCost + │
+│seller  │    │ONLINE)       │   │deliveryFee│
+└────────┘    └──────────────┘   └───────────┘
+    │                 │                 │
+    └─────────────┬───┴─────────────────┘
+                  │
+        ┌─────────▼──────────────────┐
+        │ PaymentsService.           │
+        │ initiatePayment()          │
+        └─────────┬──────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 1. Create payment record:          │
+        │    Status: PENDING                 │
+        │    Amount, orderId, userId        │
+        │    paymentMethod                  │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 2. Route to payment adapter:       │
+        │    - PayTmAdapter                  │
+        │    - RazorpayAdapter               │
+        │    - StripeAdapter                 │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 3. Call payment gateway:           │
+        │    POST /initiate                  │
+        │    {                               │
+        │      amount (cents),               │
+        │      orderId,                      │
+        │      redirectUrl,                  │
+        │      ...                           │
+        │    }                               │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 4. Response with:                  │
+        │    • paymentUrl                    │
+        │    • gatewayOrderId                │
+        │    • transactionId                 │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 5. Update payment record:          │
+        │    Status: AUTHORIZED              │
+        │    gatewayOrderId                  │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 6. STATE TRANSITION:               │
+        │    SELLER_SELECTED →               │
+        │    PAID                            │
+        │    (via OrderStateMachine)         │
+        └─────────┬──────────────────────────┘
+                  │
+        ┌─────────▼──────────────────────────┐
+        │ 7. Response:                       │
+        │    {                               │
+        │      paymentUrl (redirect user),   │
+        │      gatewayOrderId                │
+        │    }                               │
+        └─────────┬──────────────────────────┘
+                  │
+                  ▼
+        ┌────────────────────────┐
+        │ User redirected to     │
+        │ payment gateway        │
+        │ (external)             │
+        └────────┬───────────────┘
+                 │
+         ┌───────▼────────────────────┐
+         │ Payment Gateway            │
+         │ • User enters card         │
+         │ • OTP/Authentication       │
+         │ • Payment processed        │
+         │ • Redirect back to app     │
+         │   with status              │
+         └───────┬────────────────────┘
+                 │
+         ┌───────▼────────────────────────┐
+         │ Webhook from payment gateway   │
+         │ POST /internal/payments/webhook│
+         │ { txnId, status, ... }        │
+         └───────┬────────────────────────┘
+                 │
+         ┌───────▼────────────────────────┐
+         │ PaymentsController.            │
+         │ paymentWebhook()               │
+         └───────┬────────────────────────┘
+                 │
+         ┌───────▼────────────────────────┐
+         │ PaymentsService.               │
+         │ handleWebhook()                │
+         │                                │
+         │ 1. Verify webhook signature    │
+         │ 2. Find payment by txnId       │
+         │ 3. Update status: COMPLETED    │
+         │ 4. Fetch order                 │
+         │ 5. Trigger next workflow       │
+         │    (auto-trigger seller app)   │
+         └───────┬────────────────────────┘
+                 │
+         ┌───────▼────────────────────────┐
+         │ Auto-assignment flow           │
+         │ (seller app shows order)       │
+         └────────────────────────────────┘
+```
+
+### 6. ORDER DELIVERY LIFECYCLE
+
+```
+┌────────────────────────────────────────┐
+│ SELLER APP - Seller Actions            │
+│ Flow: Accept → Prepare → Ready → Done │
+└──────────┬───────────────────────────┘
+           │
+    ┌──────▼──────────────────────────────┐
+    │ Seller receives order notification  │
+    │ (Push + in-app)                    │
+    │ Order in PAID state                │
+    │                                    │
+    │ Seller can:                        │
+    │ 1. ACCEPT (→ SELLER_ACCEPTED)     │
+    │ 2. REJECT (→ SELLER_REJECTED)     │
+    │    (can select new seller)         │
+    └──────┬───────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────────┐
+    │ Seller accepts order                    │
+    │ POST /seller/orders/:id/accept          │
+    └──────┬───────────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────────┐
+    │ OrderStateMachine.transition()           │
+    │ PAID → SELLER_ACCEPTED                   │
+    │ Records OrderStateHistory                │
+    └──────┬───────────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────────┐
+    │ Seller marks "Ready for Pickup"         │
+    │ POST /seller/orders/:id/ready            │
+    └──────┬───────────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────────┐
+    │ OrdersService.markReady()                │
+    └──────┬───────────────────────────────────┘
+           │
+    ┌──────┴────────────────┬─────────────────┐
+    │                       │                 │
+    ▼                       ▼                 ▼
+┌──────────┐         ┌───────────────┐  ┌──────────┐
+│Validate  │         │Update times   │  │Assign    │
+│order     │         │preparationEnd │  │delivery  │
+│state     │         │readyAt        │  │provider  │
+└──────────┘         └───────────────┘  └──────────┘
+    │                       │                 │
+    └───────────────────┬───┴─────────────────┘
+                        │
+            ┌───────────▼────────────────┐
+            │ DeliveryService.           │
+            │ assignDelivery()           │
+            └───────────┬────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 1. Get delivery provider from config
+            │    (e.g., UBER_DIRECT)             │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 2. DeliveryAdapter.createTask()    │
+            │    (UberDirectAdapter.createTask) │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 3. Call provider API               │
+            │    POST /v1/customers/{cust_id}   │
+            │    /deliveries                    │
+            │                                   │
+            │    Complete payload:              │
+            │    • pickup_name, address, phone  │
+            │    • dropoff_name, address, phone │
+            │    • manifest_items (detailed)    │
+            │    • time windows (RFC 3339)      │
+            │    • manifest_total_value (cents) │
+            │    • quote_id (from getQuote)     │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 4. Parse response:                 │
+            │    {                               │
+            │      id,                           │
+            │      fee,                          │
+            │      tracking_url,                 │
+            │      pickup_eta,                   │
+            │      dropoff_eta,                  │
+            │      ...                           │
+            │    }                               │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 5. Create Delivery record          │
+            │    • providerTaskId (from API)    │
+            │    • provider (UBER_DIRECT)       │
+            │    • status (ASSIGNED)            │
+            │    • trackingUrl                  │
+            │    • eta                          │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 6. STATE TRANSITION:               │
+            │    SELLER_ACCEPTED →               │
+            │    PREPARING                       │
+            └───────────┬────────────────────────┘
+                        │
+            ┌───────────▼────────────────────────┐
+            │ 7. Notify user:                    │
+            │    "Delivery assigned"             │
+            │    Tracking URL                    │
+            └───────────┬────────────────────────┘
+                        │
+                        ▼
+            ┌───────────────────────────────┐
+            │ PREPARING → READY →           │
+            │ PICKED_UP → IN_TRANSIT →      │
+            │ DELIVERED (via webhooks)      │
+            └───────────────────────────────┘
+```
+
+### 7. DELIVERY WEBHOOK FLOW
+
+```
+┌──────────────────────────────────────────┐
+│ Delivery Provider (Uber Direct)          │
+│ Courier picks up order                  │
+│ Trigger webhook event: delivery.pickup_complete
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────────┐
+│ POST /internal/delivery/webhook            │
+│ {                                          │
+│   delivery_id,                             │
+│   event_type,                              │
+│   timestamp,                               │
+│   ...                                      │
+│ }                                          │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────────┐
+│ DeliveryController.handleWebhook()         │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────────┐
+│ DeliveryService.handleWebhook()            │
+└──────────┬───────────────────────────────┘
+           │
+    ┌──────┴──────────────┬──────────────────┐
+    │                     │                  │
+    ▼                     ▼                  ▼
+┌─────────┐      ┌──────────────┐   ┌─────────────┐
+│Verify   │      │Parse webhook │   │Find order & │
+│webhook  │      │(validate)    │   │delivery rec │
+│signature│      │              │   │             │
+└─────────┘      └──────────────┘   └─────────────┘
+    │                     │                  │
+    └─────────────────┬───┴──────────────────┘
+                      │
+            ┌─────────▼──────────────┐
+            │ Map event to status:   │
+            │                        │
+            │ delivery.pickup_compl  │
+            │ → PICKED_UP            │
+            │                        │
+            │ delivery.completed     │
+            │ → DELIVERED            │
+            │                        │
+            │ delivery.failed        │
+            │ → FAILED               │
+            └─────────┬──────────────┘
+                      │
+            ┌─────────▼──────────────────────┐
+            │ Update Delivery record:        │
+            │ • status                       │
+            │ • updatedAt                    │
+            │ • metadata (from webhook)      │
+            └─────────┬──────────────────────┘
+                      │
+            ┌─────────▼──────────────────────┐
+            │ STATE TRANSITION via            │
+            │ OrderStateMachine.transition() │
+            │                                │
+            │ Event handling:                │
+            │ PICKED_UP →                    │
+            │ IN_TRANSIT →                   │
+            │ DELIVERED                      │
+            └─────────┬──────────────────────┘
+                      │
+            ┌─────────▼──────────────────────┐
+            │ Trigger notifications:         │
+            │ • Notify user                  │
+            │ • Update UI in real-time       │
+            │ • Record audit logs            │
+            └─────────┬──────────────────────┘
+                      │
+                      ▼
+            ┌──────────────────────┐
+            │ Order complete       │
+            │ Send success email   │
+            │ Mark delivery done   │
+            └──────────────────────┘
+```
+
+### 8. STATE MACHINE DIAGRAM
+
+```
+                              ┌──────────────────┐
+                              │  ORDER CREATED   │
+                              └────────┬─────────┘
+                                       │
+                  Can → SELLER_SELECTED│ Can → USER_CANCELLED
+                       (select seller) │ (cancel order)
+                                       │
+                                       ▼
+                        ┌──────────────────────────┐
+                        │ SELLER_SELECTED          │
+                        │ (seller chosen, waiting) │
+                        └────────┬────────┬────────┘
+                                 │        │
+                   Can → PAID    │        │ Can → USER_CANCELLED
+                   (confirm pay) │        │
+                                 │ Can → SELLER_SELECTED
+                                 │   (change seller)
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │  PAID            │
+                        │  (payment done)  │
+                        └────────┬────────┘
+                                 │
+       ┌─────────────┬───────────┴──────────┬──────────────┐
+       │             │                      │              │
+    Can →       Can →                   Can →         Can →
+    SELLER_     SELLER_             USER_CANCELLED
+    ACCEPTED    REJECTED
+    (seller     (seller 
+    accepts)    rejects)
+       │                                
+       ▼                                
+┌─────────────────────┐                
+│ SELLER_ACCEPTED     │ Can → SELLER_SELECTED (fallback)
+└────────┬────────────┘
+         │
+      Can →
+      PREPARING
+      (seller
+      working)
+         │
+         ▼
+┌───────────────┐
+│ PREPARING     │
+└────────┬──────┘
+         │
+      Can →
+      READY_FOR_PICKUP
+         │
+         ▼
+┌──────────────────────┐
+│ READY_FOR_PICKUP     │
+└────────┬─────────────┘
+         │
+      Can →
+      PICKED_UP
+      (courier picked)
+         │
+         ▼
+┌──────────────────┐
+│ PICKED_UP        │
+└────────┬─────────┘
+         │
+      Can →
+      DELIVERED    Can →
+      (completed)  DELIVERY_FAILED
+         │            │
+         ▼            ▼
+    ┌────────┐   ┌──────────────┐
+    │DELIVERED│   │DELIVERY_FAILED│
+    │(TERMINAL)   │(TERMINAL)     │
+    └────────┘   └──────────────┘
+
+
+TERMINAL STATES:
+┌────────────────────────────────────────┐
+│ • DELIVERED - Order completed          │
+│ • USER_CANCELLED - User cancelled      │
+│ • SELLER_REJECTED - Seller rejected    │
+│ • ORDER_EXPIRED - Order timed out      │
+│ • DELIVERY_FAILED - Delivery failed    │
+└────────────────────────────────────────┘
+```
+
+### 9. NOTIFICATION FLOW
+
+```
+┌──────────────────────────────────┐
+│ Event Triggered                  │
+│ (Order state change)             │
+└──────────┬───────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ OrderStateMachine.transition()           │
+│ Records transition in OrderStateHistory  │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Queue event to Bull Queue (Redis)        │
+│ Event type:                              │
+│ • order.created                          │
+│ • order.seller_selected                  │
+│ • order.paid                             │
+│ • order.seller_accepted                  │
+│ • order.ready                            │
+│ • order.delivered                        │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ NotificationsService                     │
+│ (Consumer of queue events)               │
+└──────────┬───────────────────────────────┘
+           │
+    ┌──────┴──────────┬──────────────┐
+    │                 │              │
+    ▼                 ▼              ▼
+┌─────────┐    ┌──────────────┐  ┌──────────────┐
+│Send SMS │    │Send push     │  │Send in-app   │
+│(Twilio) │    │notification │  │notification  │
+│         │    │(Firebase)    │  │(store event) │
+└─────────┘    └──────────────┘  └──────────────┘
+    │                 │              │
+    └─────────────┬───┴──────────────┘
+                  │
+         ┌────────▼─────────────┐
+         │ Log notification:    │
+         │ • recipient          │
+         │ • type               │
+         │ • status             │
+         │ • timestamp          │
+         └─────────────────────┘
+```
+
+### 10. ERROR & RECOVERY FLOW
+
+```
+┌──────────────────────────────────────┐
+│ Operation Fails                      │
+│ (e.g., payment, delivery)            │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ Catch & Log Error                    │
+│ • error message                      │
+│ • stack trace                        │
+│ • context (orderId, etc)             │
+└──────────┬───────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ Update order status                  │
+│ Transition to FAILURE state or keep  │
+│ in recovery state (e.g., PAID but no │
+│ seller response for timeout)         │
+└──────────┬───────────────────────────┘
+           │
+    ┌──────▼──────────────┬─────────────┐
+    │                     │             │
+    ▼                     ▼             ▼
+┌─────────────┐  ┌──────────────┐  ┌──────────────┐
+│Retry with  │  │Admin manual  │  │User cancels/ │
+│exponential │  │intervention  │  │new attempt   │
+│backoff     │  │              │  │              │
+└─────────────┘  └──────────────┘  └──────────────┘
+    │                  │                   │
+    └─────────────┬────┴───────────────────┘
+                  │
+         ┌────────▼──────────┐
+         │ Notify user:      │
+         │ • Error message   │
+         │ • Recovery option │
+         │ • Support link    │
+         └───────────────────┘
+```
+
+---
+
+## Database Schema Overview
+
+```
+┌────────────────────────────────────────────────────────┐
+│              CORE ENTITIES                             │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │    Users     │  │  Sellers     │  │ Categories   │ │
+│  │ (roles)      │  │  (ONLINE)    │  │  (static)    │ │
+│  │              │  │              │  │              │ │
+│  │ • id         │  │ • id         │  │ • id         │ │
+│  │ • phone      │  │ • phone      │  │ • name       │ │
+│  │ • role       │  │ • status     │  │ • status     │ │
+│  │ • verified   │  │ • pricePerPg │  │ • handler    │ │
+│  │              │  │              │  │              │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│                                                        │
+│  ┌──────────────────────────────────────────────────┐ │
+│  │            Orders (CORE)                         │ │
+│  ├──────────────────────────────────────────────────┤ │
+│  │ • id                                             │ │
+│  │ • userId (FK)                                    │ │
+│  │ • sellerId (FK, nullable until selection)        │ │
+│  │ • categoryId (FK)                                │ │
+│  │ • status (state machine)                         │ │
+│  │ • orderPayload (JSON: category-specific data)    │ │
+│  │ • itemCost, deliveryFee, totalAmount (Decimal)   │ │
+│  │ • dropLatitude, dropLongitude, dropAddress       │ │
+│  │ • failureReason (if cancelled)                   │ │
+│  │ • timestamps: createdAt, updatedAt, completedAt  │ │
+│  │ • relations: user, seller, category, files       │ │
+│  └──────────────────────────────────────────────────┘ │
+│                                                        │
+│  ┌──────────────────────────────────────────────────┐ │
+│  │        OrderStateHistory (Audit Log)             │ │
+│  ├──────────────────────────────────────────────────┤ │
+│  │ Immutable record of all state transitions        │ │
+│  │ • id                                             │ │
+│  │ • orderId (FK)                                   │ │
+│  │ • fromStatus, toStatus                           │ │
+│  │ • triggeredBy (userId or "system")               │ │
+│  │ • reason (optional)                              │ │
+│  │ • createdAt (immutable)                          │ │
+│  └──────────────────────────────────────────────────┘ │
+│                                                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │  Payments    │  │  Deliveries  │  │    Files     │ │
+│  │              │  │              │  │              │ │
+│  │ • id         │  │ • id         │  │ • id         │ │
+│  │ • orderId    │  │ • orderId    │  │ • orderId    │ │
+│  │ • amount     │  │ • provider   │  │ • url        │ │
+│  │ • status     │  │ • providerTsk│  │ • size       │ │
+│  │ • txnId      │  │ • status     │  │ • type       │ │
+│  │ • method     │  │ • eta        │  │ • createdAt  │ │
+│  │ • createdAt  │  │ • trackingUrl│  │              │ │
+│  │              │  │ • createdAt  │  │              │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## API Endpoints Summary
+
+### Authentication
+```
+POST /v1/auth/request-otp       # Request OTP
+POST /v1/auth/verify-otp        # Verify & get JWT
+POST /v1/auth/refresh-token     # Refresh JWT
+```
+
+### Categories
+```
+GET /v1/categories              # List all categories
+```
+
+### Sellers
+```
+GET /v1/sellers                 # Find sellers (with filters)
+GET /v1/sellers/:id             # Get seller profile
+```
+
+### Orders (User App)
+```
+POST /v1/orders                         # Create order
+GET  /v1/orders/:id                     # Get order details
+POST /v1/orders/:id/select-seller       # Select seller
+POST /v1/orders/:id/delivery-quote      # Get delivery quote
+POST /v1/orders/:id/confirm             # Confirm & pay
+```
+
+### Orders (Seller App)
+```
+GET  /v1/seller/orders                  # List seller's orders
+POST /v1/seller/orders/:id/accept       # Accept order
+POST /v1/seller/orders/:id/reject       # Reject order
+POST /v1/seller/orders/:id/ready        # Mark ready for pickup
+```
+
+### Admin
+```
+GET  /v1/admin/orders                           # List all orders
+POST /v1/admin/orders/:id/reassign-seller      # Reassign seller
+POST /v1/admin/orders/:id/reassign-delivery    # Reassign delivery
+POST /v1/admin/orders/:id/cancel               # Cancel order
+```
+
+### Internal Endpoints
+```
+POST /v1/internal/files/presigned-url          # S3 upload URL
+POST /v1/internal/files/validate               # Validate file
+POST /v1/internal/payments/webhook             # Payment webhook
+POST /v1/internal/delivery/webhook             # Delivery webhook
+```
+
+---
+
+## Key Architectural Decisions
+
+### 1. **Order State Machine** ✅
+- Single source of truth for order states
+- Enforces valid transitions server-side
+- Immutable audit trail (OrderStateHistory)
+
+### 2. **Category Handler Pattern** ✅
+- Extensible for multiple service types
+- Price calculation per category
+- Validation rules per category
+
+### 3. **Delivery Provider Abstraction** ✅
+- Pluggable delivery providers
+- Unified interface (DeliveryAdapter)
+- Easy to add new providers
+
+### 4. **Payment Provider Abstraction** ✅
+- Pluggable payment gateways
+- Webhook-driven reconciliation
+- Atomic payment state updates
+
+### 5. **Event-Driven Notifications** ✅
+- Bull Queue + Redis for async events
+- Decoupled from order operations
+- Supports multiple channels (SMS, Push, In-app)
+
+### 6. **User Authentication** ✅
+- OTP-based (SMS via Twilio)
+- JWT tokens (access + refresh)
+- Role-based access control (User, Seller, Admin)
+
+---
+
+## Technology Stack
+
+```
+Backend:
+├── Framework: NestJS 9+
+├── ORM: Prisma
+├── Database: PostgreSQL
+├── Authentication: JWT + OTP
+├── Async: Bull Queue (Redis)
+├── File Storage: S3
+├── SMS: Twilio
+└── Documentation: Swagger/OpenAPI
+
+Frontend:
+├── User App: React Native + Expo
+├── State: TanStack Query (React Query)
+├── Navigation: Expo Router
+└── UI: React Native components
+
+External Services:
+├── Delivery: Uber Direct API v1.0.1
+├── Payments: PayTm, Razorpay, Stripe
+├── Communications: Twilio (SMS)
+└── Notifications: Firebase Cloud Messaging
+```
+
+---
+
+## Deployment & Infrastructure
+
+```
+┌────────────────────────────────────────┐
+│  Application Server                    │
+│  NestJS + PostgreSQL                   │
+├────────────────────────────────────────┤
+│  Health Check: /health                 │
+│  Graceful Shutdown: SIGTERM/SIGINT    │
+│  Rate Limiting: 10 req/60sec           │
+│  Database Pooling: Prisma              │
+└────────────────────────────────────────┘
+        │
+        ├─► PostgreSQL DB
+        ├─► Redis (Queue)
+        ├─► S3 Storage
+        └─► External APIs
+```
+
+This comprehensive flow diagram covers the entire application architecture, data flow, and key processes!

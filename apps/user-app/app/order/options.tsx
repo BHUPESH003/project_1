@@ -62,11 +62,11 @@ export default function OrderOptionsScreen() {
 
   const onContinue = () => {
     setError(null);
-    setOptions({ copies, color: mode === 'color' });
+    setOptions({ copies, color: mode === 'color', pages: file?.pageCount ?? 1 });
     createOrderMutation.mutate();
   };
 
-  const pageCount = options.pages;
+  const pageCount = file?.pageCount ?? 1;
   const submitting = createOrderMutation.isPending;
 
   useEffect(() => {

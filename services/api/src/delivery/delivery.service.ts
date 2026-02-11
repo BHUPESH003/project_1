@@ -49,7 +49,7 @@ export class DeliveryService {
     private readonly stateMachine: OrderStateMachineService,
     @Inject(forwardRef(() => OrderRepository))
     private readonly orderRepository: OrderRepository,
-  ) {}
+  ) { }
 
   /**
    * Assign delivery to order
@@ -160,10 +160,90 @@ export class DeliveryService {
   }
 
   /**
-   * Get delivery quote
+   * Get delivery quotes from all available providers
    *
-   * Gets delivery cost estimate from provider.
-   * Used for pricing display before delivery assignment.
+   * Fetches quotes from all registered delivery adapters in parallel.
+   * Used for displaying multiple delivery options to user.
+   * Returns array of quote options sorted by price.
+   */
+  async getAllQuotes(
+    pickup: { latitude: number; longitude: number; address: string },
+    drop: { latitude: number; longitude: number; address: string },
+    orderId: string,
+  ): Promise<
+    {
+      provider: string;
+      estimatedFee: number;
+      estimatedDurationMinutes: number;
+      quoteId?: string;
+      expiresAt?: Date;
+    }[]
+  > {
+    const registeredProviders = this.adapterRegistry.getRegisteredProviders();
+
+    if (!registeredProviders.length) {
+      throw new Error('No delivery providers registered');
+    }
+
+    // Request quote from adapter
+    const quoteRequest: DeliveryQuoteRequest = {
+      pickup,
+      drop,
+      orderId,
+    };
+
+    // Fetch quotes from all providers in parallel
+    const quotePromises = registeredProviders.map(async (providerName) => {
+      try {
+        const adapter = this.adapterRegistry.getAdapter(providerName);
+        const quote = await adapter.getQuote(quoteRequest);
+
+        this.logger.log(
+          `Quote from ${quote.provider}: ₹${quote.estimatedFee} (${quote.estimatedDurationMinutes}min)`,
+        );
+
+        return {
+          provider: quote.provider,
+          estimatedFee: quote.estimatedFee,
+          estimatedDurationMinutes: quote.estimatedDurationMinutes,
+          quoteId: quote.quoteId,
+          expiresAt: quote.expiresAt,
+        };
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(
+          `Failed to get quote from ${providerName}: ${errorMsg}`,
+        );
+        // Return null for failed providers - they'll be filtered out
+        return null;
+      }
+    });
+
+    const quotes = await Promise.all(quotePromises);
+
+    // Filter out failed providers and sort by price
+    const validQuotes = quotes
+      .filter((q) => q !== null)
+      .sort((a, b) => a!.estimatedFee - b!.estimatedFee);
+
+    if (!validQuotes.length) {
+      throw new Error('Failed to fetch delivery quotes from all providers');
+    }
+
+    this.logger.log(
+      `Delivery quotes for order ${orderId}: ${validQuotes.length} providers available`,
+    );
+
+    return validQuotes as any[];
+  }
+
+  /**
+   * Get delivery quote (LEGACY)
+   *
+   * Gets delivery cost estimate from default provider only.
+   * Kept for backward compatibility.
+   * Recommend using getAllQuotes() instead.
    */
   async getQuote(
     pickup: { latitude: number; longitude: number; address: string },
@@ -462,5 +542,61 @@ export class DeliveryService {
       tracking_url: delivery.providerTrackingUrl || undefined,
       status: delivery.status,
     };
+  }
+
+  /**
+   * Validate delivery provider is registered
+   * @throws Error if provider not registered
+   */
+  validateDeliveryProvider(providerName: string): void {
+    if (!this.adapterRegistry.hasAdapter(providerName)) {
+      const available = this.adapterRegistry.getRegisteredProviders().join(', ');
+      throw new Error(
+        `Provider ${providerName} not available. Available: ${available}`,
+      );
+    }
+  }
+
+  /**
+   * Get quote from specific delivery provider
+   * @param providerName - Provider name (e.g., 'UBER_DIRECT', 'DUNZO')
+   */
+  async getQuoteFromProvider(
+    providerName: string,
+    pickup: { latitude: number; longitude: number; address: string },
+    drop: { latitude: number; longitude: number; address: string },
+    orderId: string,
+  ): Promise<{ estimatedFee: number; provider: string; estimatedDurationMinutes: number }> {
+    // Validate provider
+    this.validateDeliveryProvider(providerName);
+
+    // Get adapter for provider
+    const adapter = this.adapterRegistry.getAdapter(providerName);
+
+    // Request quote from adapter
+    const quoteRequest: DeliveryQuoteRequest = {
+      pickup,
+      drop,
+      orderId,
+    };
+
+    const quote = await adapter.getQuote(quoteRequest);
+
+    this.logger.log(
+      `Quote from ${providerName} for order ${orderId}: ₹${quote.estimatedFee} (${quote.estimatedDurationMinutes}min)`,
+    );
+
+    return {
+      estimatedFee: quote.estimatedFee,
+      provider: quote.provider,
+      estimatedDurationMinutes: quote.estimatedDurationMinutes,
+    };
+  }
+
+  /**
+   * Get all registered delivery providers
+   */
+  getAvailableProviders(): string[] {
+    return this.adapterRegistry.getRegisteredProviders();
   }
 }

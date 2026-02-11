@@ -28,6 +28,7 @@ import { SelectSellerDto } from './dto/select-seller.dto';
 import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
+import { SelectDeliveryProviderDto } from './dto/select-delivery-provider.dto';
 import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
 
 @Injectable()
@@ -235,7 +236,8 @@ export class OrdersService {
       itemCost: priceBreakdown.itemPrice / 100, // Convert from paise to rupees
     });
 
-    // Transition state: CREATED → SELLER_SELECTED
+    // Transition state: CREATED → SELLER_SELECTED (or stay in SELLER_SELECTED if changing seller)
+    // This allows users to change their selected seller before payment
     await this.stateMachine.transition({
       orderId,
       toState: OrderStatus.SELLER_SELECTED,
@@ -271,6 +273,10 @@ export class OrdersService {
     locationDto: DeliveryQuoteDto,
   ) {
     // Get order
+    console.log('Getting order for delivery quote:', orderId);
+    console.log('Getting user Id:', userId);
+    console.log('Getting location for delivery quote:', locationDto);
+
     const order = await this.orderRepository.findById(orderId, false);
     if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
@@ -342,6 +348,236 @@ export class OrdersService {
       this.logger.error(`Failed to get delivery quote for order ${orderId}:`, errorMessage);
       throw new BadRequestException(`Unable to get delivery pricing: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Get all available delivery quotes (USER APP)
+   * Returns options from all registered delivery providers
+   * Used for showing multiple delivery choices with pricing and ETAs
+   */
+  async getAllDeliveryQuotes(
+    orderId: string,
+    userId: string,
+    locationDto: DeliveryQuoteDto,
+  ) {
+    // Get order
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify order belongs to user
+    if (order.userId !== userId) {
+      throw new BadRequestException('Order does not belong to user');
+    }
+
+    // Verify order has seller selected
+    if (!order.sellerId) {
+      throw new BadRequestException(
+        'Seller must be selected before getting delivery quotes',
+      );
+    }
+
+    // Verify order is in correct state
+    if (order.status !== OrderStatus.SELLER_SELECTED) {
+      throw new BadRequestException(
+        `Order must be in SELLER_SELECTED state. Current state: ${order.status}`,
+      );
+    }
+
+    // Get seller location
+    const seller = await this.sellerRepository.findById(order.sellerId);
+    if (!seller) {
+      throw new NotFoundException('Seller not found');
+    }
+
+    // Get quotes from all available delivery providers
+    try {
+      const allQuotes = await this.deliveryService.getAllQuotes(
+        {
+          latitude: Number(seller.latitude),
+          longitude: Number(seller.longitude),
+          address: seller.address,
+        },
+        {
+          latitude: locationDto.dropLocation.lat,
+          longitude: locationDto.dropLocation.lng,
+          address: locationDto.dropLocation.address || 'Delivery Address',
+        },
+        orderId,
+      );
+
+      // Update order with delivery location (but NOT yet delivery provider)
+      await this.orderRepository.update(orderId, {
+        dropLatitude: locationDto.dropLocation.lat,
+        dropLongitude: locationDto.dropLocation.lng,
+        dropAddress: locationDto.dropLocation.address,
+      });
+
+      // Transform to response format with provider details
+      const options = allQuotes.map((quote) => ({
+        provider: quote.provider,
+        displayName: this.getProviderDisplayName(quote.provider),
+        estimatedFee: quote.estimatedFee,
+        estimatedDurationMinutes: quote.estimatedDurationMinutes,
+        currency: 'INR',
+        quoteId: quote.quoteId,
+        expiresAt: quote.expiresAt,
+        features: this.getProviderFeatures(quote.provider),
+        logo: this.getProviderLogoUrl(quote.provider),
+        rating: this.getProviderRating(quote.provider),
+      }));
+
+      this.logger.log(
+        `All delivery quotes for order ${orderId}: ${options.length} providers`,
+      );
+
+      return {
+        order_id: orderId,
+        options,
+        message: `${options.length} delivery options available. Select preferred provider to proceed.`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get delivery quotes';
+      this.logger.error(`Failed to get all delivery quotes for order ${orderId}:`, errorMessage);
+      throw new BadRequestException(`Unable to get delivery options: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Select delivery provider for order (USER APP)
+   * User picks their preferred delivery partner from available options
+   */
+  async selectDeliveryProvider(
+    orderId: string,
+    userId: string,
+    providerDto: SelectDeliveryProviderDto,
+  ) {
+    // Get order
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify order belongs to user
+    if (order.userId !== userId) {
+      throw new BadRequestException('Order does not belong to user');
+    }
+
+    // Verify delivery location is set
+    if (!order.dropLatitude || !order.dropLongitude || !order.dropAddress) {
+      throw new BadRequestException(
+        'Delivery location must be set first. Call /delivery-quotes endpoint first.',
+      );
+    }
+
+    // Verify provider is valid and registered
+    try {
+      this.deliveryService.validateDeliveryProvider(providerDto.provider);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Invalid provider';
+      throw new BadRequestException(errorMsg);
+    }
+
+    // Get fresh quote from selected provider to get latest pricing
+    try {
+      const seller = await this.sellerRepository.findById(order.sellerId!);
+      if (!seller) {
+        throw new NotFoundException('Seller not found');
+      }
+
+      const quote = await this.deliveryService.getQuoteFromProvider(
+        providerDto.provider,
+        {
+          latitude: Number(seller.latitude),
+          longitude: Number(seller.longitude),
+          address: seller.address,
+        },
+        {
+          latitude: Number(order.dropLatitude),
+          longitude: Number(order.dropLongitude),
+          address: order.dropAddress,
+        },
+        orderId,
+      );
+
+      // Store selected provider and updated delivery fee in order
+      // Using a JSON field or metadata to store provider info
+      await this.orderRepository.update(orderId, {
+        deliveryFee: quote.estimatedFee,
+        // Note: If you need to persist the provider choice, add a field to the schema
+        // For now, we'll rely on the DeliveryService storing this
+      });
+
+      this.logger.log(
+        `Delivery provider selected for order ${orderId}: ${providerDto.provider} (₹${quote.estimatedFee})`,
+      );
+
+      return {
+        order_id: orderId,
+        provider: quote.provider,
+        deliveryFee: quote.estimatedFee,
+        estimatedDurationMinutes: quote.estimatedDurationMinutes,
+        message: `${this.getProviderDisplayName(providerDto.provider)} selected. Ready to confirm order.`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to select delivery provider';
+      this.logger.error(`Failed to select delivery provider for order ${orderId}:`, errorMessage);
+      throw new BadRequestException(`Unable to select delivery provider: ${errorMessage}`);
+    }
+  }
+
+  // ===== HELPER METHODS =====
+
+  private getProviderDisplayName(provider: string): string {
+    const nameMap: Record<string, string> = {
+      'UBER_DIRECT': 'Uber Direct',
+      'DUNZO': 'Dunzo',
+      'PORTER': 'Porter',
+    };
+    return nameMap[provider] || provider;
+  }
+
+  private getProviderLogoUrl(provider: string): string {
+    const logoMap: Record<string, string> = {
+      'UBER_DIRECT': 'https://www.uber-cdn.com/image/upload/c_auto,f_auto,q_auto:eco/v1/202307-1604950057.png',
+      'DUNZO': 'https://cdn.dunzo.com/static/logo-white.png',
+      'PORTER': 'https://porter.in/assets/logo.png',
+    };
+    return logoMap[provider] || '';
+  }
+
+  private getProviderRating(provider: string): number {
+    const ratingMap: Record<string, number> = {
+      'UBER_DIRECT': 4.8,
+      'DUNZO': 4.7,
+      'PORTER': 4.6,
+    };
+    return ratingMap[provider] || 4.5;
+  }
+
+  private getProviderFeatures(provider: string): string[] {
+    const featuresMap: Record<string, string[]> = {
+      'UBER_DIRECT': [
+        'Real-time tracking',
+        'Insurance coverage',
+        'Professional delivery',
+        'GPS enabled',
+      ],
+      'DUNZO': [
+        'Fast delivery',
+        'Local coverage',
+        'Same-day service',
+        'Affordable pricing',
+      ],
+      'PORTER': [
+        'Premium service',
+        'Insured delivery',
+        'Real-time updates',
+        'Wide coverage area',
+      ],
+    };
+    return featuresMap[provider] || [];
   }
 
   /**

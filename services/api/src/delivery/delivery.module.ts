@@ -4,6 +4,8 @@ import { DeliveryService } from './delivery.service';
 import { DeliveryRepository } from './repositories/delivery.repository';
 import { DeliveryAdapterRegistry } from './adapters/delivery-adapter.registry';
 import { UberDirectAdapter } from './adapters/uber-direct/uber-direct.adapter';
+import { DunzoAdapter } from './adapters/dunzo/dunzo.adapter';
+import { PorterAdapter } from './adapters/porter/porter.adapter';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { OrderStateMachineModule } from '@/orders/state-machine/order-state-machine.module';
 import { OrdersModule } from '@/orders/orders.module';
@@ -20,17 +22,29 @@ import { OrdersModule } from '@/orders/orders.module';
     DeliveryRepository,
     DeliveryAdapterRegistry,
     UberDirectAdapter,
-    // Register UberDirectAdapter in registry
+    DunzoAdapter,
+    PorterAdapter,
+    // Register all adapters in registry
     {
       provide: 'DELIVERY_ADAPTER_REGISTRATION',
       useFactory: (
         registry: DeliveryAdapterRegistry,
         uberAdapter: UberDirectAdapter,
+        dunzoAdapter: DunzoAdapter,
+        porterAdapter: PorterAdapter,
       ) => {
+        // Register all delivery adapters
         registry.register(uberAdapter);
+        registry.register(dunzoAdapter);
+        registry.register(porterAdapter);
         return true;
       },
-      inject: [DeliveryAdapterRegistry, UberDirectAdapter],
+      inject: [
+        DeliveryAdapterRegistry,
+        UberDirectAdapter,
+        DunzoAdapter,
+        PorterAdapter,
+      ],
     },
   ],
   exports: [DeliveryService, DeliveryRepository],

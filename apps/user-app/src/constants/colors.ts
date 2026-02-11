@@ -8,8 +8,10 @@ export const colors = {
   primary: '#0d59f2',
   primaryShadow: 'rgba(13, 89, 242, 0.4)',
   primaryTint: 'rgba(13, 89, 242, 0.2)',
+  primaryLight: 'rgba(13, 89, 242, 0.1)',
 
   // Backgrounds
+  background: '#101622',
   backgroundDark: '#101622',
   cardDark: '#182234',
   cardDisabled: '#151c2a',
@@ -18,6 +20,7 @@ export const colors = {
 
   // Borders
   borderDark: '#314368',
+  border: '#314368',
   divider: 'rgba(255, 255, 255, 0.06)',
 
   // Text
@@ -35,8 +38,11 @@ export const colors = {
   successBadgeBg: 'rgba(34, 197, 94, 0.2)',
   soonBadgeBg: 'rgba(31, 41, 55, 0.9)',
   ratingStar: '#eab308',
+  orange: '#f97316',
 
   // UI
+  white: '#ffffff',
+  gray: '#6b7280',
   radioBorder: '#64748b',
 
   // Error / states

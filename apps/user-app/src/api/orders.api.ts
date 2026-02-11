@@ -51,6 +51,37 @@ export interface OrderDetail {
   stateHistory?: OrderStateHistoryItem[];
 }
 
+/** Delivery quote option - one provider option */
+export interface DeliveryQuoteOption {
+  provider: string; // 'UBER_DIRECT', 'DUNZO', 'PORTER'
+  displayName: string; // 'Uber Direct', 'Dunzo', 'Porter'
+  estimatedFee: number; // Fee in rupees
+  estimatedDurationMinutes: number; // ETA in minutes
+  currency: string; // 'INR'
+  features?: string[]; // Provider features
+  logo?: string; // Provider logo URL
+  rating?: number; // Provider rating
+  quoteId?: string; // Provider quote ID
+  expiresAt?: string; // Expiration timestamp
+}
+
+/** Response from GET /orders/:id/delivery-quotes – multiple provider options */
+export interface DeliveryQuotesResponse {
+  order_id: string;
+  options: DeliveryQuoteOption[];
+  selected_provider?: string;
+  message: string;
+}
+
+/** Response from POST /orders/:id/select-delivery-provider */
+export interface SelectDeliveryProviderResponse {
+  order_id: string;
+  provider: string;
+  deliveryFee: number;
+  estimatedDurationMinutes: number;
+  message: string;
+}
+
 /** Response from POST /orders/:id/confirm – payment intent for UPI. */
 export interface ConfirmOrderResponse {
   order_id: string;
@@ -111,6 +142,30 @@ export const ordersApi = {
       dropLocation,
     });
     return unwrap(res);
+  },
+
+  async getAllDeliveryQuotes(
+    orderId: string,
+    dropLocation: { lat: number; lng: number; address?: string },
+  ): Promise<DeliveryQuotesResponse> {
+    const res = await client.post(`/orders/${orderId}/delivery-quotes`, {
+      dropLocation,
+    });
+    return unwrap(res) as DeliveryQuotesResponse;
+  },
+
+  async selectDeliveryProvider(
+    orderId: string,
+    provider: string,
+    deliveryAddressId?: string,
+    quoteId?: string,
+  ): Promise<SelectDeliveryProviderResponse> {
+    const res = await client.post(`/orders/${orderId}/select-delivery-provider`, {
+      provider,
+      deliveryAddressId,
+      quoteId,
+    });
+    return unwrap(res) as SelectDeliveryProviderResponse;
   },
 
   async confirmOrder(
