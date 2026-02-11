@@ -85,6 +85,7 @@ export interface UpdateOrderData {
   dropLongitude?: number;
   dropAddress?: string;
   failureReason?: string;
+  deliveryProvider?: string;
 }
 
 @Injectable()

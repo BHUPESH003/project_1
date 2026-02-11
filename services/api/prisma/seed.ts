@@ -73,11 +73,22 @@ async function main() {
       },
     });
 
+    const sonipatSellerUser = await prisma.user.upsert({
+      where: { phone: '+919999999999' },
+      update: {},
+      create: {
+        phone: '+919999999999',
+        role: UserRole.SELLER,
+        name: 'Sonipat Seller',
+      },
+    });
+
     console.log('✅ Test users seeded');
 
     // Seed Test Seller Profile
     console.log('Seeding test seller profile...');
-    await prisma.seller.upsert({
+
+    const seller = await prisma.seller.upsert({
       where: { userId: testSeller.id },
       update: {},
       create: {
@@ -92,24 +103,61 @@ async function main() {
       },
     });
 
-    console.log('✅ Test seller profile seeded');
-
-    // Link seller to printing category
-    await prisma.sellerCategory.upsert({
-      where: {
-        sellerId_categoryId: {
-          sellerId: testSeller.id,
-          categoryId: 'printing',
-        },
-      },
+    const sonipatSeller = await prisma.seller.upsert({
+      where: { userId: sonipatSellerUser.id },
       update: {},
       create: {
-        sellerId: testSeller.id,
-        categoryId: 'printing',
+        userId: sonipatSellerUser.id,
+        shopName: 'Sonipat Print Hub',
+        address: 'Sector 61, Sonipat, Haryana',
+        latitude: 28.9038,
+        longitude: 77.1198,
+        pricePerPage: 2.5,
+        prepTimeMinutes: 20,
+        status: SellerStatus.ONLINE,
       },
     });
 
-    console.log('✅ Seller categories linked');
+    console.log('✅ Test seller profile seeded');
+
+    // Link seller to printing category
+    if (seller && seller.id) {
+      await prisma.sellerCategory.upsert({
+        where: {
+          sellerId_categoryId: {
+            sellerId: seller.id,
+            categoryId: 'printing',
+          },
+        },
+        update: {},
+        create: {
+          sellerId: seller.id,
+          categoryId: 'printing',
+        },
+      });
+      console.log('✅ Seller categories linked');
+    } else {
+      console.error('❌ Seller not found or created, cannot link to category');
+    }
+
+    if (sonipatSeller && sonipatSeller.id) {
+      await prisma.sellerCategory.upsert({
+        where: {
+          sellerId_categoryId: {
+            sellerId: sonipatSeller.id,
+            categoryId: 'printing',
+          },
+        },
+        update: {},
+        create: {
+          sellerId: sonipatSeller.id,
+          categoryId: 'printing',
+        },
+      });
+      console.log('✅ Sonipat seller categories linked');
+    } else {
+      console.error('❌ Sonipat seller not found or created, cannot link to category');
+    }
 
     console.log('\n🎉 Database seeded successfully!');
   } catch (error) {

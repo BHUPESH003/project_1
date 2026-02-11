@@ -502,11 +502,9 @@ export class OrdersService {
       );
 
       // Store selected provider and updated delivery fee in order
-      // Using a JSON field or metadata to store provider info
       await this.orderRepository.update(orderId, {
         deliveryFee: quote.estimatedFee,
-        // Note: If you need to persist the provider choice, add a field to the schema
-        // For now, we'll rely on the DeliveryService storing this
+        deliveryProvider: providerDto.provider,
       });
 
       this.logger.log(

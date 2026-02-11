@@ -308,6 +308,9 @@ model Order {
   itemCost        Decimal?    @db.Decimal(10, 2)
   deliveryFee     Decimal?    @db.Decimal(10, 2)
   totalAmount     Decimal?    @db.Decimal(10, 2)
+
+  // Delivery provider (Uber, Dunzo, Porter, etc.)
+  deliveryProvider String?
   
   // Delivery location (stored when user requests quote)
   dropLatitude    Decimal?    @db.Decimal(10, 8)
