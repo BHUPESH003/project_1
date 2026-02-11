@@ -421,7 +421,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
         client_id: this.config.clientId,
         client_secret: this.config.clientSecret,
         grant_type: 'client_credentials',
-        scope: 'eats.deliveries',
+        scope: 'eats.deliveries direct.organizations',
       });
 
       if (!authResponse.data || !authResponse.data.access_token) {
