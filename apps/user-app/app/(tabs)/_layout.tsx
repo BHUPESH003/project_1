@@ -1,7 +1,15 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function TabsLayout() {
+  const isAuthenticated = useAuthStore((s) => !!s.token && !!s.user);
+  const sessionExpired = useAuthStore((s) => s.sessionExpired);
+
+  if (!isAuthenticated && !sessionExpired) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

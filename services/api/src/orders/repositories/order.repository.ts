@@ -7,6 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@repo/types';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 
 /**
@@ -97,55 +98,60 @@ export class OrderRepository {
     id: string,
     includeRelations = true,
   ): Promise<OrderEntity | null> {
-    const order = await this.prismaService.prisma.order.findUnique({
-      where: { id },
-      include: includeRelations
-        ? {
-            user: {
-              select: {
-                id: true,
-                phone: true,
-                name: true,
-              },
-            },
-            seller: {
-              select: {
-                id: true,
-                shopName: true,
-                address: true,
-                latitude: true,
-                longitude: true,
-              },
-            },
-            category: {
-              select: {
-                id: true,
-                name: true,
-                status: true,
-              },
-            },
-            files: {
-              select: {
-                id: true,
-                storageUrl: true,
-                mimeType: true,
-                originalName: true,
-              },
-            },
-            stateHistory: {
-              orderBy: { createdAt: 'asc' },
-              select: {
-                id: true,
-                fromStatus: true,
-                toStatus: true,
-                triggeredBy: true,
-                reason: true,
-                createdAt: true,
-              },
-            },
-          }
-        : undefined,
-    });
+    if (!id) {
+      return null;
+    }
+
+    const args: Prisma.OrderFindUniqueArgs = { where: { id } };
+
+    if (includeRelations) {
+      args.include = {
+        user: {
+          select: {
+            id: true,
+            phone: true,
+            name: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            shopName: true,
+            address: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+        files: {
+          select: {
+            id: true,
+            storageUrl: true,
+            mimeType: true,
+            originalName: true,
+          },
+        },
+        stateHistory: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            fromStatus: true,
+            toStatus: true,
+            triggeredBy: true,
+            reason: true,
+            createdAt: true,
+          },
+        },
+      };
+    }
+
+    const order = await this.prismaService.prisma.order.findUnique(args);
 
     return order ? this.mapToEntity(order) : null;
   }

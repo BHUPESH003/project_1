@@ -38,6 +38,10 @@ export function setOnSessionExpired(callback: () => void): void {
 /** Single-flight refresh: only one refresh in progress; all 401s wait and retry with the new token. */
 let refreshPromise: Promise<string | null> | null = null;
 
+function isRefreshRequest(url: string | undefined): boolean {
+  return typeof url === 'string' && url.includes('refresh-token');
+}
+
 const REFRESH_BUFFER_MS = 2 * 60 * 1000; // Refresh if token expires within 2 minutes
 
 async function doRefresh(): Promise<string | null> {
@@ -94,7 +98,7 @@ async function getValidToken(): Promise<string | null> {
 client.interceptors.request.use(
   async (config) => {
     // Skip Authorization for refresh-token so we don't send expired token
-    const isRefresh = typeof config.url === 'string' && config.url.includes('refresh-token');
+    const isRefresh = isRefreshRequest(config.url);
     if (!isRefresh) {
       const token = await getValidToken();
       if (token) {
@@ -113,6 +117,11 @@ client.interceptors.response.use(
       return Promise.reject(error);
     }
     if (error.response.status !== 401) {
+      return Promise.reject(error);
+    }
+    if (isRefreshRequest(error.config?.url)) {
+      await tokenStorage.clear();
+      onSessionExpired?.();
       return Promise.reject(error);
     }
     // Single-flight: one refresh at a time; all 401s wait for the same result

@@ -8,6 +8,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { setOnSessionExpired } from '@/api/client';
 
+setOnSessionExpired(() => {
+  useAuthStore.getState().clearSession();
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -40,12 +44,6 @@ export default function RootLayout() {
   useEffect(() => {
     restoreToken();
   }, [restoreToken]);
-
-  useEffect(() => {
-    setOnSessionExpired(() => {
-      useAuthStore.getState().clearSession();
-    });
-  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
