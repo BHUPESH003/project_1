@@ -22,8 +22,8 @@ export default function PaymentSuccessScreen() {
   const onTrackOrder = () => {
     const id = orderId;
     reset();
-    if (id) router.replace(`/order/${id}`);
-    else router.replace('/(tabs)/orders');
+    // Navigate to active orders tab
+    router.replace('/(tabs)/orders');
   };
 
   return (

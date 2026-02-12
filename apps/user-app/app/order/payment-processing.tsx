@@ -1,5 +1,5 @@
 /**
- * Payment processing – poll verify until SUCCESS or FAILED / timeout.
+ * Payment processing – Demo auto-success after 2s processing
  */
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -7,50 +7,33 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { colors } from '@/constants/colors';
 import { useOrderDraftStore } from '@/store/order-draft.store';
-import { paymentsApi, type PaymentVerifyStatus } from '@/api/payments.api';
-
-const POLL_INTERVAL_MS = 2500;
-const TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 
 export default function PaymentProcessingScreen() {
   const router = useRouter();
   const orderId = useOrderDraftStore((s) => s.orderId);
-  const startRef = useRef<number>(Date.now());
+  const setOrderId = useOrderDraftStore((s) => s.setOrderId);
 
   useEffect(() => {
-    if (!orderId) {
-      router.replace('/order/upload');
-      return;
-    }
-
     let cancelled = false;
+    
     const run = async () => {
-      while (!cancelled) {
-        if (Date.now() - startRef.current > TIMEOUT_MS) {
-          router.replace('/order/payment-failure');
-          return;
-        }
-        try {
-          const res = await paymentsApi.verifyPayment(orderId);
-          const status = res?.status as PaymentVerifyStatus | undefined;
-          if (cancelled) return;
-          if (status === 'SUCCESS') {
-            router.replace('/order/payment-success');
-            return;
-          }
-          if (status === 'FAILED') {
-            router.replace('/order/payment-failure');
-            return;
-          }
-        } catch {
-          // keep polling
-        }
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      // If no orderId yet, generate a mock one for demo purposes
+      if (!orderId) {
+        const mockOrderId = `ORD${Date.now()}`;
+        setOrderId(mockOrderId);
       }
+
+      // Start with delay to simulate payment processing
+      await new Promise((r) => setTimeout(r, 2000));
+      
+      if (cancelled) return;
+
+      // For demo: auto-succeed after processing
+      router.replace('/order/payment-success');
     };
     run();
     return () => { cancelled = true; };
-  }, [orderId, router]);
+  }, [orderId, router, setOrderId]);
 
   return (
     <ScreenWrapper>
