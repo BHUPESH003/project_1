@@ -579,6 +579,145 @@ export class OrdersService {
   }
 
   /**
+   * Create payment intent (USER APP)
+   * Generates payment data for Razorpay or specified provider
+   * Does NOT transition order state
+   *
+   * Supports: razorpay, paytm
+   */
+  async createPaymentIntent(
+    orderId: string,
+    userId: string,
+    provider?: string,
+  ) {
+    // Get order
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify order belongs to user
+    if (order.userId !== userId) {
+      throw new BadRequestException('Order does not belong to user');
+    }
+
+    // Verify order is in correct state
+    if (order.status !== OrderStatus.SELLER_SELECTED) {
+      throw new BadRequestException(
+        `Order must be in SELLER_SELECTED state. Current state: ${order.status}`,
+      );
+    }
+
+    // Verify seller is set
+    if (!order.sellerId) {
+      throw new BadRequestException('Seller must be selected');
+    }
+
+    // Calculate total amount
+    const totalAmount = (order.itemCost || 0) + (order.deliveryFee ?? 0);
+
+    // Update order with total amount (if not already set)
+    if (!order.totalAmount) {
+      await this.orderRepository.update(orderId, {
+        totalAmount: totalAmount,
+      });
+    }
+
+    // Get user info for payment
+    const orderWithUser = await this.orderRepository.findById(orderId, false);
+    const userPhone = orderWithUser?.user?.phone || '';
+
+    // Create payment intent with specified provider (defaults to configured provider)
+    const paymentIntent = await this.paymentsService.createPayment(
+      orderId,
+      PaymentMethod.UPI,
+      userPhone,
+      orderWithUser?.user?.name || undefined,
+      provider,
+    );
+
+    this.logger.log(
+      `Payment intent created for order ${orderId} by user ${userId} using provider: ${provider || 'default'}`,
+    );
+
+    return {
+      payment_id: paymentIntent.payment_id,
+      order_id: orderId,
+      amount: totalAmount,
+      status: paymentIntent.status,
+      payment_intent: paymentIntent.payment_intent,
+    };
+  }
+
+  /**
+   * Verify payment and transition order to PAID (USER APP)
+   *
+   * CRITICAL: This endpoint should be called after frontend completes payment gateway flow.
+   * Verifies payment with provider and transitions order to PAID.
+   * Order will then transition to SELLER_ACCEPTED via webhook if seller accepted
+   * or back to SELLER_SELECTED if seller needs to accept again.
+   */
+  async verifyPayment(
+    orderId: string,
+    userId: string,
+    paymentData: Record<string, unknown>,
+  ) {
+    // Get order
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify order belongs to user
+    if (order.userId !== userId) {
+      throw new BadRequestException('Order does not belong to user');
+    }
+
+    // Verify order is in correct state
+    if (order.status !== OrderStatus.SELLER_SELECTED) {
+      throw new BadRequestException(
+        `Order must be in SELLER_SELECTED state. Current state: ${order.status}`,
+      );
+    }
+
+    // Extract gateway payment data and verify with provider
+    const razorpayPaymentId = paymentData.razorpay_payment_id as string;
+    const razorpayOrderId = paymentData.razorpay_order_id as string;
+    const razorpaySignature = paymentData.razorpay_signature as string;
+
+    if (!razorpayPaymentId || !razorpayOrderId) {
+      throw new BadRequestException('Payment verification data is incomplete');
+    }
+
+    // Verify payment with payments service using Razorpay provider
+    const verifyResult = await this.paymentsService.verifyRazorpayPayment(
+      orderId,
+      razorpayPaymentId,
+      razorpayOrderId,
+      razorpaySignature,
+    );
+
+    if (verifyResult.status !== 'SUCCESS') {
+      throw new BadRequestException(
+        `Payment verification failed: ${verifyResult.failure_reason || 'Unknown reason'}`,
+      );
+    }
+
+    this.logger.log(`Payment verified for order ${orderId}, transitioned to PAID`);
+
+    // Fetch and return updated order
+    const updatedOrder = await this.orderRepository.findById(orderId, true);
+    return {
+      payment_id: razorpayPaymentId,
+      order_id: orderId,
+      status: updatedOrder?.status || OrderStatus.PAID,
+      gateway_payment_id: razorpayPaymentId,
+      gateway_order_id: razorpayOrderId,
+      amount: order.totalAmount,
+    };
+  }
+
+  /**
    * Confirm order and process payment (USER APP)
    * Creates payment intent - order transitions to PAID via webhook
    *

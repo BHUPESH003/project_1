@@ -215,7 +215,9 @@ async function main() {
     for (const shop of printShops) {
       printShopSellers[shop.userId] = await prisma.seller.upsert({
         where: { userId: shop.userId },
-        update: {},
+        update: {
+          status: SellerStatus.ONLINE,
+        },
         create: {
           ...shop,
           status: SellerStatus.ONLINE,
@@ -228,7 +230,9 @@ async function main() {
     for (const shop of hardwareShops) {
       hardwareShopSellers[shop.userId] = await prisma.seller.upsert({
         where: { userId: shop.userId },
-        update: {},
+        update: {
+          status: SellerStatus.ONLINE,
+        },
         create: {
           ...shop,
           status: SellerStatus.ONLINE,
@@ -282,6 +286,163 @@ async function main() {
     }
 
     console.log('✅ Seller categories linked');
+
+    // Seed Products
+    console.log('Seeding products...');
+
+    // Print shop products
+    const printProducts = [
+      {
+        sellerId: printShopSellers[sellerUsers['+919876543210'].id]?.id,
+        name: 'B&W Document Print',
+        description: 'Standard 80gsm A4 paper',
+        category: 'Printing Services',
+        price: '0.50',
+        image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: printShopSellers[sellerUsers['+919876543210'].id]?.id,
+        name: 'Color Laser Print',
+        description: 'High-quality 100gsm A4',
+        category: 'Printing Services',
+        price: '2.00',
+        image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: printShopSellers[sellerUsers['+919999999999'].id]?.id,
+        name: 'Premium Brochure Printing',
+        description: 'Full-color brochures on premium paper',
+        category: 'Printing Services',
+        price: '3.50',
+        image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: printShopSellers[sellerUsers['+919111111111'].id]?.id,
+        name: 'Business Card Print',
+        description: 'Box of 500 premium business cards',
+        category: 'Printing Services',
+        price: '1.80',
+        image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80',
+      },
+    ];
+
+    // Hardware shop products
+    const hardwareProducts = [
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919555555555'].id]?.id,
+        name: 'Stainless Steel Tap',
+        description: 'High-quality chrome finish tap for kitchen/bathroom',
+        category: 'Plumbing Supplies',
+        price: '45.00',
+        image: 'https://images.unsplash.com/photo-1585518419759-15bc0e834e6b?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919555555555'].id]?.id,
+        name: 'PVC Pipe 1 inch',
+        description: '10 meter length, durable PVC pipe',
+        category: 'Plumbing Supplies',
+        price: '35.00',
+        image: 'https://images.unsplash.com/photo-1584622181636-ffa00913074e?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919666666666'].id]?.id,
+        name: 'Copper Wire 4mm',
+        description: 'Flexible copper wire, 100 meter roll',
+        category: 'Electrical Supplies',
+        price: '120.00',
+        image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919666666666'].id]?.id,
+        name: 'LED Bulb 15W',
+        description: 'Cool white LED bulb, energy efficient',
+        category: 'Electrical Supplies',
+        price: '25.00',
+        image: 'https://images.unsplash.com/photo-1567864162381-03c3d0c0b0db?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919777777777'].id]?.id,
+        name: 'Hammer with Grip',
+        description: 'Comfortable grip, 500g hammer',
+        category: 'Tools',
+        price: '15.00',
+        image: 'https://images.unsplash.com/photo-1578734854309-c58b20fbf6ee?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919777777777'].id]?.id,
+        name: 'Power Drill Machine',
+        description: '13mm chuck, variable speed drill',
+        category: 'Tools',
+        price: '85.00',
+        image: 'https://images.unsplash.com/photo-1618220179857-7c76a6b50e6d?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919888888888'].id]?.id,
+        name: 'Wood Stain 1L',
+        description: 'Dark walnut wood stain, water-resistant',
+        category: 'Paints & Finishes',
+        price: '55.00',
+        image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=400&q=80',
+      },
+      {
+        sellerId: hardwareShopSellers[sellerUsers['+919888888888'].id]?.id,
+        name: 'Wall Paint 10L',
+        description: 'Premium interior wall paint, eggshell finish',
+        category: 'Paints & Finishes',
+        price: '180.00',
+        image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=400&q=80',
+      },
+    ];
+
+    // Create print products
+    for (const product of printProducts) {
+      if (product.sellerId) {
+        await prisma.product.upsert({
+          where: {
+            sellerId_name: {
+              sellerId: product.sellerId,
+              name: product.name,
+            },
+          },
+          update: {},
+          create: {
+            sellerId: product.sellerId,
+            name: product.name,
+            description: product.description,
+            category: product.category,
+            price: product.price,
+            image: product.image,
+            inStock: true,
+          },
+        });
+      }
+    }
+
+    // Create hardware products
+    for (const product of hardwareProducts) {
+      if (product.sellerId) {
+        await prisma.product.upsert({
+          where: {
+            sellerId_name: {
+              sellerId: product.sellerId,
+              name: product.name,
+            },
+          },
+          update: {},
+          create: {
+            sellerId: product.sellerId,
+            name: product.name,
+            description: product.description,
+            category: product.category,
+            price: product.price,
+            image: product.image,
+            inStock: true,
+          },
+        });
+      }
+    }
+
+    console.log('✅ Products seeded');
 
     console.log('\n🎉 Database seeded successfully!');
   } catch (error) {

@@ -1,9 +1,9 @@
 /**
- * Nearby sellers (print shops) – from API (ONLINE only). Sort client-side; no sellers → no-sellers.
+ * Nearby sellers (filtered by category) – from API (ONLINE only). Sort client-side; no sellers → no-sellers.
  */
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,8 +21,18 @@ import { useLocationStore } from '@/store/location.store';
 // LayoutAnimation works without setLayoutAnimationEnabledExperimental on New Architecture (no-op there)
 
 type SortLabel = 'Recommended' | 'Lowest Price' | 'Fastest';
-const CATEGORY_PRINTING = 'printing';
+const DEFAULT_CATEGORY = 'printing';
 const FOOTER_HEIGHT = 100;
+
+// Map category ID to display title
+const CATEGORY_TITLES: Record<string, string> = {
+  printing: 'Print Shops',
+  hardware: 'Hardware Shops',
+  stationary: 'Stationary Shops',
+  grocery: 'Grocery Stores',
+  pharmacy: 'Pharmacies',
+  pickup: 'Delivery Partners',
+};
 
 function mapSellerToCard(s: SellerListItem) {
   return {
@@ -37,16 +47,21 @@ function mapSellerToCard(s: SellerListItem) {
 export default function SellersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
   const [sort, setSort] = useState<SortLabel>('Recommended');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const coords = useLocationStore((s) => s.coords);
 
+  // Get category from route params, fallback to default
+  const category = (params.category as string) || DEFAULT_CATEGORY;
+  const categoryTitle = CATEGORY_TITLES[category] || `${category} Shops`;
+
   const hasCoords = coords?.latitude != null && coords?.longitude != null;
   const { data: list = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['sellers', CATEGORY_PRINTING, coords?.latitude, coords?.longitude],
+    queryKey: ['sellers', category, coords?.latitude, coords?.longitude],
     queryFn: () =>
       sellersApi.getAvailableSellers({
-        category: CATEGORY_PRINTING,
+        category,
         lat: coords?.latitude,
         lng: coords?.longitude,
       }),
@@ -74,7 +89,12 @@ export default function SellersScreen() {
   };
 
   const handleProceed = () => {
-    router.push('/order/upload');
+    if (selectedId) {
+      router.push({
+        pathname: '/shop-detail',
+        params: { shopId: selectedId },
+      });
+    }
   };
 
   if (!hasCoords) {
@@ -84,7 +104,7 @@ export default function SellersScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
             <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Nearby Print Shops</Text>
+          <Text style={styles.title}>Nearby {categoryTitle}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.emptyWrap}>
@@ -104,7 +124,7 @@ export default function SellersScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
             <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Nearby Print Shops</Text>
+          <Text style={styles.title}>Nearby {categoryTitle}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loaderWrap}><Loader /></View>
@@ -119,7 +139,7 @@ export default function SellersScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
             <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Nearby Print Shops</Text>
+          <Text style={styles.title}>Nearby {categoryTitle}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorWrap}>
@@ -139,7 +159,7 @@ export default function SellersScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
             <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Nearby Print Shops</Text>
+          <Text style={styles.title}>Nearby {categoryTitle}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.emptyWrap}>
@@ -158,7 +178,7 @@ export default function SellersScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
           <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Nearby Print Shops</Text>
+        <Text style={styles.title}>Nearby {categoryTitle}</Text>
         <View style={styles.placeholder} />
       </View>
       <View style={styles.pills}>

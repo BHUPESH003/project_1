@@ -1,7 +1,7 @@
 /**
- * Home / Services screen – categories from API with fallback dummy data.
+ * Home / Services screen – categories from API, all data from APIs only (no fallback dummy data).
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,45 +21,13 @@ import { useLocationStore } from '@/store/location.store';
 
 const FOOTER_HEIGHT = 100;
 const FALLBACK_LOCATION_LABEL = 'Tap to set location';
-const CATEGORY_PRINTING = 'printing';
-
-// Dummy/Fallback data
-const DUMMY_QUICK_SERVICES = [
-  { id: 'printing', icon: 'print', label: 'Printing', description: 'Documents & Photos' },
-  { id: 'pickup', icon: 'local-shipping', label: 'Pick & Drop', description: 'Instant delivery' },
-  { id: 'grocery', icon: 'shopping-bag', label: 'Grocery', description: 'Fresh produce' },
-  { id: 'pharmacy', icon: 'local-pharmacy', label: 'Pharmacy', description: 'Health essentials' },
-];
-
-const DUMMY_LAST_SERVICE = {
-  title: 'Printing: Business Cards',
-  shop: 'Pixel Perfect Prints',
-  price: '₹250',
-  image: 'https://images.unsplash.com/photo-1606986628025-35d57e735ae0?auto=format&fit=crop&w=200&q=80',
-};
-
-const DUMMY_SHOPS = [
-  {
-    id: 'shop-1',
-    name: 'Green Leaf Market',
-    distance: '0.8 km',
-    category: 'Grocery & Fresh Produce',
-    rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1585521537990-7b0a47ebc519?auto=format&fit=crop&w=400&q=80',
-  },
-  {
-    id: 'shop-2',
-    name: 'Pixel Perfect Prints',
-    distance: '1.2 km',
-    category: 'Business & Photo Printing',
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1599720863485-11d234ce1f3e?auto=format&fit=crop&w=400&q=80',
-  },
-];
+const CATEGORY_ALL = 'all';
+const MAX_DISTANCE_KM = 50;
 
 const SERVICE_ICONS: Record<string, any> = {
   printing: 'print',
-  stationery: 'edit-note',
+  hardware: 'construction',
+  stationary: 'edit-note',
   pickup: 'local-shipping',
   grocery: 'shopping-bag',
   pharmacy: 'local-pharmacy',
@@ -83,14 +51,15 @@ export default function HomeScreen() {
     queryFn: () => categoriesApi.getCategories(),
   });
 
-  // Fetch sellers nearby
-  const { data: sellersData = [] } = useQuery({
-    queryKey: ['sellers', CATEGORY_PRINTING, locationCoords?.latitude, locationCoords?.longitude],
+  // Fetch all nearby sellers (all categories) based on user location
+  const { data: sellersData = [], isLoading: sellersLoading } = useQuery({
+    queryKey: ['sellers', CATEGORY_ALL, locationCoords?.latitude, locationCoords?.longitude],
     queryFn: () =>
       sellersApi.getAvailableSellers({
-        category: CATEGORY_PRINTING,
+        category: CATEGORY_ALL,
         lat: locationCoords?.latitude,
         lng: locationCoords?.longitude,
+        maxDistanceKm: MAX_DISTANCE_KM,
       }),
     enabled: Boolean(locationCoords?.latitude != null && locationCoords?.longitude != null),
   });
@@ -101,42 +70,55 @@ export default function HomeScreen() {
     queryFn: () => ordersApi.getMyOrders?.(),
   });
 
-  // Normalize categories - use API data if available, fallback to dummy
+  // Normalize categories - use API data only
   const categories = useMemo(() => {
-    if (categoriesError || !categoriesData || !Array.isArray(categoriesData)) {
-      // Fallback to dummy quick services
-      return DUMMY_QUICK_SERVICES.map(item => ({
-        id: item.id,
-        name: item.label,
-        status: 'ACTIVE',
+    if (categoriesData && Array.isArray(categoriesData)) {
+      return categoriesData;
+    }
+    return [];
+  }, [categoriesData]);
+
+  // Use sellers data from API only
+  const shops = useMemo(() => {
+    if (sellersData && sellersData.length > 0) {
+      // Map API sellers to shop format
+      return sellersData.map((seller: any) => ({
+        id: seller.seller_id,
+        name: seller.shop_name || 'Unknown Shop',
+        distance: `${(seller.distance_km || 0).toFixed(1)} km`,
+        category: seller.address || 'Services',
+        rating: 4.8,
+        image: `https://images.unsplash.com/photo-1606986628025-35d57e735ae0?auto=format&fit=crop&w=400&q=80`,
       }));
     }
-    return categoriesData;
-  }, [categoriesData, categoriesError]);
-
-  // Use sellers data or fallback to dummy
-  const shops = useMemo(() => {
-    if (!sellersData || sellersData.length === 0) {
-      return DUMMY_SHOPS;
-    }
-    // Map API sellers to shop format
-    return sellersData.map((seller: any) => ({
-      id: seller.seller_id,
-      name: seller.shop_name || 'Unknown Shop',
-      distance: `${(seller.distance_km || 0).toFixed(1)} km`,
-      category: seller.address || 'Services',
-      rating: 4.8,
-      image: `https://images.unsplash.com/photo-1606986628025-35d57e735ae0?auto=format&fit=crop&w=400&q=80`,
-    }));
+    // Return empty array if no API data (no fallback to dummy)
+    return [];
   }, [sellersData]);
 
+  // Get last completed order from API
+  const lastOrder = useMemo(() => {
+    if (ordersData && Array.isArray(ordersData) && ordersData.length > 0) {
+      return ordersData[0];
+    }
+    return null;
+  }, [ordersData]);
+
+  // Auto-fetch location on component mount
+  useEffect(() => {
+    if (!locationCoords && !locationLoading) {
+      fetchLocation();
+    }
+  }, []);
+
   const onLocationPress = () => router.push('/(tabs)/home/location-selector');
-  const onServicePress = () => {
-    // Navigate to shop detail when selecting a service
-    router.push({
-      pathname: '/shop-detail',
-      params: { shopId: 'shop-1' }, // Could be dynamic based on service selected
-    });
+  const onServicePress = (categoryId?: string) => {
+    // Navigate to sellers page with category filter
+    if (categoryId) {
+      router.push({
+        pathname: '/(tabs)/home/sellers',
+        params: { category: categoryId },
+      });
+    }
   };
   const onCreateOrder = () => router.push('/pickup-delivery');
   const onShopPress = (id: string) => {
@@ -197,42 +179,61 @@ export default function HomeScreen() {
           </View>
 
           {/* Re-book Last Service */}
-          <TouchableOpacity style={styles.lastServiceCard} onPress={onServicePress}>
-            <View style={styles.lastServiceContent}>
-              <View style={styles.lastServiceIconWrap}>
-                <MaterialIcons name="history" size={24} color={colors.primary} />
+          {/* Re-book Last Service - Only show if there are past orders */}
+          {lastOrder && (
+            <TouchableOpacity style={styles.lastServiceCard} onPress={onServicePress}>
+              <View style={styles.lastServiceContent}>
+                <View style={styles.lastServiceIconWrap}>
+                  <MaterialIcons name="history" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.lastServiceTextWrap}>
+                  <Text style={styles.lastServiceLabel}>RE-BOOK LAST SERVICE</Text>
+                  <Text style={styles.lastServiceTitle} numberOfLines={1}>
+                    {lastOrder.id || 'Previous Order'}
+                  </Text>
+                  <Text style={styles.lastServiceShop} numberOfLines={1}>
+                    {lastOrder.status || 'Completed'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.lastServiceTextWrap}>
-                <Text style={styles.lastServiceLabel}>RE-BOOK LAST SERVICE</Text>
-                <Text style={styles.lastServiceTitle}>{DUMMY_LAST_SERVICE.title}</Text>
-                <Text style={styles.lastServiceShop} numberOfLines={1}>
-                  {DUMMY_LAST_SERVICE.shop} • {DUMMY_LAST_SERVICE.price}
-                </Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
 
           {/* Quick Service Access */}
-          <Text style={styles.sectionTitle}>Quick Service Access</Text>
-          <View style={styles.quickServicesGrid}>
-            {categories.map((category: any) => (
-              <TouchableOpacity
-                key={category.id}
-                style={styles.quickServiceCard}
-                onPress={onServicePress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.quickServiceIconWrap}>
-                  <MaterialIcons name={SERVICE_ICONS[category.id] || SERVICE_ICONS.default} size={32} color={colors.primary} />
-                </View>
-                <Text style={styles.quickServiceLabel}>{category.name}</Text>
-                <Text style={styles.quickServiceDesc}>
-                  {category.id === 'printing' ? 'Documents & Photos' : 'Fresh service'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {categoriesLoading ? (
+            <View style={styles.sectionLoadingWrap}>
+              <Loader />
+              <Text style={styles.loadingText}>Loading services...</Text>
+            </View>
+          ) : categories.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Quick Service Access</Text>
+              <View style={styles.quickServicesGrid}>
+                {categories.map((category: any) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={styles.quickServiceCard}
+                    onPress={() => onServicePress(category.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.quickServiceIconWrap}>
+                      <MaterialIcons name={SERVICE_ICONS[category.id] || SERVICE_ICONS.default} size={32} color={colors.primary} />
+                    </View>
+                    <Text style={styles.quickServiceLabel}>{category.name}</Text>
+                    <Text style={styles.quickServiceDesc}>
+                      {category.id === 'printing' ? 'Documents & Photos' : category.id === 'hardware' ? 'Tools & supplies' : category.id === 'stationary' ? 'Office supplies' : 'Fresh service'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : (
+            <View style={styles.emptyStateWrap}>
+              <MaterialIcons name="category" size={48} color={colors.textMuted} />
+              <Text style={styles.emptyStateText}>No services available</Text>
+            </View>
+          )}
 
           {/* Free Delivery Banner */}
           <View style={styles.bannerContainer}>
@@ -250,11 +251,30 @@ export default function HomeScreen() {
 
           {/* Nearby Shops Section */}
           <View style={styles.nearbyHeader}>
-            <Text style={styles.sectionTitle}>Nearby Shops</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/home/sellers')}>
-              <Text style={styles.viewAllText}>VIEW ALL</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>
+              Nearby Shops {sellersLoading ? '' : `(${shops.length})`}
+            </Text>
+            {!sellersLoading && shops.length > 0 && (
+              <TouchableOpacity onPress={() => router.push('/(tabs)/home/sellers')}>
+                <Text style={styles.viewAllText}>VIEW ALL</Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {sellersLoading && (
+            <View style={styles.loadingContainer}>
+              <Loader />
+              <Text style={styles.loadingText}>Finding nearby shops...</Text>
+            </View>
+          )}
+
+          {!sellersLoading && shops.length === 0 && locationCoords && (
+            <View style={styles.noShopsContainer}>
+              <MaterialIcons name="store" size={48} color={colors.textMuted} />
+              <Text style={styles.noShopsText}>No shops found nearby</Text>
+              <Text style={styles.noShopsSubtext}>Try expanding your search radius or change location</Text>
+            </View>
+          )}
 
           {shops.map((shop: any) => (
             <TouchableOpacity
@@ -532,6 +552,56 @@ const styles = StyleSheet.create({
   shopMeta: {
     ...typography.meta,
     color: colors.textSecondary,
+  },
+  loadingContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.secondary,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  noShopsContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  noShopsText: {
+    ...typography.secondary,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  noShopsSubtext: {
+    ...typography.meta,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  sectionLoadingWrap: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.md,
+  },
+  emptyStateWrap: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  emptyStateText: {
+    ...typography.secondary,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   footer: {
     position: 'absolute',

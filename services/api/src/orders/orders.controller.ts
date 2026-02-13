@@ -18,7 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
-import { UserRole } from '@repo/types';
+import { UserRole, OrderStatus } from '@repo/types';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
@@ -215,6 +215,62 @@ export class OrdersController {
   }
 
   /**
+   * POST /v1/orders/:id/create-payment-intent
+   * Create payment intent for order
+   * Generates payment data for Razorpay or other payment provider
+   * Payload: { provider?: "razorpay" | "paytm" }
+   */
+  @Post(':id/create-payment-intent')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ 
+    summary: 'Create payment intent', 
+    description: 'Creates a payment intent for the order. Returns payment gateway-specific data for frontend.' 
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiQuery({ name: 'provider', required: false, enum: ['razorpay', 'paytm'], description: 'Payment provider' })
+  @ApiResponse({ status: 200, description: 'Payment intent created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or order state' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  createPaymentIntent(
+    @Param('id') id: string,
+    @Query('provider') provider?: string,
+    @Request() req: { user: { id: string } } = { user: { id: '' } },
+  ) {
+    return this.ordersService.createPaymentIntent(id, req.user?.id, provider);
+  }
+
+  /**
+   * POST /v1/orders/:id/verify-payment
+   * Verify payment after user completes payment gateway flow
+   * Payload: { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+   * Transitions: SELLER_SELECTED → PAID
+   */
+  @Post(':id/verify-payment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ 
+    summary: 'Verify payment', 
+    description: 'Verifies payment and transitions order to PAID status.' 
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Payment verified successfully' })
+  @ApiResponse({ status: 400, description: 'Payment verification failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  verifyPayment(
+    @Param('id') id: string,
+    @Body() paymentData: Record<string, unknown>,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.verifyPayment(id, req.user.id, paymentData);
+  }
+
+
+  /**
    * POST /v1/orders/:id/confirm
    * User confirms and pays for order
    * Payload: { payment_method: "UPI" }
@@ -256,9 +312,15 @@ export class OrdersController {
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List seller orders', description: 'Retrieves list of orders for the authenticated seller. Can be filtered by status.' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED', 'CANCELLED'], description: 'Filter by order status' })
+  @ApiQuery({ 
+    name: 'status', 
+    required: false, 
+    enum: Object.values(OrderStatus),
+    description: 'Filter by order status. Leave empty to retrieve all orders.' 
+  })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Invalid status value provided' })
   getSellerOrders(
     @Query() query: GetSellerOrdersDto,
     @Request() req: { user: { id: string } },

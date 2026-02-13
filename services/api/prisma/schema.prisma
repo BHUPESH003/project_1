@@ -216,6 +216,9 @@ model Seller {
   // Categories this seller supports
   categories       SellerCategory[]
   
+  // Products/services offered
+  products         Product[]
+  
   // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -280,6 +283,36 @@ model SellerCategory {
   @@index([sellerId])
   @@index([categoryId])
   @@map("seller_categories")
+}
+
+// ========================================
+// PRODUCT MODEL
+// ========================================
+// Product/service offerings by sellers
+// Links seller and product category
+// Category-agnostic: can be used for printing services, hardware items, etc.
+
+model Product {
+  id          String   @id @default(cuid())
+  sellerId    String
+  name        String
+  description String?
+  category    String   // e.g. "Printing Services", "Plumbing Supplies", "Tools"
+  price       Decimal  @db.Decimal(10, 2)
+  image       String?
+  inStock     Boolean  @default(true)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  seller      Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  @@unique([sellerId, name]) // Unique product names per seller
+  @@index([sellerId])
+  @@index([category])
+  @@map("products")
 }
 
 // ========================================

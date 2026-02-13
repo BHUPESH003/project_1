@@ -61,14 +61,63 @@ export class SellersController {
   }
 
   /**
+   * GET /v1/sellers/:id/products
+   * Get all products for a specific seller
+   * Public endpoint
+   */
+  @Get(':id/products')
+  @ApiOperation({ 
+    summary: 'Get seller products', 
+    description: 'Retrieves all products/services offered by a seller, grouped by category. Public endpoint, no authentication required.' 
+  })
+  @ApiParam({ name: 'id', description: 'Seller ID', example: 'clh9qh3j90001q6qz6z8z8z8z' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Products retrieved successfully',
+    example: [
+      {
+        id: 'prod-123',
+        sellerId: 'clh9qh3j90001q6qz6z8z8z8z',
+        name: 'B&W Document Print',
+        description: 'Standard 80gsm A4 paper',
+        category: 'Printing Services',
+        price: 0.50,
+        image: 'https://images.unsplash.com/...',
+        inStock: true,
+      }
+    ]
+  })
+  @ApiResponse({ status: 404, description: 'Seller not found' })
+  getSellerProducts(@Param('id') id: string) {
+    return this.sellersService.getSellerProducts(id);
+  }
+
+  /**
    * GET /v1/sellers/:id
    * Get seller profile (for display in order flow)
    * Public endpoint
    */
   @Get(':id')
-  @ApiOperation({ summary: 'Get seller profile', description: 'Retrieves seller profile details. Public endpoint, no authentication required.' })
-  @ApiParam({ name: 'id', description: 'Seller ID', example: 'seller-123' })
-  @ApiResponse({ status: 200, description: 'Seller profile retrieved successfully' })
+  @ApiOperation({ 
+    summary: 'Get seller profile', 
+    description: 'Retrieves seller profile details including shop information, location, and categories. Public endpoint, no authentication required.' 
+  })
+  @ApiParam({ name: 'id', description: 'Seller ID', example: 'clh9qh3j90001q6qz6z8z8z8z' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Seller profile retrieved successfully',
+    example: {
+      id: 'clh9qh3j90001q6qz6z8z8z8z',
+      shopName: 'Fast Print Shop',
+      address: '123 Main Street, Delhi',
+      latitude: '28.6139',
+      longitude: '77.209',
+      pricePerPage: '2.00',
+      prepTimeMinutes: 30,
+      status: 'ONLINE',
+      categories: [{ id: 'printing', name: 'Printing' }],
+    }
+  })
   @ApiResponse({ status: 404, description: 'Seller not found' })
   findOne(@Param('id') id: string) {
     return this.sellersService.findOne(id);

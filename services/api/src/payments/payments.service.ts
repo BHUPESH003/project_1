@@ -73,12 +73,19 @@ export class PaymentsService {
    * Creates payment record and returns payment intent for frontend.
    *
    * CRITICAL: Does NOT transition order state - that happens via webhook.
+   *
+   * @param orderId - Order ID
+   * @param paymentMethod - Payment method (UPI, CARD, etc.)
+   * @param customerPhone - Customer's phone number
+   * @param customerName - Customer's name
+   * @param providerName - Optional payment provider name (razorpay, paytm, etc.)
    */
   async createPayment(
     orderId: string,
     paymentMethod: string,
     customerPhone: string,
     customerName?: string,
+    providerName?: string,
   ): Promise<CreatePaymentResponse> {
     // Get order
     const order = await this.orderRepository.findById(orderId, false);
@@ -113,8 +120,13 @@ export class PaymentsService {
       );
     }
 
-    // Get payment provider (default: Paytm for MVP)
-    const provider = this.providerRegistry.getDefaultProvider();
+    // Get payment provider (use specified provider or default)
+    let provider;
+    if (providerName) {
+      provider = this.providerRegistry.getProvider(providerName);
+    } else {
+      provider = this.providerRegistry.getDefaultProvider();
+    }
 
     // Create payment intent via provider
     const paymentRequest: CreatePaymentRequest = {
@@ -137,7 +149,7 @@ export class PaymentsService {
     });
 
     this.logger.log(
-      `Payment intent created for order ${orderId} (payment: ${payment.id}, gateway: ${paymentIntent.gatewayOrderId})`,
+      `Payment intent created for order ${orderId} (payment: ${payment.id}, gateway: ${paymentIntent.gatewayOrderId}, provider: ${provider.getProviderName()})`,
     );
 
     return {
@@ -198,6 +210,73 @@ export class PaymentsService {
       status: verification.status,
       gateway_order_id: verification.gatewayOrderId,
       gateway_payment_id: verification.gatewayPaymentId,
+      amount: verification.amount,
+      paid_at: verification.paidAt,
+      failure_reason: verification.failureReason,
+    };
+  }
+
+  /**
+   * Verify Razorpay payment with signature (Frontend flow)
+   *
+   * Called from frontend after user completes Razorpay payment.
+   * Verifies payment signature and updates payment record.
+   *
+   * @param orderId - Order ID
+   * @param razorpayPaymentId - Razorpay payment ID from frontend
+   * @param razorpayOrderId - Razorpay order ID from frontend
+   * @param razorpaySignature - Razorpay signature from frontend
+   */
+  async verifyRazorpayPayment(
+    orderId: string,
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    razorpaySignature: string,
+  ): Promise<VerifyPaymentResponse> {
+    // Get payment record
+    let payment = await this.paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+      throw new NotFoundException(`Payment not found for order ${orderId}`);
+    }
+
+    // Get Razorpay provider
+    const provider = this.providerRegistry.getProvider('razorpay');
+
+    // Verify payment via provider
+    const verifyRequest: VerifyPaymentRequest = {
+      orderId,
+      gatewayOrderId: razorpayOrderId,
+      gatewayPaymentId: razorpayPaymentId,
+    };
+
+    const verification = await provider.verifyPayment(verifyRequest);
+
+    // Verify signature (additional security check)
+    // This is handled by the Razorpay provider in verifyPayment
+
+    // Update payment record
+    await this.paymentRepository.update(payment.id, {
+      status: verification.status,
+      gatewayPaymentId: razorpayPaymentId,
+      paidAt: verification.paidAt,
+      failureReason: verification.failureReason,
+    });
+
+    // If payment succeeded, trigger state machine transition
+    if (verification.status === PaymentStatus.SUCCESS) {
+      await this.handlePaymentSuccess(orderId, payment.id);
+    }
+
+    this.logger.log(
+      `Razorpay payment verified for order ${orderId}: ${verification.status}`,
+    );
+
+    return {
+      payment_id: payment.id,
+      order_id: orderId,
+      status: verification.status,
+      gateway_order_id: razorpayOrderId,
+      gateway_payment_id: razorpayPaymentId,
       amount: verification.amount,
       paid_at: verification.paidAt,
       failure_reason: verification.failureReason,

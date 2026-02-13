@@ -138,6 +138,24 @@ export default function ShopDetailScreen() {
     }));
   }, [productsData, productsError, shopId]);
 
+  // Get unique categories from products
+  const productCategories = useMemo(() => {
+    const categories = [...new Set(products.map(p => p.category))];
+    return categories.sort();
+  }, [products]);
+
+  // Check if shop is a printing service shop
+  const isPrintingShop = useMemo(() => {
+    return products.some(p => p.category === 'Printing Services');
+  }, [products]);
+
+  // Reset activeTab if it doesn't exist in current categories
+  useEffect(() => {
+    if (activeTab !== 'all' && !productCategories.includes(activeTab)) {
+      setActiveTab('all');
+    }
+  }, [productCategories]);
+
   // Set seller when component mounts
   useEffect(() => {
     if (shopInfo.name && shopInfo.name !== 'Unknown Shop') {
@@ -149,11 +167,7 @@ export default function ShopDetailScreen() {
     let filtered = products;
     
     if (activeTab !== 'all') {
-      filtered = filtered.filter(p => {
-        if (activeTab === 'printing') return p.category === 'Printing Services';
-        if (activeTab === 'stationery') return p.category === 'Popular Stationery';
-        return true;
-      });
+      filtered = filtered.filter(p => p.category === activeTab);
     }
     
     if (search.trim()) {
@@ -468,23 +482,22 @@ export default function ShopDetailScreen() {
             >
               <Text style={[styles.tabText, activeTab === 'all' && styles.tabActiveText]}>All Items</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'printing' && styles.tabActive]}
-              onPress={() => setActiveTab('printing')}
-            >
-              <Text style={[styles.tabText, activeTab === 'printing' && styles.tabActiveText]}>Printing</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'stationery' && styles.tabActive]}
-              onPress={() => setActiveTab('stationery')}
-            >
-              <Text style={[styles.tabText, activeTab === 'stationery' && styles.tabActiveText]}>Stationery</Text>
-            </TouchableOpacity>
+            {productCategories.map(category => (
+              <TouchableOpacity 
+                key={category}
+                style={[styles.tab, activeTab === category && styles.tabActive]}
+                onPress={() => setActiveTab(category)}
+              >
+                <Text style={[styles.tabText, activeTab === category && styles.tabActiveText]}>
+                  {category.length > 12 ? category.substring(0, 12) + '...' : category}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        {/* Printing Services */}
-        {filteredProducts.filter(p => p.category === 'Printing Services').length > 0 && (
+        {/* Dynamic Product Sections by Category */}
+        {isPrintingShop && (
           <>
             <Text style={styles.sectionLabel}>Printing Services</Text>
             <View style={[styles.uploadBox, uploadedFiles.length > 0 && styles.uploadBoxCompact]}>
@@ -637,54 +650,59 @@ export default function ShopDetailScreen() {
           </>
         )}
 
-        {/* Popular Stationery */}
-        {filteredProducts.filter(p => p.category === 'Popular Stationery').length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Popular Stationery</Text>
-            <View style={styles.productsGrid}>
-              {filteredProducts.filter(p => p.category === 'Popular Stationery').map(product => {
-                const quantity = getProductQuantity(product.id);
-                return (
-                  <View key={product.id} style={styles.productCard}>
-                    <Image source={{ uri: product.image }} style={styles.productImg} />
-                    <TouchableOpacity style={styles.productFav}>
-                      <MaterialIcons name="favorite-border" size={16} color={colors.textPrimary} />
-                    </TouchableOpacity>
-                    <Text style={styles.productName}>{product.name}</Text>
-                    <Text style={styles.productDesc}>{product.description}</Text>
-                    <View style={styles.productRow}>
-                      <Text style={styles.productPrice}>₹{product.price.toFixed(2)}</Text>
-                      {quantity > 0 ? (
-                        <View style={styles.quantityAdjusterSm}>
+        {/* Other Product Categories */}
+        {productCategories.filter(cat => cat !== 'Printing Services').map(category => {
+          const categoryProducts = filteredProducts.filter(p => p.category === category);
+          if (categoryProducts.length === 0) return null;
+
+          return (
+            <View key={category}>
+              <Text style={styles.sectionLabel}>{category}</Text>
+              <View style={styles.productsGrid}>
+                {categoryProducts.map(product => {
+                  const quantity = getProductQuantity(product.id);
+                  return (
+                    <View key={product.id} style={styles.productCard}>
+                      <Image source={{ uri: product.image }} style={styles.productImg} />
+                      <TouchableOpacity style={styles.productFav}>
+                        <MaterialIcons name="favorite-border" size={16} color={colors.textPrimary} />
+                      </TouchableOpacity>
+                      <Text style={styles.productName}>{product.name}</Text>
+                      <Text style={styles.productDesc}>{product.description}</Text>
+                      <View style={styles.productRow}>
+                        <Text style={styles.productPrice}>₹{product.price.toFixed(2)}</Text>
+                        {quantity > 0 ? (
+                          <View style={styles.quantityAdjusterSm}>
+                            <TouchableOpacity 
+                              style={styles.quantityBtnSm}
+                              onPress={() => handleDecreaseQuantity(product.id)}
+                            >
+                              <MaterialIcons name="remove" size={14} color={colors.primary} />
+                            </TouchableOpacity>
+                            <Text style={styles.quantityTextSm}>{quantity}</Text>
+                            <TouchableOpacity 
+                              style={styles.quantityBtnSm}
+                              onPress={() => handleIncreaseQuantity(product.id)}
+                            >
+                              <MaterialIcons name="add" size={14} color={colors.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
                           <TouchableOpacity 
-                            style={styles.quantityBtnSm}
-                            onPress={() => handleDecreaseQuantity(product.id)}
+                            style={styles.addBtnSm}
+                            onPress={() => handleAddProduct(product)}
                           >
-                            <MaterialIcons name="remove" size={14} color={colors.primary} />
+                            <MaterialIcons name="add" size={16} color={colors.textPrimary} />
                           </TouchableOpacity>
-                          <Text style={styles.quantityTextSm}>{quantity}</Text>
-                          <TouchableOpacity 
-                            style={styles.quantityBtnSm}
-                            onPress={() => handleIncreaseQuantity(product.id)}
-                          >
-                            <MaterialIcons name="add" size={14} color={colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <TouchableOpacity 
-                          style={styles.addBtnSm}
-                          onPress={() => handleAddProduct(product)}
-                        >
-                          <MaterialIcons name="add" size={16} color={colors.textPrimary} />
-                        </TouchableOpacity>
-                      )}
+                        )}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
-          </>
-        )}
+          );
+        })}
 
         <View style={{ height: 100 }} />
       </ScrollView>

@@ -42,7 +42,7 @@ export class PaymentProviderRegistry {
   }
 
   /**
-   * Get default provider (first registered or configured)
+   * Get default provider (razorpay preferred, falls back to paytm or first registered)
    * @returns Payment provider instance
    */
   getDefaultProvider(): PaymentProvider {
@@ -50,7 +50,12 @@ export class PaymentProviderRegistry {
       throw new Error('No payment providers registered');
     }
 
-    // For MVP, return Paytm if available, otherwise first registered
+    // For MVP, prefer Razorpay, fallback to Paytm, then first registered
+    const razorpayProvider = this.providers.get('razorpay');
+    if (razorpayProvider) {
+      return razorpayProvider;
+    }
+
     const paytmProvider = this.providers.get('paytm');
     if (paytmProvider) {
       return paytmProvider;
