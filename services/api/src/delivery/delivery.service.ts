@@ -24,6 +24,7 @@ import {
   CreateTaskRequest,
   DeliveryEvent,
 } from './adapters/delivery-adapter.interface';
+import { PickupDropBookingDto, PickupDropBookingResponse } from './dto/pickup-drop-booking.dto';
 
 /**
  * Assign Delivery Response
@@ -591,6 +592,164 @@ export class DeliveryService {
       provider: quote.provider,
       estimatedDurationMinutes: quote.estimatedDurationMinutes,
     };
+  }
+
+  /**
+   * Get delivery options for standalone pickup/drop location booking
+   *
+   * Fetches delivery quotes from all registered providers for the given locations.
+   * Called from the /delivery/pickup-drop endpoint.
+   * No order required - standalone feature for ad-hoc deliveries.
+   *
+   * @param bookingDto - Pickup and drop location details with coordinates
+   * @returns PickupDropBookingResponse with available provider options
+   */
+  async getPickupDropOptions(
+    bookingDto: PickupDropBookingDto,
+  ): Promise<PickupDropBookingResponse> {
+    // Validate coordinates are valid
+    if (
+      !bookingDto.pickupLatitude ||
+      !bookingDto.pickupLongitude ||
+      !bookingDto.dropLatitude ||
+      !bookingDto.dropLongitude
+    ) {
+      throw new BadRequestException(
+        'All location coordinates (pickup and drop latitude/longitude) are required',
+      );
+    }
+
+    try {
+      // Fetch quotes from all delivery providers
+      const allQuotes = await this.getAllQuotes(
+        {
+          latitude: bookingDto.pickupLatitude,
+          longitude: bookingDto.pickupLongitude,
+          address: bookingDto.pickupAddress,
+        },
+        {
+          latitude: bookingDto.dropLatitude,
+          longitude: bookingDto.dropLongitude,
+          address: bookingDto.dropAddress,
+        },
+        `pickup-drop-${Date.now()}`, // Generate unique ID for tracking
+      );
+
+      // Transform to response format
+      const providers = allQuotes.map((quote) => ({
+        provider: quote.provider,
+        displayName: this.getProviderDisplayName(quote.provider),
+        estimatedFee: quote.estimatedFee,
+        estimatedDurationMinutes: quote.estimatedDurationMinutes,
+        currency: 'INR',
+        rating: this.getProviderRating(quote.provider),
+        quoteId: quote.quoteId || `${quote.provider}-${Date.now()}`,
+      }));
+
+      // Calculate distance using Haversine formula
+      const distance = this.calculateDistance(
+        bookingDto.pickupLatitude,
+        bookingDto.pickupLongitude,
+        bookingDto.dropLatitude,
+        bookingDto.dropLongitude,
+      );
+
+      // Find cheapest and fastest options
+      const cheapest =
+        providers.length > 0
+          ? providers.reduce((min, curr) =>
+              curr.estimatedFee < min.estimatedFee ? curr : min,
+            )
+          : undefined;
+
+      const fastest =
+        providers.length > 0
+          ? providers.reduce((min, curr) =>
+              curr.estimatedDurationMinutes < min.estimatedDurationMinutes
+                ? curr
+                : min,
+            )
+          : undefined;
+
+      this.logger.log(
+        `Pickup/drop booking: ${providers.length} providers available. Distance: ${distance.toFixed(2)}km`,
+      );
+
+      return {
+        pickupLocation: {
+          latitude: bookingDto.pickupLatitude,
+          longitude: bookingDto.pickupLongitude,
+          address: bookingDto.pickupAddress,
+        },
+        dropLocation: {
+          latitude: bookingDto.dropLatitude,
+          longitude: bookingDto.dropLongitude,
+          address: bookingDto.dropAddress,
+        },
+        providers,
+        cheapest,
+        fastest,
+        totalOptions: providers.length,
+        distanceKm: distance,
+        message: `${providers.length} delivery providers available for this pickup/drop location. ${cheapest ? `Cheapest option: ${cheapest.displayName} at ₹${cheapest.estimatedFee}` : 'No providers available.'}`,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to fetch delivery quotes';
+      this.logger.error(
+        `Error fetching delivery quotes for pickup/drop booking:`,
+        errorMessage,
+      );
+      throw new BadRequestException(
+        `Unable to fetch delivery options: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Helper: Calculate distance between two geographic coordinates using Haversine formula
+   */
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Helper: Get provider display name
+   */
+  private getProviderDisplayName(provider: string): string {
+    const nameMap: Record<string, string> = {
+      UBER_DIRECT: 'Uber Direct',
+      DUNZO: 'Dunzo',
+      PORTER: 'Porter',
+    };
+    return nameMap[provider] || provider;
+  }
+
+  /**
+   * Helper: Get provider rating
+   */
+  private getProviderRating(provider: string): number {
+    const ratingMap: Record<string, number> = {
+      UBER_DIRECT: 4.8,
+      DUNZO: 4.7,
+      PORTER: 4.6,
+    };
+    return ratingMap[provider] || 4.5;
   }
 
   /**

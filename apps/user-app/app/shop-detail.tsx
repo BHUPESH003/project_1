@@ -12,63 +12,6 @@ import { sellersApi } from '@/api/sellers.api';
 import { productsApi, Product } from '@/api/products.api';
 import { Loader } from '@/components/Loader';
 
-// Fallback products for when API is not available
-const DEMO_PRODUCTS = [
-  { 
-    id: 'print-1',
-    sellerId: 'shop-1',
-    category: 'Printing Services',
-    name: 'B&W Document Print', 
-    description: 'Standard 80gsm A4 paper',
-    price: 0.50,
-    image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80' 
-  },
-  { 
-    id: 'print-2',
-    sellerId: 'shop-1',
-    category: 'Printing Services',
-    name: 'Color Laser Print', 
-    description: 'High-quality 100gsm A4',
-    price: 2.00,
-    image: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80' 
-  },
-  { 
-    id: 'stat-1',
-    sellerId: 'shop-1',
-    category: 'Popular Stationery',
-    name: 'Blue Ink Pen Pack', 
-    description: 'Set of 12 pieces',
-    price: 15.00,
-    image: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=400&q=80' 
-  },
-  { 
-    id: 'stat-2',
-    sellerId: 'shop-1',
-    category: 'Popular Stationery',
-    name: 'Premium A4 Ream', 
-    description: '500 Sheets, 80gsm',
-    price: 22.00,
-    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80' 
-  },
-  { 
-    id: 'stat-3',
-    sellerId: 'shop-1',
-    category: 'Popular Stationery',
-    name: 'Spiral Notebook', 
-    description: 'A5 Size, 160 Pages',
-    price: 8.50,
-    image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80' 
-  },
-  { 
-    id: 'stat-4',
-    sellerId: 'shop-1',
-    category: 'Popular Stationery',
-    name: 'Fluo Highlighters', 
-    description: 'Set of 4 Neon Colors',
-    price: 12.00,
-    image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80' 
-  },
-];
 
 export default function ShopDetailScreen() {
   const router = useRouter();
@@ -103,10 +46,20 @@ export default function ShopDetailScreen() {
 
   // Normalize seller data
   const shopInfo = useMemo(() => {
+    if (sellerLoading) {
+      return {
+        id: shopId,
+        name: 'Loading shop...',
+        rating: 4.8,
+        reviews: 0,
+        distance: 'N/A',
+        image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=100&q=80',
+      };
+    }
     if (sellerError || !sellerData) {
       return {
         id: shopId,
-        name: 'Unknown Shop',
+        name: shopId ? `Shop ${shopId}` : 'Unknown Shop',
         rating: 4.8,
         reviews: 0,
         distance: 'N/A',
@@ -121,22 +74,20 @@ export default function ShopDetailScreen() {
       distance: `${(sellerData.distance_km || 0).toFixed(1)} km`,
       image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=100&q=80',
     };
-  }, [sellerData, sellerError]);
+  }, [sellerData, sellerError, sellerLoading, shopId]);
 
-  // Normalize products data
+  // Normalize products data - only use API data
   const products = useMemo(() => {
     const sellerId = Array.isArray(shopId) ? shopId[0] : shopId;
-    if (productsError || !productsData || productsData.length === 0) {
-      return DEMO_PRODUCTS.map(p => ({
-        ...p,
-        sellerId: sellerId || p.sellerId,
-      }));
+    // Return only API data, no fallback to demo products
+    if (!productsData || productsData.length === 0) {
+      return [];
     }
     return productsData.map(p => ({
       ...p,
       sellerId: sellerId || p.sellerId,
     }));
-  }, [productsData, productsError, shopId]);
+  }, [productsData, shopId]);
 
   // Get unique categories from products
   const productCategories = useMemo(() => {
@@ -156,12 +107,18 @@ export default function ShopDetailScreen() {
     }
   }, [productCategories]);
 
-  // Set seller when component mounts
+  // Set seller immediately when taking shopId from route
+  // This ensures seller is always selected, even before API responds
   useEffect(() => {
-    if (shopInfo.name && shopInfo.name !== 'Unknown Shop') {
-      setSelectedSeller(shopInfo.id, shopInfo.name);
+    if (shopId) {
+      // Set seller with shopId immediately (store as temporary until API responds)
+      // If API has not responded yet, use shopId as fallback name
+      const sellerName = shopInfo.name && shopInfo.name !== 'Unknown Shop' 
+        ? shopInfo.name 
+        : `Shop ${shopId}`;
+      setSelectedSeller(shopId as string, sellerName);
     }
-  }, [shopInfo.id, shopInfo.name, setSelectedSeller]);
+  }, [shopId, shopInfo.name, setSelectedSeller]);
 
   const filteredProducts = useMemo(() => {
     let filtered = products;

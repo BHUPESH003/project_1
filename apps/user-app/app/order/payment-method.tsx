@@ -46,31 +46,37 @@ export default function PaymentMethodScreen() {
         // Handle Razorpay payment via web checkout
         try {
           const paymentData = res.payment_intent?.paymentData || {};
-          
-          // Build Razorpay checkout URL with payment details
-          const checkoutUrl = `https://checkout.razorpay.com/?key=${paymentData.keyId}`;
           const amount = res.amount || order?.pricing?.totalAmount || 0;
           
+          // For web-based Razorpay, show informational alert and route to processing
+          // In production with native build, use react-native-razorpay
           Alert.alert(
-            'Razorpay Payment',
-            `You will be redirected to complete your payment of ₹${amount}.\n\nAfter payment, return to the app to confirm.`,
+            'Razorpay Payment – Expo Mode',
+            `Payment Amount: ₹${amount}\n\nIn Expo Go, Razorpay requires a full build with native modules.\n\nFor development testing:\n• Create an EAS build (eas build)\n• Use native Razorpay SDK\n• Or switch to Paytm for testing`,
             [
+              {
+                text: 'Switch to Paytm',
+                onPress: () => {
+                  setSelectedMethod('paytm');
+                  setIsProcessing(false);
+                },
+                style: 'default',
+              },
+              {
+                text: 'Simulate Success',
+                onPress: () => {
+                  // Simulate successful payment for testing
+                  router.replace({
+                    pathname: '/order/payment-processing',
+                    params: { paymentId: `rzp_${Date.now()}`, method: 'razorpay' },
+                  });
+                },
+                style: 'default',
+              },
               {
                 text: 'Cancel',
                 onPress: () => setIsProcessing(false),
                 style: 'cancel',
-              },
-              {
-                text: 'Proceed to Payment',
-                onPress: async () => {
-                  // For now, simulate successful payment by redirecting to processing
-                  // In production, implement proper web-based Razorpay integration or native build
-                  Alert.alert(
-                    'Development Mode',
-                    'Razorpay web checkout requires a full build.\n\nFor testing, use Paytm UPI payment or create a production build with native support.'
-                  );
-                  setIsProcessing(false);
-                },
               },
             ]
           );
@@ -83,9 +89,16 @@ export default function PaymentMethodScreen() {
         const url = res?.payment?.payment_intent?.paymentData?.upi?.paymentUrl;
         if (url) {
           const canOpen = await Linking.canOpenURL(url);
-          if (canOpen) await Linking.openURL(url);
+          if (canOpen) {
+            await Linking.openURL(url);
+            // After user completes payment on Paytm, route to processing
+            setTimeout(() => {
+              router.replace('/order/payment-processing');
+            }, 1000);
+          }
+        } else {
+          router.replace('/order/payment-processing');
         }
-        router.replace('/order/payment-processing');
       }
     },
     onError: (error: any) => {
@@ -95,11 +108,15 @@ export default function PaymentMethodScreen() {
   });
 
   useEffect(() => {
-    if (!orderId) router.replace('/order/upload');
+    if (!orderId) router.replace('/checkout');
   }, [orderId, router]);
 
   const total = order?.pricing?.totalAmount ?? 0;
   const onPay = () => {
+    if (!selectedMethod) {
+      Alert.alert('Select Method', 'Please select a payment method');
+      return;
+    }
     setIsProcessing(true);
     confirmMutation.mutate(selectedMethod);
   };

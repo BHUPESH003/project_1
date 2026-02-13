@@ -22,13 +22,13 @@ import { CategoryRegistry } from '@/categories/handlers/category-registry';
 import { SellerRepository } from '@/sellers/repositories/seller.repository';
 import { PaymentsService } from '@/payments/payments.service';
 import { DeliveryService } from '@/delivery/delivery.service';
+import { DeliveryPartnerRepository } from '@/delivery/repositories/delivery-partner.repository';
+import { PrismaService } from '@/prisma/prisma.service';
 import { QueueService } from '@/queue/queue.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
-import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
-import { SelectDeliveryProviderDto } from './dto/select-delivery-provider.dto';
 import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
 
 @Injectable()
@@ -44,6 +44,8 @@ export class OrdersService {
     private readonly paymentsService: PaymentsService,
     @Inject(forwardRef(() => DeliveryService))
     private readonly deliveryService: DeliveryService,
+    private readonly deliveryPartnerRepository: DeliveryPartnerRepository,
+    private readonly prismaService: PrismaService,
     private readonly queueService: QueueService,
     private readonly configService: ConfigService,
   ) {}
@@ -51,6 +53,11 @@ export class OrdersService {
   /**
    * Create draft order (USER APP)
    * State: CREATED
+   * 
+   * Recommended flow:
+   * 1. GET /sellers (discover sellers)
+   * 2. GET /sellers/:sellerId/products (view seller products)
+   * 3. POST /orders with sellerId (create order with pre-selected seller)
    */
   async create(userId: string, createOrderDto: CreateOrderDto) {
     // Get category handler (NO if/else by category)
@@ -62,12 +69,110 @@ export class OrdersService {
       throw new BadRequestException(validation.error || 'Invalid order payload');
     }
 
-    // Create order with validated payload
+    // Enrich order items with product details from database
+    let enrichedPayload = (validation.normalizedPayload || createOrderDto.orderPayload) as any;
+    let itemCost = 0;
+    let sellerId: string | null = createOrderDto.sellerId || null;
+
+    if (enrichedPayload && enrichedPayload.items && Array.isArray(enrichedPayload.items)) {
+      const enrichedItems = [];
+
+      for (const item of enrichedPayload.items) {
+        try {
+          // Fetch product details by productId
+          if (!item.productId) {
+            throw new BadRequestException(`Item must have a productId`);
+          }
+
+          const product = await this.prismaService.prisma.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) {
+            throw new NotFoundException(`Product ${item.productId} not found`);
+          }
+
+          // Validate all products are from the same seller
+          if (!sellerId) {
+            sellerId = product.sellerId;
+          } else if (product.sellerId !== sellerId) {
+            throw new BadRequestException(
+              `All products must be from the same seller. Found products from different sellers.`,
+            );
+          }
+
+          // Calculate price and total
+          const price = Number(product.price);
+          const quantity = item.quantity || 1;
+          const totalPrice = price * quantity;
+
+          // Store seller ID from first item
+          if (!sellerId) {
+            sellerId = product.sellerId;
+          }
+
+          // Add to item cost
+          itemCost += totalPrice;
+
+          // Enrich item with product details
+          enrichedItems.push({
+            productId: item.productId,
+            name: product.name,
+            quantity,
+            price,
+            totalPrice,
+          });
+        } catch (error) {
+          if (error instanceof BadRequestException || error instanceof NotFoundException) {
+            throw error;
+          }
+          this.logger.error(`Error enriching item with productId ${item.productId}:`, error);
+          throw new BadRequestException(`Could not fetch product details for ${item.productId}`);
+        }
+      }
+
+      enrichedPayload = {
+        ...enrichedPayload,
+        items: enrichedItems,
+      };
+    }
+
+    // Create order with enriched payload
     const order = await this.orderRepository.create({
       userId,
       categoryId: createOrderDto.categoryId,
-      orderPayload: validation.normalizedPayload || createOrderDto.orderPayload,
+      orderPayload: enrichedPayload,
     });
+
+    // Get user's delivery address (first address or default)
+    let dropLatitude: number | null = null;
+    let dropLongitude: number | null = null;
+    let dropAddress: string | null = null;
+
+    try {
+      const userAddress = await this.prismaService.prisma.userAddress.findFirst({
+        where: { userId },
+      });
+
+      if (userAddress) {
+        dropLatitude = userAddress.latitude ? Number(userAddress.latitude) : null;
+        dropLongitude = userAddress.longitude ? Number(userAddress.longitude) : null;
+        dropAddress = userAddress.addressLine || null;
+      }
+    } catch (error) {
+      this.logger.warn(`Could not fetch user address for order ${order.id}`, error);
+    }
+
+    // Update order with calculated values
+    if (sellerId || itemCost > 0 || dropLatitude || dropLongitude || dropAddress) {
+      await this.orderRepository.update(order.id, {
+        sellerId: sellerId || undefined,
+        itemCost: itemCost > 0 ? itemCost : undefined,
+        dropLatitude: dropLatitude || undefined,
+        dropLongitude: dropLongitude || undefined,
+        dropAddress: dropAddress || undefined,
+      });
+    }
 
     // Record initial state in history
     await this.stateMachine.recordInitialState(
@@ -265,101 +370,16 @@ export class OrdersService {
 
   /**
    * Get delivery quote (USER APP)
-   * Uses real delivery provider APIs for accurate pricing
-   */
-  async getDeliveryQuote(
-    orderId: string,
-    userId: string,
-    locationDto: DeliveryQuoteDto,
-  ) {
-    // Get order
-    console.log('Getting order for delivery quote:', orderId);
-    console.log('Getting user Id:', userId);
-    console.log('Getting location for delivery quote:', locationDto);
-
-    const order = await this.orderRepository.findById(orderId, false);
-    if (!order) {
-      throw new NotFoundException(`Order ${orderId} not found`);
-    }
-
-    // Verify order belongs to user
-    if (order.userId !== userId) {
-      throw new BadRequestException('Order does not belong to user');
-    }
-
-    // Verify order has seller selected
-    if (!order.sellerId) {
-      throw new BadRequestException(
-        'Seller must be selected before getting delivery quote',
-      );
-    }
-
-    // Verify order is in correct state
-    if (order.status !== OrderStatus.SELLER_SELECTED) {
-      throw new BadRequestException(
-        `Order must be in SELLER_SELECTED state. Current state: ${order.status}`,
-      );
-    }
-
-    // Get seller location
-    const seller = await this.sellerRepository.findById(order.sellerId);
-    if (!seller) {
-      throw new NotFoundException('Seller not found');
-    }
-
-    // Get real delivery quote from provider
-    try {
-      const quote = await this.deliveryService.getQuote(
-        {
-          latitude: Number(seller.latitude),
-          longitude: Number(seller.longitude),
-          address: seller.address,
-        },
-        {
-          latitude: locationDto.dropLocation.lat,
-          longitude: locationDto.dropLocation.lng,
-          address: locationDto.dropLocation.address || 'Delivery Address',
-        },
-        orderId,
-      );
-
-      const deliveryFee = quote.fee;
-
-      // Update order with delivery location and fee
-      await this.orderRepository.update(orderId, {
-        dropLatitude: locationDto.dropLocation.lat,
-        dropLongitude: locationDto.dropLocation.lng,
-        dropAddress: locationDto.dropLocation.address,
-        deliveryFee: deliveryFee,
-      });
-
-      this.logger.log(
-        `Real delivery quote for order ${orderId}: ₹${deliveryFee} via ${quote.provider} (${quote.estimatedDurationMinutes}min)`,
-      );
-
-      return {
-        delivery_fee: deliveryFee,
-        provider: quote.provider,
-        distance_km: 0, // Not needed with real quotes
-      };
-    } catch (error) {
-      // If delivery quote fails, surface the error - don't guess pricing
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get delivery quote';
-      this.logger.error(`Failed to get delivery quote for order ${orderId}:`, errorMessage);
-      throw new BadRequestException(`Unable to get delivery pricing: ${errorMessage}`);
-    }
-  }
-
   /**
-   * Get all available delivery quotes (USER APP)
-   * Returns options from all registered delivery providers
-   * Used for showing multiple delivery choices with pricing and ETAs
+   * Get all available delivery quotes for an order (USER APP)
+   * 
+   * Dynamically calculates quotes based on:
+   * - Seller pickup location (from order.sellerId)
+   * - User drop location (from order.dropLatitude/dropLongitude or user address table)
+   * 
+   * Returns all available delivery partner options with pricing and ETAs
    */
-  async getAllDeliveryQuotes(
-    orderId: string,
-    userId: string,
-    locationDto: DeliveryQuoteDto,
-  ) {
+  async getDeliveryQuotes(orderId: string, userId: string) {
     // Get order
     const order = await this.orderRepository.findById(orderId, false);
     if (!order) {
@@ -371,24 +391,50 @@ export class OrdersService {
       throw new BadRequestException('Order does not belong to user');
     }
 
-    // Verify order has seller selected
+    // Verify seller is selected
     if (!order.sellerId) {
       throw new BadRequestException(
         'Seller must be selected before getting delivery quotes',
       );
     }
 
-    // Verify order is in correct state
-    if (order.status !== OrderStatus.SELLER_SELECTED) {
-      throw new BadRequestException(
-        `Order must be in SELLER_SELECTED state. Current state: ${order.status}`,
-      );
-    }
-
-    // Get seller location
+    // Get seller for pickup location
     const seller = await this.sellerRepository.findById(order.sellerId);
     if (!seller) {
       throw new NotFoundException('Seller not found');
+    }
+
+    // Get user drop location - from order or user address table
+    let dropLatitude: number | null = null;
+    let dropLongitude: number | null = null;
+    let dropAddress: string | null = null;
+
+    if (order.dropLatitude && order.dropLongitude && order.dropAddress) {
+      // Use stored location from order
+      dropLatitude = Number(order.dropLatitude);
+      dropLongitude = Number(order.dropLongitude);
+      dropAddress = order.dropAddress;
+    } else {
+      // Try to fetch from user address table
+      try {
+        const userAddress = await this.prismaService.prisma.userAddress.findFirst({
+          where: { userId },
+        });
+        if (userAddress && userAddress.latitude && userAddress.longitude) {
+          dropLatitude = Number(userAddress.latitude);
+          dropLongitude = Number(userAddress.longitude);
+          dropAddress = userAddress.addressLine || null;
+        }
+      } catch (error) {
+        this.logger.warn(`Could not fetch user address for order ${orderId}:`, error);
+      }
+    }
+
+    // Require drop location to calculate quotes
+    if (!dropLatitude || !dropLongitude) {
+      throw new BadRequestException(
+        'User delivery address is required. Please provide delivery location to get quotes.',
+      );
     }
 
     // Get quotes from all available delivery providers
@@ -400,21 +446,23 @@ export class OrdersService {
           address: seller.address,
         },
         {
-          latitude: locationDto.dropLocation.lat,
-          longitude: locationDto.dropLocation.lng,
-          address: locationDto.dropLocation.address || 'Delivery Address',
+          latitude: dropLatitude,
+          longitude: dropLongitude,
+          address: dropAddress || 'Delivery Address',
         },
         orderId,
       );
 
-      // Update order with delivery location (but NOT yet delivery provider)
-      await this.orderRepository.update(orderId, {
-        dropLatitude: locationDto.dropLocation.lat,
-        dropLongitude: locationDto.dropLocation.lng,
-        dropAddress: locationDto.dropLocation.address,
-      });
+      // Update order with delivery location (if not already set)
+      if (!order.dropLatitude || !order.dropLongitude) {
+        await this.orderRepository.update(orderId, {
+          dropLatitude,
+          dropLongitude,
+          dropAddress: dropAddress || undefined,
+        });
+      }
 
-      // Transform to response format with provider details
+      // Transform to response format
       const options = allQuotes.map((quote) => ({
         provider: quote.provider,
         displayName: this.getProviderDisplayName(quote.provider),
@@ -423,105 +471,37 @@ export class OrdersService {
         currency: 'INR',
         quoteId: quote.quoteId,
         expiresAt: quote.expiresAt,
-        features: this.getProviderFeatures(quote.provider),
-        logo: this.getProviderLogoUrl(quote.provider),
         rating: this.getProviderRating(quote.provider),
       }));
 
+      // Sort by fee (cheapest first)
+      options.sort((a, b) => a.estimatedFee - b.estimatedFee);
+
       this.logger.log(
-        `All delivery quotes for order ${orderId}: ${options.length} providers`,
+        `Delivery quotes for order ${orderId}: ${options.length} providers available`,
       );
 
       return {
         order_id: orderId,
-        options,
-        message: `${options.length} delivery options available. Select preferred provider to proceed.`,
+        pickup_location: {
+          latitude: Number(seller.latitude),
+          longitude: Number(seller.longitude),
+          address: seller.address || 'Pickup Location',
+        },
+        drop_location: {
+          latitude: dropLatitude,
+          longitude: dropLongitude,
+          address: dropAddress || 'Delivery Address',
+        },
+        providers: options,
+        cheapest: options.length > 0 ? options[0] : null,
+        total_options: options.length,
+        message: `${options.length} delivery options available. Select your preferred provider.`,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to get delivery quotes';
-      this.logger.error(`Failed to get all delivery quotes for order ${orderId}:`, errorMessage);
-      throw new BadRequestException(`Unable to get delivery options: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Select delivery provider for order (USER APP)
-   * User picks their preferred delivery partner from available options
-   */
-  async selectDeliveryProvider(
-    orderId: string,
-    userId: string,
-    providerDto: SelectDeliveryProviderDto,
-  ) {
-    // Get order
-    const order = await this.orderRepository.findById(orderId, false);
-    if (!order) {
-      throw new NotFoundException(`Order ${orderId} not found`);
-    }
-
-    // Verify order belongs to user
-    if (order.userId !== userId) {
-      throw new BadRequestException('Order does not belong to user');
-    }
-
-    // Verify delivery location is set
-    if (!order.dropLatitude || !order.dropLongitude || !order.dropAddress) {
-      throw new BadRequestException(
-        'Delivery location must be set first. Call /delivery-quotes endpoint first.',
-      );
-    }
-
-    // Verify provider is valid and registered
-    try {
-      this.deliveryService.validateDeliveryProvider(providerDto.provider);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Invalid provider';
-      throw new BadRequestException(errorMsg);
-    }
-
-    // Get fresh quote from selected provider to get latest pricing
-    try {
-      const seller = await this.sellerRepository.findById(order.sellerId!);
-      if (!seller) {
-        throw new NotFoundException('Seller not found');
-      }
-
-      const quote = await this.deliveryService.getQuoteFromProvider(
-        providerDto.provider,
-        {
-          latitude: Number(seller.latitude),
-          longitude: Number(seller.longitude),
-          address: seller.address,
-        },
-        {
-          latitude: Number(order.dropLatitude),
-          longitude: Number(order.dropLongitude),
-          address: order.dropAddress,
-        },
-        orderId,
-      );
-
-      // Store selected provider and updated delivery fee in order
-      await this.orderRepository.update(orderId, {
-        deliveryFee: quote.estimatedFee,
-        deliveryProvider: providerDto.provider,
-      });
-
-      this.logger.log(
-        `Delivery provider selected for order ${orderId}: ${providerDto.provider} (₹${quote.estimatedFee})`,
-      );
-
-      return {
-        order_id: orderId,
-        provider: quote.provider,
-        deliveryFee: quote.estimatedFee,
-        estimatedDurationMinutes: quote.estimatedDurationMinutes,
-        message: `${this.getProviderDisplayName(providerDto.provider)} selected. Ready to confirm order.`,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to select delivery provider';
-      this.logger.error(`Failed to select delivery provider for order ${orderId}:`, errorMessage);
-      throw new BadRequestException(`Unable to select delivery provider: ${errorMessage}`);
+      this.logger.error(`Failed to get delivery quotes for order ${orderId}:`, errorMessage);
+      throw new BadRequestException(`Unable to get delivery quotes: ${errorMessage}`);
     }
   }
 

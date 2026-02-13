@@ -2,16 +2,40 @@
  * Checkout screen – cart summary, delivery partner selection, payment method
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useMutation } from '@tanstack/react-query';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
+import { useOrderDraftStore } from '@/store/order-draft.store';
+import { ordersApi } from '@/api/orders.api';
 
-// Demo delivery partners
+/**
+ * Map category display names to category IDs
+ */
+function getCategoryIdFromName(categoryName?: string): string {
+  if (!categoryName) return 'generic';
+  
+  const categoryMap: { [key: string]: string } = {
+    'Printing Services': 'printing',
+    'Printing': 'printing',
+    'Popular Stationery': 'stationery',
+    'Stationery': 'stationery',
+    'Hardware': 'hardware',
+  };
+  
+  return categoryMap[categoryName] || 'generic';
+}
+
+/**
+ * Delivery partners (HARDCODED - pending API integration)
+ * TODO: Replace with API call to deliveryApi.getAvailablePartners() when endpoint is available
+ * For now using static data to maintain checkout flow
+ */
 const DELIVERY_PARTNERS = [
   {
     id: 'porter',
@@ -46,6 +70,10 @@ export default function CheckoutScreen() {
   const setDeliveryProvider = useCartStore((state) => state.setDeliveryProvider);
   const setDeliveryFee = useCartStore((state) => state.setDeliveryFee);
   const setPaymentMethod = useCartStore((state) => state.setPaymentMethod);
+  
+  const setOrderId = useOrderDraftStore((state) => state.setOrderId);
+  const setDeliveryProviderOD = useOrderDraftStore((state) => state.setDeliveryProvider);
+  const setDeliveryFeeOD = useOrderDraftStore((state) => state.setDeliveryFee);
 
   const selectedPartner = DELIVERY_PARTNERS.find(p => p.id === selectedProvider);
   const deliveryFee = selectedPartner?.fee || 0;
@@ -56,11 +84,77 @@ export default function CheckoutScreen() {
     setDeliveryFee(provider.fee);
   };
 
+  // Create order mutation
+  const createOrderMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedSellerId) throw new Error('No seller selected');
+      if (cartItems.length === 0) throw new Error('Cart is empty');
+      
+      // Determine category ID from first cart item's category
+      const firstItemCategory = cartItems[0]?.category;
+      const categoryId = getCategoryIdFromName(firstItemCategory);
+      
+      // Step 1: Create draft order
+      const createPayload = {
+        categoryId,
+        orderPayload: {
+          items: cartItems.map(item => ({
+            productId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          notes: `Order from ${selectedShopName || 'shop'}. Items: ${cartItems.map(i => `${i.name} x${i.quantity}`).join(', ')}`,
+        },
+      };
+      
+      const response = await ordersApi.createOrder(createPayload);
+      const orderId = response.order_id;
+      
+      // Step 2: Immediately select the seller for this order
+      try {
+        await ordersApi.selectSeller(orderId, selectedSellerId);
+      } catch (err: any) {
+        console.warn('Failed to select seller, order still created:', err);
+        // Continue anyway - order was created successfully
+      }
+      
+      return orderId;
+    },
+    onSuccess: async (orderId) => {
+      // Store order ID for payment flow
+      setOrderId(orderId);
+      setDeliveryProviderOD(selectedProvider || null);
+      setDeliveryFeeOD(deliveryFee);
+      
+      // Navigate to payment method
+      router.push('/order/payment-method');
+    },
+    onError: (error: any) => {
+      Alert.alert('Order Creation Failed', error?.message || 'Could not create order. Please try again.');
+    },
+  });
+
   const handlePaymentConfirm = () => {
-    if (selectedProvider && paymentMethod) {
-      // Navigate to payment selection page
-      router.push('/payment-selection');
+    if (cartItems.length === 0) {
+      Alert.alert('Empty Cart', 'Please add items before proceeding');
+      return;
     }
+    if (!selectedSellerId) {
+      Alert.alert('Seller Not Selected', 'Please go back to shop and ensure you selected the correct shop. Your cart may have been cleared.');
+      return;
+    }
+    if (!selectedProvider) {
+      Alert.alert('Delivery Partner Required', 'Please select a delivery partner before proceeding');
+      return;
+    }
+    if (!paymentMethod) {
+      Alert.alert('Payment Method Required', 'Please select a payment option (Prepay or Pay After Delivery)');
+      return;
+    }
+    
+    // Create order and proceed to payment
+    createOrderMutation.mutate();
   };
 
   return (
@@ -83,11 +177,16 @@ export default function CheckoutScreen() {
           {/* Shop & Items Summary */}
           <View style={styles.section}>
             <View style={styles.shopHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.shopLabel}>FROM</Text>
-                <Text style={styles.shopName}>{selectedShopName || 'Your Shop'}</Text>
+                <Text style={styles.shopName}>{selectedShopName || 'Shop Not Selected'}</Text>
+                {!selectedSellerId && (
+                  <Text style={{ fontSize: 12, color: colors.error, marginTop: 4 }}>
+                    ⚠️ Go back to shop to ensure seller is selected
+                  </Text>
+                )}
               </View>
-              <MaterialIcons name="store" size={32} color={colors.primary} />
+              <MaterialIcons name="store" size={32} color={selectedSellerId ? colors.primary : colors.error} />
             </View>
 
             <View style={styles.sectionHeader}>
@@ -250,13 +349,17 @@ export default function CheckoutScreen() {
           <TouchableOpacity
             style={[
               styles.confirmBtn,
-              (!selectedProvider || !paymentMethod) && styles.confirmBtnDisabled,
+              (!selectedProvider || !paymentMethod || createOrderMutation.isPending) && styles.confirmBtnDisabled,
             ]}
             onPress={handlePaymentConfirm}
-            disabled={!selectedProvider || !paymentMethod}
+            disabled={!selectedProvider || !paymentMethod || createOrderMutation.isPending}
           >
-            <Text style={styles.confirmBtnText}>Pay & Confirm Order</Text>
-            <MaterialIcons name="arrow-forward" size={20} color={colors.textPrimary} />
+            <Text style={styles.confirmBtnText}>
+              {createOrderMutation.isPending ? 'Creating Order...' : `Pay ₹${total.toFixed(2)}`}
+            </Text>
+            {!createOrderMutation.isPending && (
+              <MaterialIcons name="arrow-forward" size={20} color={colors.textPrimary} />
+            )}
           </TouchableOpacity>
         </View>
       </View>

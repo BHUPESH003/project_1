@@ -2,6 +2,8 @@ import { Module, forwardRef } from '@nestjs/common';
 import { DeliveryController } from './delivery.controller';
 import { DeliveryService } from './delivery.service';
 import { DeliveryRepository } from './repositories/delivery.repository';
+import { DeliveryPartnerRepository } from './repositories/delivery-partner.repository';
+import { DeliveryQuotationService } from './services/delivery-quotation.service';
 import { DeliveryAdapterRegistry } from './adapters/delivery-adapter.registry';
 import { UberDirectAdapter } from './adapters/uber-direct/uber-direct.adapter';
 import { DunzoAdapter } from './adapters/dunzo/dunzo.adapter';
@@ -20,6 +22,8 @@ import { OrdersModule } from '@/orders/orders.module';
   providers: [
     DeliveryService,
     DeliveryRepository,
+    DeliveryPartnerRepository,
+    DeliveryQuotationService,
     DeliveryAdapterRegistry,
     UberDirectAdapter,
     DunzoAdapter,
@@ -47,6 +51,6 @@ import { OrdersModule } from '@/orders/orders.module';
       ],
     },
   ],
-  exports: [DeliveryService, DeliveryRepository],
+  exports: [DeliveryService, DeliveryRepository, DeliveryPartnerRepository, DeliveryQuotationService],
 })
 export class DeliveryModule {}

@@ -444,6 +444,73 @@ async function main() {
 
     console.log('✅ Products seeded');
 
+    // Seed Delivery Partners
+    console.log('Seeding delivery partners...');
+    await prisma.deliveryPartner.upsert({
+      where: { providerName: 'dunzo' },
+      update: {},
+      create: {
+        providerName: 'dunzo',
+        displayName: 'Dunzo',
+        apiUrl: 'https://api.dunzo.com/v1',
+        apiKey: process.env.DUNZO_API_KEY || 'demo-key-dunzo',
+        apiSecret: process.env.DUNZO_API_SECRET,
+        isActive: true,
+        priority: 0,
+        baseFeeRupees: 50,
+        perKmRupees: 10,
+        minChargeRupees: 50,
+        avgDeliveryMins: 22,
+        successRate: 99.5,
+        supportPhone: '+91-8080-808-080',
+        supportEmail: 'support@dunzo.com',
+      },
+    });
+
+    await prisma.deliveryPartner.upsert({
+      where: { providerName: 'porter' },
+      update: {},
+      create: {
+        providerName: 'porter',
+        displayName: 'Porter',
+        apiUrl: 'https://api.porter.in/v1',
+        apiKey: process.env.PORTER_API_KEY || 'demo-key-porter',
+        apiSecret: process.env.PORTER_API_SECRET,
+        isActive: true,
+        priority: 1,
+        baseFeeRupees: 60,
+        perKmRupees: 12,
+        minChargeRupees: 60,
+        avgDeliveryMins: 18,
+        successRate: 99.2,
+        supportPhone: '+91-7298-887-700',
+        supportEmail: 'support@porter.in',
+      },
+    });
+
+    await prisma.deliveryPartner.upsert({
+      where: { providerName: 'uber_direct' },
+      update: {},
+      create: {
+        providerName: 'uber_direct',
+        displayName: 'Uber Direct',
+        apiUrl: 'https://api.uber.com/v1/delivery',
+        apiKey: process.env.UBER_API_KEY || 'demo-key-uber',
+        apiSecret: process.env.UBER_API_SECRET,
+        isActive: true,
+        priority: 2,
+        baseFeeRupees: 45,
+        perKmRupees: 11,
+        minChargeRupees: 45,
+        avgDeliveryMins: 25,
+        successRate: 98.8,
+        supportPhone: '+91-8000-2040-1111',
+        supportEmail: 'support@uber.com',
+      },
+    });
+
+    console.log('✅ Delivery partners seeded');
+
     console.log('\n🎉 Database seeded successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);

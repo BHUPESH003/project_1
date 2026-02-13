@@ -21,8 +21,6 @@ import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
 import { UserRole, OrderStatus } from '@repo/types';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
-import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
-import { SelectDeliveryProviderDto } from './dto/select-delivery-provider.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
@@ -32,8 +30,8 @@ import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
  *
  * API Contract v1 endpoints (USER APP):
  * - POST /v1/orders (create draft order)
- * - POST /v1/orders/:id/select-seller (assign seller to order)
- * - POST /v1/orders/:id/delivery-quote (get delivery pricing)
+ * - POST /v1/orders/:id/select-seller (assign seller to order) [optional]
+ * - GET /v1/orders/:id/delivery-quotes (get all available delivery partners with quotes)
  * - POST /v1/orders/:id/confirm (confirm & pay)
  * - GET /v1/orders/:id (track order)
  *
@@ -60,14 +58,28 @@ export class OrdersController {
   /**
    * POST /v1/orders
    * Create draft order (USER APP)
-   * Payload: { category, order_payload: { file_url, pages, copies, color, notes } }
-   * Response: { order_id, status: "CREATED" }
+   * 
+   * RECOMMENDED FLOW:
+   * 1. GET /sellers (find available sellers)
+   * 2. GET /sellers/:sellerId/products (view seller's products)
+   * 3. POST /orders with sellerId + items (create order with pre-selected seller)
+   * 
+   * LEGACY FLOW (still supported):
+   * 1. POST /orders (create order)
+   * 2. POST /orders/:id/select-seller (select seller after creation)
+   * 
+   * Payload: { categoryId, sellerId?, orderPayload: { items?, notes? } }
+   * Items format: { productId, quantity } - price fetched from database
+   * Response: { order_id, status: "CREATED", sellerId?, itemCost? }
    */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a new draft order', description: 'Creates a draft order with CREATED status. Requires USER role.' })
+  @ApiOperation({ 
+    summary: 'Create a new draft order', 
+    description: 'Creates a draft order with CREATED status. Backend auto-fetches product prices, calculates costs, and extracts seller info. Optionally pre-select seller with sellerId. Requires USER role.' 
+  })
   @ApiResponse({ status: 201, description: 'Order created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -112,8 +124,15 @@ export class OrdersController {
   }
 
   /**
-   * POST /v1/orders/:id/select-seller
-   * User selects a seller from available list
+   * POST /v1/orders/:id/select-seller (Optional - for backwards compatibility)
+   * Assign seller to an existing order
+   * 
+   * Note: RECOMMENDED flow is to select seller BEFORE creating order:
+   * 1. GET /sellers (discover sellers)
+   * 2. GET /sellers/:sellerId/products (view products)
+   * 3. POST /orders with sellerId in body (create order with pre-selected seller)
+   * 
+   * This endpoint exists for orders created without a seller.
    * Payload: { seller_id }
    * Transitions: CREATED → SELLER_SELECTED
    */
@@ -121,7 +140,10 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Select seller for order', description: 'Assigns a seller to the order. Transitions order from CREATED to SELLER_SELECTED status.' })
+  @ApiOperation({ 
+    summary: 'Select seller for order (optional)', 
+    description: 'Assigns a seller to an existing order. RECOMMENDED: Provide sellerId when creating order instead. Transitions order from CREATED to SELLER_SELECTED status.' 
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Seller selected successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
@@ -136,82 +158,33 @@ export class OrdersController {
   }
 
   /**
-   * POST /v1/orders/:id/delivery-quote
-   * Get delivery pricing for order
-   * Payload: { drop_location: { lat, lng } }
-   * Response: { delivery_fee, provider }
+   * GET /v1/orders/:id/delivery-quotes
+   * Get all available delivery provider quotes for an order (USER APP)
+   * 
+   * Dynamically calculates quotes based on:
+   * - Order pickup location (from seller selected for order)
+   * - Order drop location (from user address stored in order)
+   * 
+   * Response: { order_id, pickup_location, drop_location, providers: [...] }
    */
-  @Post(':id/delivery-quote')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get delivery quote', description: 'Calculates delivery pricing for the order based on drop location.' })
-  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiResponse({ status: 200, description: 'Delivery quote retrieved successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request data' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'Order not found' })
-  getDeliveryQuote(
-    @Param('id') id: string,
-    @Body() locationDto: DeliveryQuoteDto,
-    @Request() req: { user: { id: string } },
-  ) {
-    return this.ordersService.getDeliveryQuote(id, req.user.id, locationDto);
-  }
-
-  /**
-   * POST /v1/orders/:id/delivery-quotes
-   * Get ALL available delivery provider quotes (USER APP)
-   * Shows user multiple delivery options with different pricing
-   * Payload: { drop_location: { lat, lng } }
-   * Response: { order_id, options: [{ provider, deliveryFee, estimatedDurationMinutes, ... }] }
-   */
-  @Post(':id/delivery-quotes')
+  @Get(':id/delivery-quotes')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get all available delivery quotes',
-    description: 'Fetches delivery quotes from all available providers (Uber Direct, Dunzo, Porter, etc.). User can then select preferred provider.',
+    summary: 'Get available delivery quotes for order',
+    description: 'Fetches delivery quotes from all available providers based on seller pickup location and user drop location. Returns multiple options with pricing and ETAs.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Delivery quotes retrieved successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request data or invalid order state' })
+  @ApiResponse({ status: 400, description: 'Invalid request or missing location data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  getAllDeliveryQuotes(
+  getDeliveryQuotes(
     @Param('id') id: string,
-    @Body() locationDto: DeliveryQuoteDto,
     @Request() req: { user: { id: string } },
   ) {
-    return this.ordersService.getAllDeliveryQuotes(id, req.user.id, locationDto);
-  }
-
-  /**
-   * POST /v1/orders/:id/select-delivery-provider
-   * User selects a delivery provider from available options (USER APP)
-   * Payload: { provider: "UBER_DIRECT" | "DUNZO" | "PORTER" }
-   * Response: { order_id, provider, deliveryFee }
-   */
-  @Post(':id/select-delivery-provider')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Select delivery provider',
-    description: 'User selects preferred delivery provider from available options. Must call /delivery-quotes first.',
-  })
-  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiResponse({ status: 200, description: 'Delivery provider selected successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid provider or invalid order state' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'Order not found' })
-  selectDeliveryProvider(
-    @Param('id') id: string,
-    @Body() providerDto: SelectDeliveryProviderDto,
-    @Request() req: { user: { id: string } },
-  ) {
-    return this.ordersService.selectDeliveryProvider(id, req.user.id, providerDto);
+    return this.ordersService.getDeliveryQuotes(id, req.user.id);
   }
 
   /**
