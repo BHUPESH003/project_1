@@ -1,3 +1,15 @@
+/**
+ * Shop Detail Screen – Products, services, and cart management
+ * 
+ * ORDER TRACKING:
+ * - When user adds products to cart, they are stored locally in cart store
+ * - An order is created ONCE when user navigates to checkout (with location)
+ * - OrderId is stored in cart store (persists across navigation)
+ * - If user returns and adds more products, the same orderId is used
+ * - Products are added/removed from cart, and order is finalized at checkout
+ * - This ensures only ONE order per cart session, not multiple orders
+ */
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, SafeAreaView, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +20,7 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
+import { ordersApi, DeliveryQuoteOption } from '@/api/orders.api';
 import { sellersApi } from '@/api/sellers.api';
 import { productsApi, Product } from '@/api/products.api';
 import { Loader } from '@/components/Loader';
@@ -27,6 +40,7 @@ export default function ShopDetailScreen() {
   const removeItem = useCartStore((state) => state.removeItem);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const setSelectedSeller = useCartStore((state) => state.setSelectedSeller);
+  const cartOrderId = useCartStore((state) => state.orderId); // Get orderId
   const itemCount = useCartStore((state) => state.getItemCount());
   const subtotal = useCartStore((state) => state.getSubtotal());
 
@@ -67,11 +81,11 @@ export default function ShopDetailScreen() {
       };
     }
     return {
-      id: sellerData.seller_id,
-      name: sellerData.shop_name,
+      id: sellerData.id,
+      name: sellerData.shopName,
       rating: 4.8,
       reviews: 120,
-      distance: `${(sellerData.distance_km || 0).toFixed(1)} km`,
+      distance: 'N/A',
       image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=100&q=80',
     };
   }, [sellerData, sellerError, sellerLoading, shopId]);
@@ -138,7 +152,7 @@ export default function ShopDetailScreen() {
   }, [activeTab, search, products]);
 
   const handleAddProduct = (product: Product, totalPrice?: number) => {
-    addItem({
+    const result = addItem({
       id: product.id,
       sellerId: shopInfo.id,
       shopName: shopInfo.name,
@@ -149,6 +163,66 @@ export default function ShopDetailScreen() {
       category: product.category,
       totalPrice: totalPrice, // For print services
     });
+
+    // If adding failed due to different shop, show alert
+    if (!result.success && result.message) {
+      Alert.alert('Cannot Add Item', result.message, [
+        { text: 'Cancel', onPress: () => {} },
+        {
+          text: 'Clear Cart & Add',
+          onPress: () => {
+            // Clear cart and add the item from new shop
+            useCartStore.setState({
+              items: [{ ...product, id: product.id, sellerId: shopInfo.id, shopName: shopInfo.name, quantity: 1, totalPrice }],
+              selectedSellerId: shopInfo.id,
+              selectedShopName: shopInfo.name,
+              selectedDeliveryProvider: null,
+              deliveryFee: null,
+              paymentMethod: 'prepay',
+              deliveryAddress: null,
+              pickupLocation: null,
+              dropLocation: null,
+              orderId: null, // Reset order when clearing cart
+            });
+          },
+        },
+      ]);
+    } else if (result.success) {
+      // Update order if it exists
+      syncOrderWithCart();
+    }
+  };
+
+  /**
+   * Sync cart items to the order (if order exists)
+   * Called whenever cart items change
+   */
+  const syncOrderWithCart = async () => {
+    if (!cartOrderId) {
+      return; // No order yet, will be created at checkout
+    }
+
+    try {
+      // Build items array from current cart
+      const items = cartItems.map(item => ({
+        productId: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+      }));
+
+      if (items.length === 0) {
+        // If cart is empty, we could delete the order or just skip update
+        return;
+      }
+
+      // Update order with current items
+      await ordersApi.updateOrder(cartOrderId, { items });
+      console.log(`Order ${cartOrderId} synced with current cart`);
+    } catch (error: any) {
+      console.warn('Failed to sync order with cart:', error);
+      // Don't fail the add operation, warn user in next screen
+    }
   };
 
   const getProductQuantity = (productId: string) => {
@@ -159,6 +233,8 @@ export default function ShopDetailScreen() {
   const handleIncreaseQuantity = (productId: string) => {
     const quantity = getProductQuantity(productId);
     updateQuantity(productId, quantity + 1);
+    // Sync order when quantity changes
+    setTimeout(() => syncOrderWithCart(), 100);
   };
 
   const handleDecreaseQuantity = (productId: string) => {
@@ -168,6 +244,8 @@ export default function ShopDetailScreen() {
     } else {
       removeItem(productId);
     }
+    // Sync order when quantity changes or item removed
+    setTimeout(() => syncOrderWithCart(), 100);
   };
 
   const getPageCount = async (file: any): Promise<number> => {

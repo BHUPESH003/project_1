@@ -19,6 +19,7 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
+  orderId?: string | null; // Track the draft order ID for cart items
   selectedSellerId?: string | null;
   selectedShopName?: string | null;
   selectedDeliveryProvider?: string | null;
@@ -29,10 +30,13 @@ interface CartState {
   dropLocation?: { lat: number; lng: number; address: string } | null;
   
   // Cart operations
-  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  addItem: (item: Omit<CartItem, 'quantity'>) => { success: boolean; message?: string };
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  
+  // Order operations
+  setOrderId: (orderId: string | null) => void;
   
   // Seller operations
   setSelectedSeller: (sellerId: string | null, shopName: string | null) => void;
@@ -53,6 +57,7 @@ interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
+  orderId: null,
   selectedSellerId: null,
   selectedShopName: null,
   selectedDeliveryProvider: null,
@@ -62,20 +67,42 @@ export const useCartStore = create<CartState>((set, get) => ({
   pickupLocation: null,
   dropLocation: null,
 
-  addItem: (item) =>
-    set((state) => {
-      const existing = state.items.find((i) => i.id === item.id);
-      if (existing) {
-        return {
-          items: state.items.map((i) =>
-            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-          ),
-        };
-      }
-      return {
-        items: [...state.items, { ...item, quantity: 1 }],
-      };
-    }),
+  addItem: (item) => {
+    const state = get();
+    const existing = state.items.find((i) => i.id === item.id);
+
+    // If cart is empty, allow adding the first item and set the seller
+    if (state.items.length === 0) {
+      set({
+        items: [{ ...item, quantity: 1 }],
+        selectedSellerId: item.sellerId,
+        selectedShopName: item.shopName,
+      });
+      return { success: true };
+    }
+
+    // If user is trying to add from a different shop, reject
+    if (state.selectedSellerId && state.selectedSellerId !== item.sellerId) {
+      const errorMessage = `You can only order from ${state.selectedShopName} at a time. Clear your cart to order from another shop.`;
+      return { success: false, message: errorMessage };
+    }
+
+    // If same item exists, increase quantity
+    if (existing) {
+      set({
+        items: state.items.map((i) =>
+          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+        ),
+      });
+      return { success: true };
+    }
+
+    // Add new item from same shop
+    set({
+      items: [...state.items, { ...item, quantity: 1 }],
+    });
+    return { success: true };
+  },
 
   removeItem: (id) =>
     set((state) => ({
@@ -92,6 +119,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   clearCart: () =>
     set({
       items: [],
+      orderId: null,
       selectedSellerId: null,
       selectedShopName: null,
       selectedDeliveryProvider: null,
@@ -101,6 +129,9 @@ export const useCartStore = create<CartState>((set, get) => ({
       pickupLocation: null,
       dropLocation: null,
     }),
+
+  setOrderId: (orderId) =>
+    set({ orderId }),
 
   setSelectedSeller: (sellerId, shopName) =>
     set({ selectedSellerId: sellerId, selectedShopName: shopName }),

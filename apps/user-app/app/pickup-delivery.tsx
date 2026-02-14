@@ -22,8 +22,11 @@ import { typography } from '@/constants/typography';
 import { useLocationStore } from '@/store/location.store';
 import { useCartStore } from '@/store/cart.store';
 import { sellersApi } from '@/api/sellers.api';
+import { deliveryApi, PickupDropBookingRequest, PickupDropBookingResponse } from '@/api/delivery.api';
 
-// Dummy delivery partners
+// Dummy delivery partners (fallback when coordinates unavailable)
+// TODO: Replace with real API call: deliveryApi.getPickupDropOptions(bookingRequest) when location coordinates are available
+// The API will fetch real delivery partners based on pickup/drop coordinates and show pricing/distance
 const DUMMY_DELIVERY_PARTNERS = [
   {
     id: 'swift-express',

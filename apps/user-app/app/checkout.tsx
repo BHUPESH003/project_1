@@ -1,7 +1,21 @@
 /**
  * Checkout screen – cart summary, delivery partner selection, payment method
+ * 
+ * ORDER LIFECYCLE:
+ * 1. User adds products to cart (shop-detail.tsx) - local cart updates only
+ * 2. User navigates to checkout - orderId from cart store is retrieved
+ * 3. If orderId doesn't exist, first order is created with current cart items + location
+ * 4. OrderId is stored in cart store to persist across navigations
+ * 5. Delivery quotes are fetched for the order
+ * 6. User selects delivery partner and payment method
+ * 7. User clicks "Pay" - uses existing orderId, navigates to payment
+ * 8. Payment confirmed - order proceeds through fulfillment
+ * 
+ * KEY: Only ONE order is created per cart session. Adding/removing products
+ * updates the local cart, not the order (since no update API exists yet).
+ * The order is finalized with current cart state at checkout.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,13 +26,14 @@ import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
 import { useOrderDraftStore } from '@/store/order-draft.store';
-import { ordersApi } from '@/api/orders.api';
+import { ordersApi, DeliveryQuoteOption } from '@/api/orders.api';
+import { useLocation } from '@/hooks/useLocation';
 
 /**
  * Map category display names to category IDs
  */
 function getCategoryIdFromName(categoryName?: string): string {
-  if (!categoryName) return 'generic';
+  if (!categoryName) return 'printing'; // Default to 'printing' instead of 'generic' (which doesn't exist in DB)
   
   const categoryMap: { [key: string]: string } = {
     'Printing Services': 'printing',
@@ -28,37 +43,17 @@ function getCategoryIdFromName(categoryName?: string): string {
     'Hardware': 'hardware',
   };
   
-  return categoryMap[categoryName] || 'generic';
+  return categoryMap[categoryName] || 'printing'; // Fallback to 'printing' if category not found
 }
-
-/**
- * Delivery partners (HARDCODED - pending API integration)
- * TODO: Replace with API call to deliveryApi.getAvailablePartners() when endpoint is available
- * For now using static data to maintain checkout flow
- */
-const DELIVERY_PARTNERS = [
-  {
-    id: 'porter',
-    name: 'Porter',
-    label: 'QUICKEST',
-    time: '15-20 mins',
-    type: 'Direct',
-    fee: 120,
-    logo: 'https://images.unsplash.com/photo-1605378122142-98e5dba7214d?auto=format&fit=crop&w=50&q=80',
-  },
-  {
-    id: 'dunzo',
-    name: 'Dunzo',
-    time: '22 mins',
-    type: 'Multi-stop',
-    fee: 95,
-    logo: 'https://images.unsplash.com/photo-1578274455163-6d0d38d3364b?auto=format&fit=crop&w=50&q=80',
-  },
-];
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { coords: deviceLocation } = useLocation();
+  
+  const [deliveryPartners, setDeliveryPartners] = useState<DeliveryQuoteOption[]>([]);
+  const [isLoadingPartners, setIsLoadingPartners] = useState(false);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
   
   const cartItems = useCartStore((state) => state.items);
   const selectedSellerId = useCartStore((state) => state.selectedSellerId);
@@ -66,64 +61,190 @@ export default function CheckoutScreen() {
   const selectedProvider = useCartStore((state) => state.selectedDeliveryProvider);
   const paymentMethod = useCartStore((state) => state.paymentMethod);
   const subtotal = useCartStore((state) => state.getSubtotal());
+  const cartDropLocation = useCartStore((state) => state.dropLocation);
+  const cartOrderId = useCartStore((state) => state.orderId); // Get orderId from cart store
   
   const setDeliveryProvider = useCartStore((state) => state.setDeliveryProvider);
   const setDeliveryFee = useCartStore((state) => state.setDeliveryFee);
   const setPaymentMethod = useCartStore((state) => state.setPaymentMethod);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const setCartOrderId = useCartStore((state) => state.setOrderId);
   
   const setOrderId = useOrderDraftStore((state) => state.setOrderId);
   const setDeliveryProviderOD = useOrderDraftStore((state) => state.setDeliveryProvider);
   const setDeliveryFeeOD = useOrderDraftStore((state) => state.setDeliveryFee);
 
-  const selectedPartner = DELIVERY_PARTNERS.find(p => p.id === selectedProvider);
-  const deliveryFee = selectedPartner?.fee || 0;
+  // Get drop location - prioritize cart drop location, fallback to device location
+  const dropLocation = cartDropLocation || (deviceLocation ? {
+    lat: deviceLocation.latitude,
+    lng: deviceLocation.longitude,
+    address: 'Current Location'
+  } : null);
+
+  // Local state for tracking order ID during creation
+  const [orderId, setLocalOrderId] = useState<string | null>(null);
+  const [initialOrderLoading, setInitialOrderLoading] = useState(true);
+
+  const selectedPartner = deliveryPartners.find(p => p.provider === selectedProvider);
+  const deliveryFee = selectedPartner?.estimatedFee || 0;
   const total = paymentMethod === 'postpay' ? subtotal : subtotal + deliveryFee;
 
-  const handleSelectProvider = (provider: typeof DELIVERY_PARTNERS[0]) => {
-    setDeliveryProvider(provider.id);
-    setDeliveryFee(provider.fee);
+
+  const handleSelectProvider = (provider: DeliveryQuoteOption) => {
+    setDeliveryProvider(provider.provider);
+    setDeliveryFee(provider.estimatedFee);
   };
 
-  // Create order mutation
+  // Load delivery partners on checkout page load
+  useEffect(() => {
+    const loadDeliveryPartners = async () => {
+      try {
+        // Wait for location to be available
+        if (!selectedSellerId || !dropLocation) {
+          setInitialOrderLoading(false);
+          return;
+        }
+
+        setIsLoadingPartners(true);
+        setPartnerError(null);
+
+        let createdOrderId = cartOrderId; // Use existing order from cart if available
+
+        // Only create new order if one doesn't exist
+        if (!createdOrderId) {
+          // Determine category ID from first cart item's category
+          const firstItemCategory = cartItems[0]?.category;
+          const categoryId = getCategoryIdFromName(firstItemCategory);
+
+          // Build order payload
+          const orderPayload: any = {
+            items: cartItems.map(item => ({
+              productId: item.id,
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+            notes: `Order from ${selectedShopName || 'shop'}. Items: ${cartItems.map(i => `${i.name} x${i.quantity}`).join(', ')}`,
+            dropLatitude: dropLocation.lat,
+            dropLongitude: dropLocation.lng,
+            dropAddress: dropLocation.address || 'Delivery Location',
+          };
+
+          // For printing category, fileUrl is mandatory
+          if (categoryId === 'printing') {
+            // Use shop name as reference fileUrl for product-based printing
+            orderPayload.fileUrl = `print-shop-order-${selectedShopName || 'unknown'}-${Date.now()}`;
+            orderPayload.pages = 1; // Default: 1 page
+            orderPayload.copies = 1; // Default: 1 copy
+            orderPayload.color = false; // Default: B&W
+          }
+
+          const createPayload = {
+            categoryId,
+            orderPayload,
+          };
+
+          const response = await ordersApi.createOrder(createPayload);
+          createdOrderId = response.order_id;
+          setLocalOrderId(createdOrderId);
+          setCartOrderId(createdOrderId); // Store in cart store for persistence
+        } else {
+          setLocalOrderId(createdOrderId);
+        }
+
+        // Select seller for this order (if not already selected)
+        try {
+          await ordersApi.selectSeller(createdOrderId, selectedSellerId);
+        } catch (err: any) {
+          console.warn('Failed to select seller:', err);
+        }
+
+        // Fetch delivery quotes
+        const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId);
+        setDeliveryPartners(quotesResponse.providers || []);
+      } catch (err: any) {
+        console.error('Failed to load delivery partners:', err);
+        setPartnerError('Could not load delivery partners. Please try again.');
+      } finally {
+        setIsLoadingPartners(false);
+        setInitialOrderLoading(false);
+      }
+    };
+
+    loadDeliveryPartners();
+  }, [selectedSellerId, dropLocation, cartItems, selectedShopName]);
+
+  // Create order mutation (or use existing orderId from useEffect)
   const createOrderMutation = useMutation({
     mutationFn: async () => {
+      // If order was already created by useEffect or from cart store, skip creation
+      if (orderId || cartOrderId) {
+        return orderId || cartOrderId;
+      }
+
       if (!selectedSellerId) throw new Error('No seller selected');
       if (cartItems.length === 0) throw new Error('Cart is empty');
+      if (!dropLocation) throw new Error('Delivery location required. Please enable location permissions or set a delivery address.');
       
       // Determine category ID from first cart item's category
       const firstItemCategory = cartItems[0]?.category;
       const categoryId = getCategoryIdFromName(firstItemCategory);
       
-      // Step 1: Create draft order
+      // Build order payload
+      const orderPayload: any = {
+        items: cartItems.map(item => ({
+          productId: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        notes: `Order from ${selectedShopName || 'shop'}. Items: ${cartItems.map(i => `${i.name} x${i.quantity}`).join(', ')}`,
+        dropLatitude: dropLocation.lat,
+        dropLongitude: dropLocation.lng,
+        dropAddress: dropLocation.address || 'Delivery Location',
+      };
+
+      // For printing category, fileUrl is mandatory
+      if (categoryId === 'printing') {
+        // Use shop name as reference fileUrl for product-based printing
+        orderPayload.fileUrl = `print-shop-order-${selectedShopName || 'unknown'}-${Date.now()}`;
+        orderPayload.pages = 1; // Default: 1 page
+        orderPayload.copies = 1; // Default: 1 copy
+        orderPayload.color = false; // Default: B&W
+      }
+      
+      // Step 1: Create draft order with drop location
       const createPayload = {
         categoryId,
-        orderPayload: {
-          items: cartItems.map(item => ({
-            productId: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          notes: `Order from ${selectedShopName || 'shop'}. Items: ${cartItems.map(i => `${i.name} x${i.quantity}`).join(', ')}`,
-        },
+        orderPayload,
       };
-      
-      const response = await ordersApi.createOrder(createPayload);
-      const orderId = response.order_id;
+            const response = await ordersApi.createOrder(createPayload);
+      const createdOrderId = response.order_id;
+      setCartOrderId(createdOrderId); // Save to cart store for persistence
       
       // Step 2: Immediately select the seller for this order
       try {
-        await ordersApi.selectSeller(orderId, selectedSellerId);
+        await ordersApi.selectSeller(createdOrderId, selectedSellerId);
       } catch (err: any) {
         console.warn('Failed to select seller, order still created:', err);
         // Continue anyway - order was created successfully
       }
       
-      return orderId;
+      // Step 3: Fetch delivery quotes for this order (fallback if useEffect didn't load them)
+      try {
+        const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId);
+        setDeliveryPartners(quotesResponse.providers || []);
+      } catch (err: any) {
+        console.warn('Failed to fetch delivery quotes:', err);
+        setPartnerError('Could not load delivery partners. Please try again.');
+      }
+      
+      return createdOrderId;
     },
-    onSuccess: async (orderId) => {
+    onSuccess: async (resolvedOrderId) => {
       // Store order ID for payment flow
-      setOrderId(orderId);
+      setOrderId(resolvedOrderId);
       setDeliveryProviderOD(selectedProvider || null);
       setDeliveryFeeOD(deliveryFee);
       
@@ -135,6 +256,7 @@ export default function CheckoutScreen() {
     },
   });
 
+
   const handlePaymentConfirm = () => {
     if (cartItems.length === 0) {
       Alert.alert('Empty Cart', 'Please add items before proceeding');
@@ -142,6 +264,18 @@ export default function CheckoutScreen() {
     }
     if (!selectedSellerId) {
       Alert.alert('Seller Not Selected', 'Please go back to shop and ensure you selected the correct shop. Your cart may have been cleared.');
+      return;
+    }
+
+    // Validate that all items are from the same shop
+    const allItemsFromSameSeller = cartItems.every(item => item.sellerId === selectedSellerId);
+    if (!allItemsFromSameSeller) {
+      Alert.alert('Invalid Cart', 'All items must be from the same shop. Please clear your cart and try again.');
+      return;
+    }
+
+    if (!dropLocation) {
+      Alert.alert('Location Required', 'Please enable location permissions or set a delivery address to get delivery quotes.');
       return;
     }
     if (!selectedProvider) {
@@ -204,11 +338,32 @@ export default function CheckoutScreen() {
                 />
                 <View style={styles.itemContent}>
                   <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemQty}>{item.quantity} Unit{item.quantity > 1 ? 's' : ''}</Text>
+                  <Text style={styles.itemQty}>{item.description?.substring(0, 40)}</Text>
+                  <Text style={styles.itemPrice}>
+                    ₹{(item.totalPrice ? item.totalPrice : item.price).toFixed(2)}
+                  </Text>
                 </View>
-                <Text style={styles.itemPrice}>
-                  ₹{(item.totalPrice ? item.totalPrice * item.quantity : item.price * item.quantity).toFixed(2)}
-                </Text>
+                <View style={styles.quantityAdjuster}>
+                  <TouchableOpacity
+                    style={styles.quantityBtn}
+                    onPress={() => {
+                      if (item.quantity > 1) {
+                        updateQuantity(item.id, item.quantity - 1);
+                      } else {
+                        removeItem(item.id);
+                      }
+                    }}
+                  >
+                    <MaterialIcons name="remove" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  <Text style={styles.quantityText}>{item.quantity}</Text>
+                  <TouchableOpacity
+                    style={styles.quantityBtn}
+                    onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                  >
+                    <MaterialIcons name="add" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
@@ -216,40 +371,59 @@ export default function CheckoutScreen() {
           {/* Delivery Partner Selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>DELIVERY PARTNER</Text>
-            {DELIVERY_PARTNERS.map((partner) => (
-              <TouchableOpacity
-                key={partner.id}
-                style={[
-                  styles.partnerCard,
-                  selectedProvider === partner.id && styles.partnerCardSelected,
-                ]}
-                onPress={() => handleSelectProvider(partner)}
-              >
-                <View style={styles.partnerIconWrap}>
-                  <MaterialIcons name="local-shipping" size={28} color={colors.primary} />
-                </View>
-                <View style={styles.partnerContent}>
-                  <View style={styles.partnerNameRow}>
-                    <Text style={styles.partnerName}>{partner.name}</Text>
-                    {partner.label && <Text style={styles.partnerLabel}>{partner.label}</Text>}
+            
+            {isLoadingPartners ? (
+              <View style={styles.loadingContainer}>
+                <MaterialIcons name="hourglass-empty" size={32} color={colors.textMuted} />
+                <Text style={styles.loadingText}>Loading delivery partners...</Text>
+              </View>
+            ) : partnerError ? (
+              <View style={styles.errorContainer}>
+                <MaterialIcons name="error-outline" size={32} color={colors.error} />
+                <Text style={styles.errorText}>{partnerError}</Text>
+              </View>
+            ) : deliveryPartners.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="local-shipping" size={32} color={colors.textMuted} />
+                <Text style={styles.emptyText}>No delivery partners available</Text>
+              </View>
+            ) : (
+              deliveryPartners.map((partner) => (
+                <TouchableOpacity
+                  key={partner.provider}
+                  style={[
+                    styles.partnerCard,
+                    selectedProvider === partner.provider && styles.partnerCardSelected,
+                  ]}
+                  onPress={() => handleSelectProvider(partner)}
+                >
+                  <View style={styles.partnerIconWrap}>
+                    <MaterialIcons name="local-shipping" size={28} color={colors.primary} />
                   </View>
-                  <Text style={styles.partnerTime}>{partner.time} • {partner.type}</Text>
-                </View>
-                <View style={styles.partnerFeeWrap}>
-                  <Text style={styles.partnerFee}>₹{partner.fee}</Text>
-                  <View
-                    style={[
-                      styles.partnerRadio,
-                      selectedProvider === partner.id && styles.partnerRadioSelected,
-                    ]}
-                  >
-                    {selectedProvider === partner.id && (
-                      <View style={styles.partnerRadioInner} />
-                    )}
+                  <View style={styles.partnerContent}>
+                    <View style={styles.partnerNameRow}>
+                      <Text style={styles.partnerName}>{partner.displayName}</Text>
+                    </View>
+                    <Text style={styles.partnerTime}>
+                      {partner.estimatedDurationMinutes} mins • {partner.currency} {partner.estimatedFee}
+                    </Text>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.partnerFeeWrap}>
+                    <Text style={styles.partnerFee}>₹{partner.estimatedFee}</Text>
+                    <View
+                      style={[
+                        styles.partnerRadio,
+                        selectedProvider === partner.provider && styles.partnerRadioSelected,
+                      ]}
+                    >
+                      {selectedProvider === partner.provider && (
+                        <View style={styles.partnerRadioInner} />
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
 
           {/* Delivery Payment */}
@@ -446,31 +620,58 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderDark,
+    gap: spacing.md,
   },
   itemImage: {
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderRadius: 8,
     backgroundColor: colors.background,
   },
   itemContent: {
     flex: 1,
-    marginLeft: spacing.md,
+    justifyContent: 'flex-start',
   },
   itemName: {
     ...typography.secondary,
     fontWeight: '700',
     color: colors.textPrimary,
+    marginBottom: spacing.xxs,
   },
   itemQty: {
     ...typography.meta,
     color: colors.textMuted,
-    marginTop: spacing.xxs,
+    marginBottom: spacing.xs,
   },
   itemPrice: {
     ...typography.secondary,
     fontWeight: '700',
+    color: colors.primary,
+    fontSize: 14,
+  },
+  quantityAdjuster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryTint,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  quantityBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityText: {
+    ...typography.secondary,
+    fontWeight: '700',
     color: colors.textPrimary,
+    minWidth: 24,
+    textAlign: 'center',
   },
   partnerCard: {
     flexDirection: 'row',
@@ -542,6 +743,45 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.primary,
     margin: 2,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  loadingText: {
+    ...typography.meta,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  errorText: {
+    ...typography.meta,
+    color: colors.error,
+    marginTop: spacing.md,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  emptyText: {
+    ...typography.meta,
+    color: colors.textMuted,
+    marginTop: spacing.md,
   },
   paymentOption: {
     flexDirection: 'row',

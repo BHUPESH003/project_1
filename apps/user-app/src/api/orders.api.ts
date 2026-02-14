@@ -65,20 +65,22 @@ export interface DeliveryQuoteOption {
   expiresAt?: string; // Expiration timestamp
 }
 
-/** Response from GET /orders/:id/delivery-quotes – multiple provider options */
-export interface DeliveryQuotesResponse {
-  order_id: string;
-  options: DeliveryQuoteOption[];
-  selected_provider?: string;
-  message: string;
+/** Location object included in delivery Quote response */
+export interface LocationInQuote {
+  latitude: number;
+  longitude: number;
+  address: string;
 }
 
-/** Response from POST /orders/:id/select-delivery-provider */
-export interface SelectDeliveryProviderResponse {
+/** Response from GET /orders/:id/delivery-quotes – multiple provider options with locations */
+export interface DeliveryQuotesResponse {
   order_id: string;
-  provider: string;
-  deliveryFee: number;
-  estimatedDurationMinutes: number;
+  pickup_location: LocationInQuote;
+  drop_location: LocationInQuote;
+  providers: DeliveryQuoteOption[];
+  cheapest?: DeliveryQuoteOption;
+  fastest?: DeliveryQuoteOption;
+  total_options: number;
   message: string;
 }
 
@@ -107,13 +109,25 @@ export interface ConfirmOrderResponse {
 export interface CreateOrderPayload {
   categoryId: string;
   orderPayload: {
+    items?: Array<{ productId: string; name: string; quantity: number; price: number }>;
     fileUrl?: string;
     pages?: number;
     copies?: number;
     color?: boolean;
     notes?: string;
+    dropLatitude?: number;
+    dropLongitude?: number;
+    dropAddress?: string;
     [key: string]: unknown;
   };
+}
+
+export interface UpdateOrderPayload {
+  items?: Array<{ productId: string; name: string; quantity: number; price: number }>;
+  notes?: string;
+  dropLatitude?: number;
+  dropLongitude?: number;
+  dropAddress?: string;
 }
 
 export const ordersApi = {
@@ -132,40 +146,24 @@ export const ordersApi = {
     return unwrap(res) as { order_id: string; status: string };
   },
 
+  async updateOrder(orderId: string, payload: UpdateOrderPayload): Promise<{ order_id: string; status: string; message: string }> {
+    const res = await client.patch(`/orders/${orderId}`, payload);
+    return unwrap(res) as { order_id: string; status: string; message: string };
+  },
+
   async selectSeller(orderId: string, sellerId: string) {
     const res = await client.post(`/orders/${orderId}/select-seller`, { sellerId });
     return unwrap(res);
   },
 
-  async getDeliveryQuote(orderId: string, dropLocation: { lat: number; lng: number }) {
-    const res = await client.post(`/orders/${orderId}/delivery-quote`, {
-      dropLocation,
-    });
-    return unwrap(res);
-  },
-
-  async getAllDeliveryQuotes(
-    orderId: string,
-    dropLocation: { lat: number; lng: number; address?: string },
-  ): Promise<DeliveryQuotesResponse> {
-    const res = await client.post(`/orders/${orderId}/delivery-quotes`, {
-      dropLocation,
-    });
+  /**
+   * Get available delivery quotes for an order
+   * Fetches quotes from all delivery providers based on order's seller location and user drop location
+   * Requires: order.sellerId to be set, order.dropLatitude/dropLongitude to be available
+   */
+  async getDeliveryQuotes(orderId: string): Promise<DeliveryQuotesResponse> {
+    const res = await client.get(`/orders/${orderId}/delivery-quotes`);
     return unwrap(res) as DeliveryQuotesResponse;
-  },
-
-  async selectDeliveryProvider(
-    orderId: string,
-    provider: string,
-    deliveryAddressId?: string,
-    quoteId?: string,
-  ): Promise<SelectDeliveryProviderResponse> {
-    const res = await client.post(`/orders/${orderId}/select-delivery-provider`, {
-      provider,
-      deliveryAddressId,
-      quoteId,
-    });
-    return unwrap(res) as SelectDeliveryProviderResponse;
   },
 
   async confirmOrder(

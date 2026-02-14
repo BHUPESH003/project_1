@@ -102,6 +102,90 @@ export class OrderPayloadDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Delivery location (optional - frontend can provide user's drop location)
+  @ApiPropertyOptional({ 
+    description: 'Drop location latitude (for delivery quote calculation)',
+    example: 28.6139,
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  dropLatitude?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'Drop location longitude (for delivery quote calculation)',
+    example: 77.2090,
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  dropLongitude?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'Drop location address (for delivery quote calculation)',
+    example: 'Delhi, India',
+    type: String
+  })
+  @IsOptional()
+  @IsString()
+  dropAddress?: string;
+}
+
+/**
+ * Update Order DTO
+ * 
+ * Allows updating order items and location (before payment)
+ * - Can only update draft orders (status = CREATED or SELLER_SELECTED)
+ * - Items are replaced entirely (not merged)
+ * - Location can be updated at any time
+ */
+export class UpdateOrderDto {
+  @ApiPropertyOptional({
+    description: 'Order items (products) - replaces entire items array',
+    example: [
+      { productId: 'prod-1', name: 'Item 1', quantity: 2, price: 100, totalPrice: 200 },
+    ],
+    type: [OrderItemDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items?: OrderItemDto[];
+
+  @ApiPropertyOptional({ description: 'Additional notes', example: 'Updated notes' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  // Delivery location update
+  @ApiPropertyOptional({ 
+    description: 'Drop location latitude',
+    example: 28.6139,
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  dropLatitude?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'Drop location longitude',
+    example: 77.2090,
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  dropLongitude?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'Drop location address',
+    example: 'Delhi, India',
+    type: String
+  })
+  @IsOptional()
+  @IsString()
+  dropAddress?: string;
 }
 
 /**

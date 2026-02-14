@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -20,6 +21,7 @@ import { OrdersService } from './orders.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
 import { UserRole, OrderStatus } from '@repo/types';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/create-order.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
@@ -88,6 +90,39 @@ export class OrdersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.ordersService.create(req.user.id, createOrderDto);
+  }
+
+  /**
+   * PATCH /v1/orders/:id
+   * Update draft order items and location (USER APP)
+   * 
+   * Can only update orders in CREATED or SELLER_SELECTED status
+   * Replaces items array entirely (not merged)
+   * 
+   * Payload: { items?, dropLatitude?, dropLongitude?, dropAddress?, notes? }
+   * Items format: { productId, quantity } - price fetched from database
+   * Response: { order_id, status, message }
+   */
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER)
+  @ApiBearerAuth()
+  @ApiOperation({ 
+    summary: 'Update draft order items or location', 
+    description: 'Updates items or location for orders in CREATED or SELLER_SELECTED status. Items array is replaced entirely. Recalculates item cost based on current product prices. Requires USER role.' 
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or cannot update in current status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Cannot update other user\'s order' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  update(
+    @Param('id') id: string,
+    @Body() updateOrderDto: UpdateOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.update(id, req.user.id, updateOrderDto);
   }
 
   /**

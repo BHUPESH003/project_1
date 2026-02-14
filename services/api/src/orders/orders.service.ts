@@ -11,6 +11,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -149,18 +150,28 @@ export class OrdersService {
     let dropLongitude: number | null = null;
     let dropAddress: string | null = null;
 
-    try {
-      const userAddress = await this.prismaService.prisma.userAddress.findFirst({
-        where: { userId },
-      });
+    // Check if drop location is provided in orderPayload
+    if (enrichedPayload && enrichedPayload.dropLatitude && enrichedPayload.dropLongitude) {
+      dropLatitude = enrichedPayload.dropLatitude;
+      dropLongitude = enrichedPayload.dropLongitude;
+      dropAddress = enrichedPayload.dropAddress || null;
+      this.logger.log(`Using drop location from order payload: lat=${dropLatitude}, lng=${dropLongitude}`);
+    } else {
+      // Try to fetch from user address table if not provided
+      try {
+        const userAddress = await this.prismaService.prisma.userAddress.findFirst({
+          where: { userId },
+        });
 
-      if (userAddress) {
-        dropLatitude = userAddress.latitude ? Number(userAddress.latitude) : null;
-        dropLongitude = userAddress.longitude ? Number(userAddress.longitude) : null;
-        dropAddress = userAddress.addressLine || null;
+        if (userAddress) {
+          dropLatitude = userAddress.latitude ? Number(userAddress.latitude) : null;
+          dropLongitude = userAddress.longitude ? Number(userAddress.longitude) : null;
+          dropAddress = userAddress.addressLine || null;
+          this.logger.log(`Using drop location from user address table: lat=${dropLatitude}, lng=${dropLongitude}`);
+        }
+      } catch (error) {
+        this.logger.warn(`Could not fetch user address for order ${order.id}`, error);
       }
-    } catch (error) {
-      this.logger.warn(`Could not fetch user address for order ${order.id}`, error);
     }
 
     // Update order with calculated values
@@ -201,6 +212,124 @@ export class OrdersService {
     return {
       order_id: order.id,
       status: order.status,
+    };
+  }
+
+  /**
+   * Update order items and location
+   * Can only update draft orders (status = CREATED or SELLER_SELECTED)
+   * Items array is replaced entirely (not merged)
+   */
+  async update(orderId: string, userId: string, updateOrderDto: any) {
+    // Fetch existing order
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify ownership
+    if (order.userId !== userId) {
+      throw new ForbiddenException('You can only update your own orders');
+    }
+
+    // Only allow updates on draft orders
+    const allowedStatuses = [OrderStatus.CREATED, OrderStatus.SELLER_SELECTED];
+    if (!allowedStatuses.includes(order.status as any)) {
+      throw new BadRequestException(
+        `Cannot update order in ${order.status} status. Only draft orders can be updated.`
+      );
+    }
+
+    let updatedPayload = { ...(order.orderPayload as any) };
+    let newItemCost = 0;
+
+    // Update items if provided
+    if (updateOrderDto.items && Array.isArray(updateOrderDto.items)) {
+      const enrichedItems = [];
+
+      for (const item of updateOrderDto.items) {
+        try {
+          if (!item.productId) {
+            throw new BadRequestException(`Item must have a productId`);
+          }
+
+          // Fetch product details
+          const product = await this.prismaService.prisma.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) {
+            throw new NotFoundException(`Product ${item.productId} not found`);
+          }
+
+          // Validate seller matches original
+          if (product.sellerId !== order.sellerId) {
+            throw new BadRequestException(
+              `Product ${item.productId} is from different seller. All products must be from ${order.sellerId}`
+            );
+          }
+
+          // Calculate price and total
+          const price = Number(product.price);
+          const quantity = item.quantity || 1;
+          const totalPrice = price * quantity;
+
+          newItemCost += totalPrice;
+
+          enrichedItems.push({
+            productId: item.productId,
+            name: product.name,
+            quantity,
+            price,
+            totalPrice,
+          });
+        } catch (error) {
+          if (error instanceof BadRequestException || error instanceof NotFoundException) {
+            throw error;
+          }
+          this.logger.error(`Error enriching item with productId ${item.productId}:`, error);
+          throw new BadRequestException(`Could not fetch product details for ${item.productId}`);
+        }
+      }
+
+      updatedPayload.items = enrichedItems;
+    }
+
+    // Update notes if provided
+    if (updateOrderDto.notes !== undefined) {
+      updatedPayload.notes = updateOrderDto.notes;
+    }
+
+    // Update location fields
+    const updateData: any = {
+      orderPayload: updatedPayload,
+    };
+
+    if (newItemCost > 0) {
+      updateData.itemCost = newItemCost;
+    }
+
+    if (updateOrderDto.dropLatitude !== undefined) {
+      updateData.dropLatitude = updateOrderDto.dropLatitude;
+    }
+
+    if (updateOrderDto.dropLongitude !== undefined) {
+      updateData.dropLongitude = updateOrderDto.dropLongitude;
+    }
+
+    if (updateOrderDto.dropAddress !== undefined) {
+      updateData.dropAddress = updateOrderDto.dropAddress;
+    }
+
+    // Update order
+    const updatedOrder = await this.orderRepository.update(orderId, updateData);
+
+    this.logger.log(`Order ${orderId} updated by user ${userId}`);
+
+    return {
+      order_id: updatedOrder.id,
+      status: updatedOrder.status,
+      message: 'Order updated successfully',
     };
   }
 

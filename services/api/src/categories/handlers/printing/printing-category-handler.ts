@@ -18,12 +18,26 @@ import {
 
 /**
  * Printing order payload structure
+ * 
+ * For printing category, fileUrl is MANDATORY (required)
+ * Products (items) are optional for bundling with file orders
  */
 interface PrintingPayload {
-  fileUrl?: string;
+  // File-based printing - REQUIRED
+  fileUrl: string;
   pages?: number;
   copies?: number;
   color?: boolean;
+  
+  // Optional: products to bundle with printing order
+  items?: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  
+  // Common fields
   notes?: string;
 }
 
@@ -49,11 +63,10 @@ export class PrintingCategoryHandler implements CategoryHandler {
   /**
    * Validate printing order payload
    * 
-   * Requirements:
+   * For printing category: fileUrl is MANDATORY (required)
    * - fileUrl is required
-   * - pages must be positive integer
-   * - copies must be positive integer
-   * - color is boolean
+   * - pages, copies, color are optional
+   * - items (products) are optional
    */
   validatePayload(payload: unknown): ValidationResult {
     if (!payload || typeof payload !== 'object') {
@@ -65,7 +78,7 @@ export class PrintingCategoryHandler implements CategoryHandler {
 
     const printingPayload = payload as PrintingPayload;
 
-    // Validate fileUrl (required for printing)
+    // FILEURL IS MANDATORY for printing category
     if (!printingPayload.fileUrl || typeof printingPayload.fileUrl !== 'string') {
       return {
         valid: false,
@@ -110,18 +123,35 @@ export class PrintingCategoryHandler implements CategoryHandler {
       };
     }
 
-    // Normalize payload (ensure defaults)
-    const normalized: PrintingPayload = {
-      fileUrl: printingPayload.fileUrl,
-      pages: printingPayload.pages ?? 1,
-      copies: printingPayload.copies ?? 1,
-      color: printingPayload.color ?? false,
-      notes: printingPayload.notes,
-    };
+    // Validate items if provided (optional)
+    if (printingPayload.items && Array.isArray(printingPayload.items)) {
+      for (const item of printingPayload.items) {
+        if (!item.productId || !item.name || item.quantity === undefined || item.price === undefined) {
+          return {
+            valid: false,
+            error: 'Each item must have productId, name, quantity, and price',
+          };
+        }
+        if (item.quantity < 1) {
+          return {
+            valid: false,
+            error: 'Item quantity must be at least 1',
+          };
+        }
+      }
+    }
 
+    // Return normalized payload
     return {
       valid: true,
-      normalizedPayload: normalized,
+      normalizedPayload: {
+        fileUrl: printingPayload.fileUrl,
+        pages: printingPayload.pages ?? 1,
+        copies: printingPayload.copies ?? 1,
+        color: printingPayload.color ?? false,
+        items: printingPayload.items || [],
+        notes: printingPayload.notes,
+      },
     };
   }
 
@@ -129,25 +159,23 @@ export class PrintingCategoryHandler implements CategoryHandler {
    * Calculate printing price
    * 
    * Pricing logic:
-   * - Base price = pages * copies * per_page_price
-   * - Color multiplier: 1.5x if color = true
+   * 1. Base price from fileUrl: pages * copies * per_page_price * color_multiplier
+   * 2. Add optional items if provided
+   * 3. Total = file price + items price
    */
   calculatePrice(payload: unknown, seller: Seller): PriceBreakdown {
     const printingPayload = payload as PrintingPayload;
 
-    // Extract values (use defaults if not provided)
+    // FILE-BASED PRINTING PRICING (required)
     const pages = printingPayload.pages ?? 1;
     const copies = printingPayload.copies ?? 1;
     const isColor = printingPayload.color ?? false;
 
-    // Get seller's per-page price (in rupees, stored as Decimal)
-    // Convert to paise for calculation (multiply by 100)
     const pricePerPageRupees = seller.pricePerPage
       ? Number(seller.pricePerPage)
       : 0;
     
-    // Convert to paise (smallest currency unit)
-    const pricePerPage = pricePerPageRupees * 100;
+    const pricePerPage = pricePerPageRupees * 100; // Convert to paise
 
     if (pricePerPage <= 0) {
       throw new Error(
@@ -155,26 +183,35 @@ export class PrintingCategoryHandler implements CategoryHandler {
       );
     }
 
-    // Calculate base price (pages * copies * per_page_price)
-    let itemPrice = pages * copies * pricePerPage;
+    let filePrice = pages * copies * pricePerPage;
 
-    // Apply color multiplier (1.5x for color printing)
     if (isColor) {
-      itemPrice = Math.ceil(itemPrice * 1.5);
+      filePrice = Math.ceil(filePrice * 1.5);
     }
 
-    // Return price breakdown
+    // ADD OPTIONAL ITEMS PRICE if provided
+    let itemsPrice = 0;
+    if (printingPayload.items && Array.isArray(printingPayload.items)) {
+      for (const item of printingPayload.items) {
+        itemsPrice += Number(item.price) * (item.quantity || 1) * 100; // Convert to paise
+      }
+    }
+
+    const totalPrice = filePrice + itemsPrice;
+
     return {
-      itemPrice, // In paise (smallest currency unit)
+      itemPrice: totalPrice,
       currency: 'INR',
       breakdown: {
+        filePrice,
         pages,
         copies,
         pricePerPage: pricePerPage,
         isColor,
         colorMultiplier: isColor ? 1.5 : 1,
-        basePrice: pages * copies * pricePerPage,
-        finalPrice: itemPrice,
+        itemsPrice,
+        itemCount: printingPayload.items?.length || 0,
+        totalPrice,
       },
     };
   }
@@ -182,10 +219,10 @@ export class PrintingCategoryHandler implements CategoryHandler {
   /**
    * Get file upload requirements for printing
    * 
-   * Printing requires:
-   * - Single file upload
-   * - PDF, DOC, DOCX, or image formats
+   * Printing requires a file to be uploaded/provided:
+   * - Supported formats: PDF, DOC, DOCX, images
    * - Max size: 50MB
+   * - Single file only
    */
   getFileRequirements(): FileRequirements {
     return {
@@ -205,15 +242,22 @@ export class PrintingCategoryHandler implements CategoryHandler {
   /**
    * Process printing order (optional)
    * 
-   * Could include:
-   * - File validation
-   * - Page count extraction
-   * - Other printing-specific processing
+   * Handles file-based printing orders with optional bundled products.
+   * - Validates/processes the uploaded file
+   * - Tracks any bundled products
    */
   async processOrder(orderId: string, payload: unknown): Promise<void> {
-    // TODO: Implement processing logic in Sprint 2 if needed
+    const printingPayload = payload as PrintingPayload;
+    
+    // TODO: Process file-based printing
     // - Validate file exists
     // - Extract page count from file
-    // - Update order with extracted data
+    // - Queue for printing
+    
+    if (printingPayload.items && Array.isArray(printingPayload.items) && printingPayload.items.length > 0) {
+      // Log bundled products with printing order
+      const productNames = printingPayload.items.map(item => `${item.name} x${item.quantity}`).join(', ');
+      // TODO: Log bundled products
+    }
   }
 }

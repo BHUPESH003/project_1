@@ -16,6 +16,29 @@ export interface SellerListItem {
   distance_km?: number;
 }
 
+/** Response from GET /sellers/:id - seller profile details */
+export interface SellerDetail {
+  id: string;
+  shopName: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerPage: number;
+  prepTimeMinutes: number;
+  status: string;
+  statusUpdatedAt: string | null;
+  user?: {
+    id: string;
+    phone: string;
+    name: string | null;
+  };
+  categories?: Array<{
+    id: string;
+    name: string;
+    status: string;
+  }>;
+}
+
 const DEFAULT_SERVICE_RADIUS_KM = 50;
 
 export const sellersApi = {
@@ -31,8 +54,8 @@ export const sellersApi = {
     return unwrap(res) as SellerListItem[];
   },
 
-  async getSeller(id: string) {
+  async getSeller(id: string): Promise<SellerDetail> {
     const res = await client.get(`/sellers/${id}`);
-    return unwrap(res);
+    return unwrap(res) as SellerDetail;
   },
 };
