@@ -50,7 +50,7 @@ export class AssignDeliveryJob extends WorkerHost {
         strict: false,
       });
     }
-    return this.deliveryService!;
+    return this.deliveryService;
   }
 
   async process(job: Job<AssignDeliveryJobData>): Promise<void> {
@@ -78,10 +78,7 @@ export class AssignDeliveryJob extends WorkerHost {
     } catch (error) {
       // Log error but don't throw - job will retry automatically
       // If delivery already assigned, this is idempotent (safe to ignore)
-      if (
-        error instanceof Error &&
-        error.message.includes('already exists')
-      ) {
+      if (error instanceof Error && error.message.includes('already exists')) {
         this.logger.log(
           `Delivery already assigned for order ${orderId} (job: ${job.id}) - idempotent`,
         );

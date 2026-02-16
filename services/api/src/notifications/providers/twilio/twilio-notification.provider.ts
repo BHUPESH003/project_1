@@ -40,7 +40,9 @@ interface TwilioConfig {
 }
 
 @Injectable()
-export class TwilioNotificationProvider implements NotificationProvider, OnModuleInit {
+export class TwilioNotificationProvider
+  implements NotificationProvider, OnModuleInit
+{
   private readonly logger = new Logger(TwilioNotificationProvider.name);
   private readonly config: TwilioConfig;
   private twilioClient!: Twilio;
@@ -53,8 +55,7 @@ export class TwilioNotificationProvider implements NotificationProvider, OnModul
       authToken:
         this.configService.get<string>('TWILIO_AUTH_TOKEN') || 'stub-token',
       fromNumber:
-        this.configService.get<string>('TWILIO_FROM_NUMBER') ||
-        '+1234567890',
+        this.configService.get<string>('TWILIO_FROM_NUMBER') || '+1234567890',
     };
 
     this.logger.log(
@@ -64,7 +65,10 @@ export class TwilioNotificationProvider implements NotificationProvider, OnModul
 
   async onModuleInit() {
     // Initialize Twilio client
-    this.twilioClient = new Twilio(this.config.accountSid, this.config.authToken);
+    this.twilioClient = new Twilio(
+      this.config.accountSid,
+      this.config.authToken,
+    );
     this.logger.log('Twilio client initialized successfully');
   }
 
@@ -89,9 +93,7 @@ export class TwilioNotificationProvider implements NotificationProvider, OnModul
   async sendSms(
     request: SmsNotificationRequest,
   ): Promise<SmsNotificationResponse> {
-    this.logger.log(
-      `Sending SMS via Twilio to ${request.phoneNumber}`,
-    );
+    this.logger.log(`Sending SMS via Twilio to ${request.phoneNumber}`);
 
     try {
       // Send SMS via Twilio API

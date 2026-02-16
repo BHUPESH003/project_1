@@ -82,7 +82,9 @@ import { JWT_CONFIG, getConfigValue } from '@/constants';
         twilioProvider: TwilioProvider,
         infobipProvider: InfobipProvider,
       ) => {
-        const providerType = configService.get<string>('OTP_PROVIDER', 'twilio').toLowerCase();
+        const providerType = configService
+          .get<string>('OTP_PROVIDER', 'twilio')
+          .toLowerCase();
 
         switch (providerType) {
           case 'twilio':
@@ -99,7 +101,12 @@ import { JWT_CONFIG, getConfigValue } from '@/constants';
 
         return true;
       },
-      inject: [ConfigService, OtpProviderRegistry, TwilioProvider, InfobipProvider],
+      inject: [
+        ConfigService,
+        OtpProviderRegistry,
+        TwilioProvider,
+        InfobipProvider,
+      ],
     },
   ],
   exports: [AuthService, JwtService],

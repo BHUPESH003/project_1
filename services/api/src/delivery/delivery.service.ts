@@ -24,7 +24,10 @@ import {
   CreateTaskRequest,
   DeliveryEvent,
 } from './adapters/delivery-adapter.interface';
-import { PickupDropBookingDto, PickupDropBookingResponse } from './dto/pickup-drop-booking.dto';
+import {
+  PickupDropBookingDto,
+  PickupDropBookingResponse,
+} from './dto/pickup-drop-booking.dto';
 
 /**
  * Assign Delivery Response
@@ -50,7 +53,7 @@ export class DeliveryService {
     private readonly stateMachine: OrderStateMachineService,
     @Inject(forwardRef(() => OrderRepository))
     private readonly orderRepository: OrderRepository,
-  ) { }
+  ) {}
 
   /**
    * Assign delivery to order
@@ -75,14 +78,8 @@ export class DeliveryService {
     }
 
     // Verify order has delivery location
-    if (
-      !order.dropLatitude ||
-      !order.dropLongitude ||
-      !order.dropAddress
-    ) {
-      throw new BadRequestException(
-        'Order must have delivery location set',
-      );
+    if (!order.dropLatitude || !order.dropLongitude || !order.dropAddress) {
+      throw new BadRequestException('Order must have delivery location set');
     }
 
     // Verify order has seller
@@ -91,9 +88,8 @@ export class DeliveryService {
     }
 
     // Check if delivery already exists
-    const existingDelivery = await this.deliveryRepository.findByOrderId(
-      orderId,
-    );
+    const existingDelivery =
+      await this.deliveryRepository.findByOrderId(orderId);
     if (existingDelivery) {
       this.logger.log(
         `Delivery already exists for order ${orderId}, returning existing delivery`,
@@ -122,9 +118,9 @@ export class DeliveryService {
         address: seller.seller.address,
       },
       drop: {
-        latitude: order.dropLatitude!,
-        longitude: order.dropLongitude!,
-        address: order.dropAddress!,
+        latitude: order.dropLatitude,
+        longitude: order.dropLongitude,
+        address: order.dropAddress,
       },
     };
 
@@ -139,9 +135,9 @@ export class DeliveryService {
       pickupLatitude: sellerLat,
       pickupLongitude: sellerLng,
       pickupAddress: seller.seller.address,
-      dropLatitude: order.dropLatitude!,
-      dropLongitude: order.dropLongitude!,
-      dropAddress: order.dropAddress!,
+      dropLatitude: order.dropLatitude,
+      dropLongitude: order.dropLongitude,
+      dropAddress: order.dropAddress,
     });
 
     this.logger.log(
@@ -226,7 +222,7 @@ export class DeliveryService {
     // Filter out failed providers and sort by price
     const validQuotes = quotes
       .filter((q) => q !== null)
-      .sort((a, b) => a!.estimatedFee - b!.estimatedFee);
+      .sort((a, b) => a.estimatedFee - b.estimatedFee);
 
     if (!validQuotes.length) {
       throw new Error('Failed to fetch delivery quotes from all providers');
@@ -250,7 +246,11 @@ export class DeliveryService {
     pickup: { latitude: number; longitude: number; address: string },
     drop: { latitude: number; longitude: number; address: string },
     orderId: string,
-  ): Promise<{ fee: number; provider: string; estimatedDurationMinutes: number }> {
+  ): Promise<{
+    fee: number;
+    provider: string;
+    estimatedDurationMinutes: number;
+  }> {
     // Get default adapter (Uber Direct for MVP)
     const adapter = this.adapterRegistry.getDefaultAdapter();
 
@@ -377,7 +377,9 @@ export class DeliveryService {
       return {
         processed: false,
         message:
-          error instanceof Error ? error.message : 'Unknown error processing webhook',
+          error instanceof Error
+            ? error.message
+            : 'Unknown error processing webhook',
       };
     }
   }
@@ -551,7 +553,9 @@ export class DeliveryService {
    */
   validateDeliveryProvider(providerName: string): void {
     if (!this.adapterRegistry.hasAdapter(providerName)) {
-      const available = this.adapterRegistry.getRegisteredProviders().join(', ');
+      const available = this.adapterRegistry
+        .getRegisteredProviders()
+        .join(', ');
       throw new Error(
         `Provider ${providerName} not available. Available: ${available}`,
       );
@@ -567,7 +571,11 @@ export class DeliveryService {
     pickup: { latitude: number; longitude: number; address: string },
     drop: { latitude: number; longitude: number; address: string },
     orderId: string,
-  ): Promise<{ estimatedFee: number; provider: string; estimatedDurationMinutes: number }> {
+  ): Promise<{
+    estimatedFee: number;
+    provider: string;
+    estimatedDurationMinutes: number;
+  }> {
     // Validate provider
     this.validateDeliveryProvider(providerName);
 
@@ -695,7 +703,9 @@ export class DeliveryService {
       };
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : 'Failed to fetch delivery quotes';
+        error instanceof Error
+          ? error.message
+          : 'Failed to fetch delivery quotes';
       this.logger.error(
         `Error fetching delivery quotes for pickup/drop booking:`,
         errorMessage,

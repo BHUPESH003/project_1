@@ -18,7 +18,7 @@ import {
 
 /**
  * Printing order payload structure
- * 
+ *
  * For printing category, fileUrl is MANDATORY (required)
  * Products (items) are optional for bundling with file orders
  */
@@ -28,7 +28,7 @@ interface PrintingPayload {
   pages?: number;
   copies?: number;
   color?: boolean;
-  
+
   // Optional: products to bundle with printing order
   items?: Array<{
     productId: string;
@@ -36,7 +36,7 @@ interface PrintingPayload {
     quantity: number;
     price: number;
   }>;
-  
+
   // Common fields
   notes?: string;
 }
@@ -62,7 +62,7 @@ export class PrintingCategoryHandler implements CategoryHandler {
 
   /**
    * Validate printing order payload
-   * 
+   *
    * For printing category: fileUrl is MANDATORY (required)
    * - fileUrl is required
    * - pages, copies, color are optional
@@ -79,7 +79,10 @@ export class PrintingCategoryHandler implements CategoryHandler {
     const printingPayload = payload as PrintingPayload;
 
     // FILEURL IS MANDATORY for printing category
-    if (!printingPayload.fileUrl || typeof printingPayload.fileUrl !== 'string') {
+    if (
+      !printingPayload.fileUrl ||
+      typeof printingPayload.fileUrl !== 'string'
+    ) {
       return {
         valid: false,
         error: 'fileUrl is required for printing orders',
@@ -126,7 +129,12 @@ export class PrintingCategoryHandler implements CategoryHandler {
     // Validate items if provided (optional)
     if (printingPayload.items && Array.isArray(printingPayload.items)) {
       for (const item of printingPayload.items) {
-        if (!item.productId || !item.name || item.quantity === undefined || item.price === undefined) {
+        if (
+          !item.productId ||
+          !item.name ||
+          item.quantity === undefined ||
+          item.price === undefined
+        ) {
           return {
             valid: false,
             error: 'Each item must have productId, name, quantity, and price',
@@ -157,7 +165,7 @@ export class PrintingCategoryHandler implements CategoryHandler {
 
   /**
    * Calculate printing price
-   * 
+   *
    * Pricing logic:
    * 1. Base price from fileUrl: pages * copies * per_page_price * color_multiplier
    * 2. Add optional items if provided
@@ -174,7 +182,7 @@ export class PrintingCategoryHandler implements CategoryHandler {
     const pricePerPageRupees = seller.pricePerPage
       ? Number(seller.pricePerPage)
       : 0;
-    
+
     const pricePerPage = pricePerPageRupees * 100; // Convert to paise
 
     if (pricePerPage <= 0) {
@@ -218,7 +226,7 @@ export class PrintingCategoryHandler implements CategoryHandler {
 
   /**
    * Get file upload requirements for printing
-   * 
+   *
    * Printing requires a file to be uploaded/provided:
    * - Supported formats: PDF, DOC, DOCX, images
    * - Max size: 50MB
@@ -241,22 +249,28 @@ export class PrintingCategoryHandler implements CategoryHandler {
 
   /**
    * Process printing order (optional)
-   * 
+   *
    * Handles file-based printing orders with optional bundled products.
    * - Validates/processes the uploaded file
    * - Tracks any bundled products
    */
   async processOrder(orderId: string, payload: unknown): Promise<void> {
     const printingPayload = payload as PrintingPayload;
-    
+
     // TODO: Process file-based printing
     // - Validate file exists
     // - Extract page count from file
     // - Queue for printing
-    
-    if (printingPayload.items && Array.isArray(printingPayload.items) && printingPayload.items.length > 0) {
+
+    if (
+      printingPayload.items &&
+      Array.isArray(printingPayload.items) &&
+      printingPayload.items.length > 0
+    ) {
       // Log bundled products with printing order
-      const productNames = printingPayload.items.map(item => `${item.name} x${item.quantity}`).join(', ');
+      const productNames = printingPayload.items
+        .map((item) => `${item.name} x${item.quantity}`)
+        .join(', ');
       // TODO: Log bundled products
     }
   }

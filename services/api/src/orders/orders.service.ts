@@ -54,7 +54,7 @@ export class OrdersService {
   /**
    * Create draft order (USER APP)
    * State: CREATED
-   * 
+   *
    * Recommended flow:
    * 1. GET /sellers (discover sellers)
    * 2. GET /sellers/:sellerId/products (view seller products)
@@ -67,15 +67,22 @@ export class OrdersService {
     // Validate payload using handler
     const validation = handler.validatePayload(createOrderDto.orderPayload);
     if (!validation.valid) {
-      throw new BadRequestException(validation.error || 'Invalid order payload');
+      throw new BadRequestException(
+        validation.error || 'Invalid order payload',
+      );
     }
 
     // Enrich order items with product details from database
-    let enrichedPayload = (validation.normalizedPayload || createOrderDto.orderPayload) as any;
+    let enrichedPayload = (validation.normalizedPayload ||
+      createOrderDto.orderPayload) as any;
     let itemCost = 0;
     let sellerId: string | null = createOrderDto.sellerId || null;
 
-    if (enrichedPayload && enrichedPayload.items && Array.isArray(enrichedPayload.items)) {
+    if (
+      enrichedPayload &&
+      enrichedPayload.items &&
+      Array.isArray(enrichedPayload.items)
+    ) {
       const enrichedItems = [];
 
       for (const item of enrichedPayload.items) {
@@ -124,11 +131,19 @@ export class OrdersService {
             totalPrice,
           });
         } catch (error) {
-          if (error instanceof BadRequestException || error instanceof NotFoundException) {
+          if (
+            error instanceof BadRequestException ||
+            error instanceof NotFoundException
+          ) {
             throw error;
           }
-          this.logger.error(`Error enriching item with productId ${item.productId}:`, error);
-          throw new BadRequestException(`Could not fetch product details for ${item.productId}`);
+          this.logger.error(
+            `Error enriching item with productId ${item.productId}:`,
+            error,
+          );
+          throw new BadRequestException(
+            `Could not fetch product details for ${item.productId}`,
+          );
         }
       }
 
@@ -151,31 +166,53 @@ export class OrdersService {
     let dropAddress: string | null = null;
 
     // Check if drop location is provided in orderPayload
-    if (enrichedPayload && enrichedPayload.dropLatitude && enrichedPayload.dropLongitude) {
+    if (
+      enrichedPayload &&
+      enrichedPayload.dropLatitude &&
+      enrichedPayload.dropLongitude
+    ) {
       dropLatitude = enrichedPayload.dropLatitude;
       dropLongitude = enrichedPayload.dropLongitude;
       dropAddress = enrichedPayload.dropAddress || null;
-      this.logger.log(`Using drop location from order payload: lat=${dropLatitude}, lng=${dropLongitude}`);
+      this.logger.log(
+        `Using drop location from order payload: lat=${dropLatitude}, lng=${dropLongitude}`,
+      );
     } else {
       // Try to fetch from user address table if not provided
       try {
-        const userAddress = await this.prismaService.prisma.userAddress.findFirst({
-          where: { userId },
-        });
+        const userAddress =
+          await this.prismaService.prisma.userAddress.findFirst({
+            where: { userId },
+          });
 
         if (userAddress) {
-          dropLatitude = userAddress.latitude ? Number(userAddress.latitude) : null;
-          dropLongitude = userAddress.longitude ? Number(userAddress.longitude) : null;
+          dropLatitude = userAddress.latitude
+            ? Number(userAddress.latitude)
+            : null;
+          dropLongitude = userAddress.longitude
+            ? Number(userAddress.longitude)
+            : null;
           dropAddress = userAddress.addressLine || null;
-          this.logger.log(`Using drop location from user address table: lat=${dropLatitude}, lng=${dropLongitude}`);
+          this.logger.log(
+            `Using drop location from user address table: lat=${dropLatitude}, lng=${dropLongitude}`,
+          );
         }
       } catch (error) {
-        this.logger.warn(`Could not fetch user address for order ${order.id}`, error);
+        this.logger.warn(
+          `Could not fetch user address for order ${order.id}`,
+          error,
+        );
       }
     }
 
     // Update order with calculated values
-    if (sellerId || itemCost > 0 || dropLatitude || dropLongitude || dropAddress) {
+    if (
+      sellerId ||
+      itemCost > 0 ||
+      dropLatitude ||
+      dropLongitude ||
+      dropAddress
+    ) {
       await this.orderRepository.update(order.id, {
         sellerId: sellerId || undefined,
         itemCost: itemCost > 0 ? itemCost : undefined,
@@ -236,11 +273,11 @@ export class OrdersService {
     const allowedStatuses = [OrderStatus.CREATED, OrderStatus.SELLER_SELECTED];
     if (!allowedStatuses.includes(order.status as any)) {
       throw new BadRequestException(
-        `Cannot update order in ${order.status} status. Only draft orders can be updated.`
+        `Cannot update order in ${order.status} status. Only draft orders can be updated.`,
       );
     }
 
-    let updatedPayload = { ...(order.orderPayload as any) };
+    const updatedPayload = { ...(order.orderPayload as any) };
     let newItemCost = 0;
 
     // Update items if provided
@@ -265,7 +302,7 @@ export class OrdersService {
           // Validate seller matches original
           if (product.sellerId !== order.sellerId) {
             throw new BadRequestException(
-              `Product ${item.productId} is from different seller. All products must be from ${order.sellerId}`
+              `Product ${item.productId} is from different seller. All products must be from ${order.sellerId}`,
             );
           }
 
@@ -284,11 +321,19 @@ export class OrdersService {
             totalPrice,
           });
         } catch (error) {
-          if (error instanceof BadRequestException || error instanceof NotFoundException) {
+          if (
+            error instanceof BadRequestException ||
+            error instanceof NotFoundException
+          ) {
             throw error;
           }
-          this.logger.error(`Error enriching item with productId ${item.productId}:`, error);
-          throw new BadRequestException(`Could not fetch product details for ${item.productId}`);
+          this.logger.error(
+            `Error enriching item with productId ${item.productId}:`,
+            error,
+          );
+          throw new BadRequestException(
+            `Could not fetch product details for ${item.productId}`,
+          );
         }
       }
 
@@ -381,13 +426,14 @@ export class OrdersService {
             address: order.seller.address,
           }
         : null,
-      delivery: order.status === OrderStatus.READY_FOR_PICKUP ||
+      delivery:
+        order.status === OrderStatus.READY_FOR_PICKUP ||
         order.status === OrderStatus.PICKED_UP ||
         order.status === OrderStatus.DELIVERED
-        ? {
-            status: 'pending',
-          }
-        : null,
+          ? {
+              status: 'pending',
+            }
+          : null,
       pricing: {
         itemCost: order.itemCost,
         deliveryFee: order.deliveryFee,
@@ -395,14 +441,23 @@ export class OrdersService {
       },
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
-      stateHistory: (order.stateHistory ?? []).map((h: { id: string; fromStatus: string | null; toStatus: string; triggeredBy: string | null; reason: string | null; createdAt: Date }) => ({
-        id: h.id,
-        fromStatus: h.fromStatus,
-        toStatus: h.toStatus,
-        triggeredBy: h.triggeredBy,
-        reason: h.reason,
-        createdAt: h.createdAt,
-      })),
+      stateHistory: (order.stateHistory ?? []).map(
+        (h: {
+          id: string;
+          fromStatus: string | null;
+          toStatus: string;
+          triggeredBy: string | null;
+          reason: string | null;
+          createdAt: Date;
+        }) => ({
+          id: h.id,
+          fromStatus: h.fromStatus,
+          toStatus: h.toStatus,
+          triggeredBy: h.triggeredBy,
+          reason: h.reason,
+          createdAt: h.createdAt,
+        }),
+      ),
     };
   }
 
@@ -433,13 +488,12 @@ export class OrdersService {
     }
 
     if (seller.status !== SellerStatus.ONLINE) {
-      throw new BadRequestException(
-        'Seller is not available (must be ONLINE)',
-      );
+      throw new BadRequestException('Seller is not available (must be ONLINE)');
     }
 
     // Verify seller supports this category
-    const sellerCategories = seller.categories?.map((sc) => sc.category.id) || [];
+    const sellerCategories =
+      seller.categories?.map((sc) => sc.category.id) || [];
     if (!sellerCategories.includes(order.categoryId)) {
       throw new BadRequestException(
         `Seller does not support category ${order.categoryId}`,
@@ -448,9 +502,12 @@ export class OrdersService {
 
     // Get category handler to calculate price
     const handler = this.categoryRegistry.getHandler(order.categoryId);
-    
+
     // Fetch full seller from Prisma for pricing (handler needs Prisma Seller type)
-    const sellerForPricing = await this.sellerRepository.findById(seller.id, false);
+    const sellerForPricing = await this.sellerRepository.findById(
+      seller.id,
+      false,
+    );
     if (!sellerForPricing) {
       throw new NotFoundException('Seller not found for pricing');
     }
@@ -462,7 +519,10 @@ export class OrdersService {
       pricePerPage: sellerForPricing.pricePerPage,
     } as any; // Type assertion - handler will extract what it needs
 
-    const priceBreakdown = handler.calculatePrice(order.orderPayload, prismaSeller);
+    const priceBreakdown = handler.calculatePrice(
+      order.orderPayload,
+      prismaSeller,
+    );
 
     // Update order with seller and pricing
     await this.orderRepository.update(orderId, {
@@ -479,9 +539,7 @@ export class OrdersService {
       reason: 'User selected seller',
     });
 
-    this.logger.log(
-      `Order ${orderId} seller selected: ${sellerDto.sellerId}`,
-    );
+    this.logger.log(`Order ${orderId} seller selected: ${sellerDto.sellerId}`);
 
     return {
       order_id: orderId,
@@ -546,16 +604,20 @@ export class OrdersService {
     } else {
       // Try to fetch from user address table
       try {
-        const userAddress = await this.prismaService.prisma.userAddress.findFirst({
-          where: { userId },
-        });
+        const userAddress =
+          await this.prismaService.prisma.userAddress.findFirst({
+            where: { userId },
+          });
         if (userAddress && userAddress.latitude && userAddress.longitude) {
           dropLatitude = Number(userAddress.latitude);
           dropLongitude = Number(userAddress.longitude);
           dropAddress = userAddress.addressLine || null;
         }
       } catch (error) {
-        this.logger.warn(`Could not fetch user address for order ${orderId}:`, error);
+        this.logger.warn(
+          `Could not fetch user address for order ${orderId}:`,
+          error,
+        );
       }
     }
 
@@ -628,9 +690,17 @@ export class OrdersService {
         message: `${options.length} delivery options available. Select your preferred provider.`,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get delivery quotes';
-      this.logger.error(`Failed to get delivery quotes for order ${orderId}:`, errorMessage);
-      throw new BadRequestException(`Unable to get delivery quotes: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to get delivery quotes';
+      this.logger.error(
+        `Failed to get delivery quotes for order ${orderId}:`,
+        errorMessage,
+      );
+      throw new BadRequestException(
+        `Unable to get delivery quotes: ${errorMessage}`,
+      );
     }
   }
 
@@ -638,46 +708,47 @@ export class OrdersService {
 
   private getProviderDisplayName(provider: string): string {
     const nameMap: Record<string, string> = {
-      'UBER_DIRECT': 'Uber Direct',
-      'DUNZO': 'Dunzo',
-      'PORTER': 'Porter',
+      UBER_DIRECT: 'Uber Direct',
+      DUNZO: 'Dunzo',
+      PORTER: 'Porter',
     };
     return nameMap[provider] || provider;
   }
 
   private getProviderLogoUrl(provider: string): string {
     const logoMap: Record<string, string> = {
-      'UBER_DIRECT': 'https://www.uber-cdn.com/image/upload/c_auto,f_auto,q_auto:eco/v1/202307-1604950057.png',
-      'DUNZO': 'https://cdn.dunzo.com/static/logo-white.png',
-      'PORTER': 'https://porter.in/assets/logo.png',
+      UBER_DIRECT:
+        'https://www.uber-cdn.com/image/upload/c_auto,f_auto,q_auto:eco/v1/202307-1604950057.png',
+      DUNZO: 'https://cdn.dunzo.com/static/logo-white.png',
+      PORTER: 'https://porter.in/assets/logo.png',
     };
     return logoMap[provider] || '';
   }
 
   private getProviderRating(provider: string): number {
     const ratingMap: Record<string, number> = {
-      'UBER_DIRECT': 4.8,
-      'DUNZO': 4.7,
-      'PORTER': 4.6,
+      UBER_DIRECT: 4.8,
+      DUNZO: 4.7,
+      PORTER: 4.6,
     };
     return ratingMap[provider] || 4.5;
   }
 
   private getProviderFeatures(provider: string): string[] {
     const featuresMap: Record<string, string[]> = {
-      'UBER_DIRECT': [
+      UBER_DIRECT: [
         'Real-time tracking',
         'Insurance coverage',
         'Professional delivery',
         'GPS enabled',
       ],
-      'DUNZO': [
+      DUNZO: [
         'Fast delivery',
         'Local coverage',
         'Same-day service',
         'Affordable pricing',
       ],
-      'PORTER': [
+      PORTER: [
         'Premium service',
         'Insured delivery',
         'Real-time updates',
@@ -812,7 +883,9 @@ export class OrdersService {
       );
     }
 
-    this.logger.log(`Payment verified for order ${orderId}, transitioned to PAID`);
+    this.logger.log(
+      `Payment verified for order ${orderId}, transitioned to PAID`,
+    );
 
     // Fetch and return updated order
     const updatedOrder = await this.orderRepository.findById(orderId, true);

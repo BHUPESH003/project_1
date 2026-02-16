@@ -25,12 +25,12 @@ export class CategoryRegistry {
   register(handler: CategoryHandler): void {
     const categoryId = handler.getCategoryId();
     this.handlers.set(categoryId, handler);
-    
+
     // Store generic handler for fallback
     if (categoryId === 'generic') {
       this.genericHandler = handler;
     }
-    
+
     this.logger.log(`Registered handler for category: ${categoryId}`);
   }
 

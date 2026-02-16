@@ -88,10 +88,17 @@ export class UsersService {
     };
   }
 
-  async updateNotificationPreferences(userId: string, dto: UpdateNotificationPreferencesDto) {
+  async updateNotificationPreferences(
+    userId: string,
+    dto: UpdateNotificationPreferencesDto,
+  ) {
     const u = await this.userRepository.update(userId, {
-      ...(dto.orderUpdates !== undefined && { notificationOrderUpdates: dto.orderUpdates }),
-      ...(dto.promotions !== undefined && { notificationPromotions: dto.promotions }),
+      ...(dto.orderUpdates !== undefined && {
+        notificationOrderUpdates: dto.orderUpdates,
+      }),
+      ...(dto.promotions !== undefined && {
+        notificationPromotions: dto.promotions,
+      }),
     });
     return {
       orderUpdates: u.notificationOrderUpdates,

@@ -31,7 +31,9 @@ export class PorterAdapter implements DeliveryAdapter {
    * DUMMY: Returns static quote based on distance estimation
    */
   async getQuote(request: DeliveryQuoteRequest): Promise<DeliveryQuote> {
-    this.logger.log(`[DUMMY] Getting quote from Porter for order ${request.orderId}`);
+    this.logger.log(
+      `[DUMMY] Getting quote from Porter for order ${request.orderId}`,
+    );
 
     // Calculate estimated distance (simplified)
     const distance = this.calculateDistance(
@@ -62,7 +64,9 @@ export class PorterAdapter implements DeliveryAdapter {
    * DUMMY: Returns success response with mock task ID
    */
   async createTask(request: CreateTaskRequest): Promise<DeliveryTask> {
-    this.logger.log(`[DUMMY] Creating task on Porter for order ${request.orderId}`);
+    this.logger.log(
+      `[DUMMY] Creating task on Porter for order ${request.orderId}`,
+    );
 
     const taskId = `porter-task-${request.orderId}`;
     const providerTaskId = `PORTER-${Date.now()}`;
@@ -112,7 +116,7 @@ export class PorterAdapter implements DeliveryAdapter {
         provider: this.PROVIDER_NAME,
         providerTaskId: (payload.delivery_id as string) || 'unknown',
         eventType: this.mapEventType(eventType),
-        timestamp: new Date(payload.created_at as string || Date.now()),
+        timestamp: new Date((payload.created_at as string) || Date.now()),
       };
 
       return {
@@ -122,7 +126,8 @@ export class PorterAdapter implements DeliveryAdapter {
     } catch (error) {
       return {
         valid: false,
-        error: error instanceof Error ? error.message : 'Failed to parse webhook',
+        error:
+          error instanceof Error ? error.message : 'Failed to parse webhook',
       };
     }
   }
@@ -168,14 +173,14 @@ export class PorterAdapter implements DeliveryAdapter {
       string,
       'PICKED_UP' | 'DELIVERED' | 'FAILED' | 'CANCELLED' | 'IN_TRANSIT'
     > = {
-      'PICKED_UP': 'PICKED_UP',
-      'PICKUP_COMPLETED': 'PICKED_UP',
-      'DELIVERED': 'DELIVERED',
-      'DELIVERY_COMPLETED': 'DELIVERED',
-      'FAILED': 'FAILED',
-      'CANCELLED': 'CANCELLED',
-      'IN_TRANSIT': 'IN_TRANSIT',
-      'OUT_FOR_DELIVERY': 'IN_TRANSIT',
+      PICKED_UP: 'PICKED_UP',
+      PICKUP_COMPLETED: 'PICKED_UP',
+      DELIVERED: 'DELIVERED',
+      DELIVERY_COMPLETED: 'DELIVERED',
+      FAILED: 'FAILED',
+      CANCELLED: 'CANCELLED',
+      IN_TRANSIT: 'IN_TRANSIT',
+      OUT_FOR_DELIVERY: 'IN_TRANSIT',
     };
 
     return eventMap[eventType] || 'IN_TRANSIT';

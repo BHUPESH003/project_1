@@ -9,6 +9,7 @@ import { SellersModule } from '@/sellers/sellers.module';
 import { DeliveryModule } from '@/delivery/delivery.module';
 import { PaymentsModule } from '@/payments/payments.module';
 import { PrismaModule } from '@/prisma/prisma.module';
+import { BannersModule } from '@/banners/banners.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PrismaModule } from '@/prisma/prisma.module';
     DeliveryModule, // For DeliveryService and DeliveryRepository
     PaymentsModule, // For PaymentRepository
     PrismaModule, // For AdminAuditService
+    BannersModule, // For admin banner CRUD
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminAuditService],

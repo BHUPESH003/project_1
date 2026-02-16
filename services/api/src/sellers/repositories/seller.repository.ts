@@ -10,12 +10,17 @@ export interface SellerEntity {
   userId: string;
   shopName: string;
   address: string;
+  description: string | null;
   latitude: unknown;
   longitude: unknown;
   status: SellerStatus;
   statusUpdatedAt: Date | null;
   pricePerPage: unknown;
   prepTimeMinutes: number;
+  imagePath: string | null;
+  rating: number | null;
+  discountThreshold: number | null;
+  discountPercent: number | null;
   createdAt: Date;
   updatedAt: Date;
   user?: {
@@ -88,14 +93,16 @@ export class SellerRepository {
   }
 
   /**
-   * Find available sellers (ONLINE only) with optional filters
+   * Find available sellers (ONLINE only) with optional filters and pagination
    */
   async findAvailable(filters?: {
     categoryId?: string;
     lat?: number;
     lng?: number;
     maxDistanceKm?: number;
-  }): Promise<SellerEntity[]> {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ sellers: SellerEntity[]; total: number }> {
     const where: {
       status: SellerStatus;
       categories?: {
@@ -115,32 +122,40 @@ export class SellerRepository {
       };
     }
 
-    const sellers = await this.prismaService.prisma.seller.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            phone: true,
-            name: true,
+    const limit = Math.min(Math.max(filters?.limit ?? 20, 1), 100);
+    const offset = Math.max(filters?.offset ?? 0, 0);
+
+    const [sellers, total] = await Promise.all([
+      this.prismaService.prisma.seller.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              phone: true,
+              name: true,
+            },
           },
-        },
-        categories: {
-          include: {
-            category: {
-              select: {
-                id: true,
-                name: true,
-                status: true,
+          categories: {
+            include: {
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  status: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip: offset,
+        take: limit,
+      }),
+      this.prismaService.prisma.seller.count({ where }),
+    ]);
 
     let result = sellers.map((s) => this.mapToEntity(s));
 
@@ -166,7 +181,7 @@ export class SellerRepository {
         .sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
     }
 
-    return result;
+    return { sellers: result, total };
   }
 
   /**
@@ -280,12 +295,17 @@ export class SellerRepository {
     userId: string;
     shopName: string;
     address: string;
+    description?: string | null;
     latitude: unknown;
     longitude: unknown;
     status: unknown;
     statusUpdatedAt: Date | null;
     pricePerPage: unknown;
     prepTimeMinutes: number | null;
+    imagePath: string | null;
+    rating: unknown;
+    discountThreshold?: number | null;
+    discountPercent?: unknown;
     createdAt: Date;
     updatedAt: Date;
     user?: {
@@ -303,8 +323,14 @@ export class SellerRepository {
   }): SellerEntity {
     return {
       ...seller,
-      status: seller.status as SellerStatus, // Type assertion for enum compatibility
+      status: seller.status as SellerStatus,
       prepTimeMinutes: seller.prepTimeMinutes ?? 0,
+      imagePath: seller.imagePath ?? null,
+      rating: seller.rating != null ? Number(seller.rating) : null,
+      description: seller.description ?? null,
+      discountThreshold: seller.discountThreshold ?? null,
+      discountPercent:
+        seller.discountPercent != null ? Number(seller.discountPercent) : null,
     };
   }
 }

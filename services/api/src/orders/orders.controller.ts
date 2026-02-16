@@ -60,16 +60,16 @@ export class OrdersController {
   /**
    * POST /v1/orders
    * Create draft order (USER APP)
-   * 
+   *
    * RECOMMENDED FLOW:
    * 1. GET /sellers (find available sellers)
    * 2. GET /sellers/:sellerId/products (view seller's products)
    * 3. POST /orders with sellerId + items (create order with pre-selected seller)
-   * 
+   *
    * LEGACY FLOW (still supported):
    * 1. POST /orders (create order)
    * 2. POST /orders/:id/select-seller (select seller after creation)
-   * 
+   *
    * Payload: { categoryId, sellerId?, orderPayload: { items?, notes? } }
    * Items format: { productId, quantity } - price fetched from database
    * Response: { order_id, status: "CREATED", sellerId?, itemCost? }
@@ -78,9 +78,10 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ 
-    summary: 'Create a new draft order', 
-    description: 'Creates a draft order with CREATED status. Backend auto-fetches product prices, calculates costs, and extracts seller info. Optionally pre-select seller with sellerId. Requires USER role.' 
+  @ApiOperation({
+    summary: 'Create a new draft order',
+    description:
+      'Creates a draft order with CREATED status. Backend auto-fetches product prices, calculates costs, and extracts seller info. Optionally pre-select seller with sellerId. Requires USER role.',
   })
   @ApiResponse({ status: 201, description: 'Order created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
@@ -95,10 +96,10 @@ export class OrdersController {
   /**
    * PATCH /v1/orders/:id
    * Update draft order items and location (USER APP)
-   * 
+   *
    * Can only update orders in CREATED or SELLER_SELECTED status
    * Replaces items array entirely (not merged)
-   * 
+   *
    * Payload: { items?, dropLatitude?, dropLongitude?, dropAddress?, notes? }
    * Items format: { productId, quantity } - price fetched from database
    * Response: { order_id, status, message }
@@ -107,15 +108,19 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ 
-    summary: 'Update draft order items or location', 
-    description: 'Updates items or location for orders in CREATED or SELLER_SELECTED status. Items array is replaced entirely. Recalculates item cost based on current product prices. Requires USER role.' 
+  @ApiOperation({
+    summary: 'Update draft order items or location',
+    description:
+      'Updates items or location for orders in CREATED or SELLER_SELECTED status. Items array is replaced entirely. Recalculates item cost based on current product prices. Requires USER role.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Order updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or cannot update in current status' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or cannot update in current status',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Cannot update other user\'s order' })
+  @ApiResponse({ status: 403, description: "Cannot update other user's order" })
   @ApiResponse({ status: 404, description: 'Order not found' })
   update(
     @Param('id') id: string,
@@ -133,7 +138,11 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List my orders', description: 'Returns orders for the authenticated user. Requires USER role.' })
+  @ApiOperation({
+    summary: 'List my orders',
+    description:
+      'Returns orders for the authenticated user. Requires USER role.',
+  })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAllForUser(@Request() req: { user: { id: string } }) {
@@ -149,9 +158,16 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER, UserRole.SELLER, UserRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get order details', description: 'Retrieves order details for tracking. Available to USER, SELLER, and ADMIN roles.' })
+  @ApiOperation({
+    summary: 'Get order details',
+    description:
+      'Retrieves order details for tracking. Available to USER, SELLER, and ADMIN roles.',
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiResponse({ status: 200, description: 'Order details retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details retrieved successfully',
+  })
   @ApiResponse({ status: 404, description: 'Order not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findOne(@Param('id') id: string) {
@@ -161,12 +177,12 @@ export class OrdersController {
   /**
    * POST /v1/orders/:id/select-seller (Optional - for backwards compatibility)
    * Assign seller to an existing order
-   * 
+   *
    * Note: RECOMMENDED flow is to select seller BEFORE creating order:
    * 1. GET /sellers (discover sellers)
    * 2. GET /sellers/:sellerId/products (view products)
    * 3. POST /orders with sellerId in body (create order with pre-selected seller)
-   * 
+   *
    * This endpoint exists for orders created without a seller.
    * Payload: { seller_id }
    * Transitions: CREATED → SELLER_SELECTED
@@ -175,13 +191,17 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ 
-    summary: 'Select seller for order (optional)', 
-    description: 'Assigns a seller to an existing order. RECOMMENDED: Provide sellerId when creating order instead. Transitions order from CREATED to SELLER_SELECTED status.' 
+  @ApiOperation({
+    summary: 'Select seller for order (optional)',
+    description:
+      'Assigns a seller to an existing order. RECOMMENDED: Provide sellerId when creating order instead. Transitions order from CREATED to SELLER_SELECTED status.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Seller selected successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or invalid state transition',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order or seller not found' })
   selectSeller(
@@ -195,11 +215,11 @@ export class OrdersController {
   /**
    * GET /v1/orders/:id/delivery-quotes
    * Get all available delivery provider quotes for an order (USER APP)
-   * 
+   *
    * Dynamically calculates quotes based on:
    * - Order pickup location (from seller selected for order)
    * - Order drop location (from user address stored in order)
-   * 
+   *
    * Response: { order_id, pickup_location, drop_location, providers: [...] }
    */
   @Get(':id/delivery-quotes')
@@ -208,11 +228,18 @@ export class OrdersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get available delivery quotes for order',
-    description: 'Fetches delivery quotes from all available providers based on seller pickup location and user drop location. Returns multiple options with pricing and ETAs.',
+    description:
+      'Fetches delivery quotes from all available providers based on seller pickup location and user drop location. Returns multiple options with pricing and ETAs.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiResponse({ status: 200, description: 'Delivery quotes retrieved successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or missing location data' })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery quotes retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or missing location data',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
   getDeliveryQuotes(
@@ -232,13 +259,22 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ 
-    summary: 'Create payment intent', 
-    description: 'Creates a payment intent for the order. Returns payment gateway-specific data for frontend.' 
+  @ApiOperation({
+    summary: 'Create payment intent',
+    description:
+      'Creates a payment intent for the order. Returns payment gateway-specific data for frontend.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiQuery({ name: 'provider', required: false, enum: ['razorpay', 'paytm'], description: 'Payment provider' })
-  @ApiResponse({ status: 200, description: 'Payment intent created successfully' })
+  @ApiQuery({
+    name: 'provider',
+    required: false,
+    enum: ['razorpay', 'paytm'],
+    description: 'Payment provider',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment intent created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid request or order state' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
@@ -260,9 +296,9 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ 
-    summary: 'Verify payment', 
-    description: 'Verifies payment and transitions order to PAID status.' 
+  @ApiOperation({
+    summary: 'Verify payment',
+    description: 'Verifies payment and transitions order to PAID status.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Payment verified successfully' })
@@ -277,7 +313,6 @@ export class OrdersController {
     return this.ordersService.verifyPayment(id, req.user.id, paymentData);
   }
 
-
   /**
    * POST /v1/orders/:id/confirm
    * User confirms and pays for order
@@ -288,10 +323,20 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Confirm and pay for order', description: 'Confirms the order and processes payment. Transitions order from SELLER_SELECTED to PAID status.' })
+  @ApiOperation({
+    summary: 'Confirm and pay for order',
+    description:
+      'Confirms the order and processes payment. Transitions order from SELLER_SELECTED to PAID status.',
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
-  @ApiResponse({ status: 200, description: 'Order confirmed and payment processed' })
-  @ApiResponse({ status: 400, description: 'Invalid request or invalid state transition' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order confirmed and payment processed',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or invalid state transition',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
   confirmOrder(
@@ -319,12 +364,16 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List seller orders', description: 'Retrieves list of orders for the authenticated seller. Can be filtered by status.' })
-  @ApiQuery({ 
-    name: 'status', 
-    required: false, 
+  @ApiOperation({
+    summary: 'List seller orders',
+    description:
+      'Retrieves list of orders for the authenticated seller. Can be filtered by status.',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
     enum: Object.values(OrderStatus),
-    description: 'Filter by order status. Leave empty to retrieve all orders.' 
+    description: 'Filter by order status. Leave empty to retrieve all orders.',
   })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -348,7 +397,11 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Accept order', description: 'Seller accepts the order. Transitions order from PAID to SELLER_ACCEPTED status.' })
+  @ApiOperation({
+    summary: 'Accept order',
+    description:
+      'Seller accepts the order. Transitions order from PAID to SELLER_ACCEPTED status.',
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Order accepted successfully' })
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
@@ -372,7 +425,11 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Reject order', description: 'Seller rejects the order. Transitions order from PAID to SELLER_REJECTED status.' })
+  @ApiOperation({
+    summary: 'Reject order',
+    description:
+      'Seller rejects the order. Transitions order from PAID to SELLER_REJECTED status.',
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Order rejected successfully' })
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
@@ -396,16 +453,17 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Mark order ready for pickup', description: 'Seller marks the order as ready for pickup. Transitions order from PREPARING to READY_FOR_PICKUP status.' })
+  @ApiOperation({
+    summary: 'Mark order ready for pickup',
+    description:
+      'Seller marks the order as ready for pickup. Transitions order from PREPARING to READY_FOR_PICKUP status.',
+  })
   @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
   @ApiResponse({ status: 200, description: 'Order marked as ready for pickup' })
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  markReady(
-    @Param('id') id: string,
-    @Request() req: { user: { id: string } },
-  ) {
+  markReady(@Param('id') id: string, @Request() req: { user: { id: string } }) {
     // Get seller ID from user ID
     return this.ordersService.markReady(id, req.user.id);
   }

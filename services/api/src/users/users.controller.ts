@@ -1,5 +1,21 @@
-import { Controller, Get, Patch, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '@/common/guards';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -53,7 +69,10 @@ export class UsersController {
   @ApiOperation({ summary: 'Add a saved address' })
   @ApiResponse({ status: 201, description: 'Address created' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  addAddress(@Request() req: { user: { id: string } }, @Body() dto: CreateAddressDto) {
+  addAddress(
+    @Request() req: { user: { id: string } },
+    @Body() dto: CreateAddressDto,
+  ) {
     return this.usersService.addAddress(req.user.id, dto);
   }
 
@@ -65,7 +84,10 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Address deleted' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Address not found' })
-  deleteAddress(@Request() req: { user: { id: string } }, @Param('id') id: string) {
+  deleteAddress(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
     return this.usersService.deleteAddress(req.user.id, id);
   }
 

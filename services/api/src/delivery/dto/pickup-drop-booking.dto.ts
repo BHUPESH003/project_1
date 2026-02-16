@@ -1,4 +1,10 @@
-import { IsNumber, IsString, IsLatitude, IsLongitude, IsOptional } from 'class-validator';
+import {
+  IsNumber,
+  IsString,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**

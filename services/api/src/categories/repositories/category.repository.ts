@@ -12,6 +12,7 @@ export interface CategoryEntity {
   description: string | null;
   status: CategoryStatus;
   displayOrder: number;
+  iconPath: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +64,7 @@ export class CategoryRepository implements IBaseRepository<CategoryEntity> {
         description: true,
         status: true,
         displayOrder: true,
+        iconPath: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -143,12 +145,14 @@ export class CategoryRepository implements IBaseRepository<CategoryEntity> {
     description: string | null;
     status: unknown;
     displayOrder: number;
+    iconPath: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): CategoryEntity {
     return {
       ...category,
-      status: category.status as CategoryStatus, // Type assertion for enum compatibility
+      status: category.status as CategoryStatus,
+      iconPath: category.iconPath ?? null,
     };
   }
 }

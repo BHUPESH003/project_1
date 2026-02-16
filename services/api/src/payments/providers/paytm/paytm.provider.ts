@@ -61,10 +61,13 @@ export class PaytmProvider implements PaymentProvider {
     // Load Paytm configuration from environment
     const merchantId = this.configService.get<string>('PAYTM_MERCHANT_ID');
     const merchantKey = this.configService.get<string>('PAYTM_MERCHANT_KEY');
-    const environment = this.configService.get<string>('PAYTM_ENV') || 'sandbox';
+    const environment =
+      this.configService.get<string>('PAYTM_ENV') || 'sandbox';
 
     if (!merchantId || !merchantKey) {
-      throw new Error('Paytm integration requires PAYTM_MERCHANT_ID and PAYTM_MERCHANT_KEY environment variables');
+      throw new Error(
+        'Paytm integration requires PAYTM_MERCHANT_ID and PAYTM_MERCHANT_KEY environment variables',
+      );
     }
 
     this.config = {
@@ -73,12 +76,16 @@ export class PaytmProvider implements PaymentProvider {
       environment: (environment as 'sandbox' | 'production') || 'sandbox',
       website: this.configService.get<string>('PAYTM_WEBSITE') || 'WEBSTAGING',
       channelId: this.configService.get<string>('PAYTM_CHANNEL_ID') || 'WAP',
-      industryType: this.configService.get<string>('PAYTM_INDUSTRY_TYPE') || 'Retail',
-      callbackUrl: this.configService.get<string>('PAYTM_CALLBACK_URL') || 'http://localhost:3000/api/internal/payments/webhook',
+      industryType:
+        this.configService.get<string>('PAYTM_INDUSTRY_TYPE') || 'Retail',
+      callbackUrl:
+        this.configService.get<string>('PAYTM_CALLBACK_URL') ||
+        'http://localhost:3000/api/internal/payments/webhook',
       // Paytm base URLs differ between sandbox and production
-      baseUrl: environment === 'production'
-        ? 'https://securegw.paytm.in'
-        : 'https://securegw-stage.paytm.in', // Sandbox URL
+      baseUrl:
+        environment === 'production'
+          ? 'https://securegw.paytm.in'
+          : 'https://securegw-stage.paytm.in', // Sandbox URL
     };
 
     this.httpClient = axios.create({
@@ -139,13 +146,18 @@ export class PaytmProvider implements PaymentProvider {
       const checksum = this.generateChecksum(orderParams);
 
       // Create order with Paytm
-      const initiateResponse = await this.httpClient.post('/theia/api/v1/initiateTransaction', {
-        ...orderParams,
-        CHECKSUMHASH: checksum,
-      });
+      const initiateResponse = await this.httpClient.post(
+        '/theia/api/v1/initiateTransaction',
+        {
+          ...orderParams,
+          CHECKSUMHASH: checksum,
+        },
+      );
 
       if (!initiateResponse.data || initiateResponse.data.RESULT !== 'S') {
-        throw new Error(`Paytm order creation failed: ${initiateResponse.data?.RESPMSG || 'Unknown error'}`);
+        throw new Error(
+          `Paytm order creation failed: ${initiateResponse.data?.RESPMSG || 'Unknown error'}`,
+        );
       }
 
       // Extract payment URL and QR code from response
@@ -181,7 +193,10 @@ export class PaytmProvider implements PaymentProvider {
         },
       };
     } catch (error: any) {
-      const paytmMsg = error?.response?.data?.RESPMSG ?? error?.response?.data?.message ?? error?.message;
+      const paytmMsg =
+        error?.response?.data?.RESPMSG ??
+        error?.response?.data?.message ??
+        error?.message;
       const paytmResult = error?.response?.data?.RESULT;
       this.logger.error(
         `Paytm order creation failed for order ${request.orderId}: RESULT=${paytmResult ?? 'N/A'} RESPMSG=${paytmMsg ?? 'N/A'}`,
@@ -189,7 +204,9 @@ export class PaytmProvider implements PaymentProvider {
       );
       // Common causes: wrong PAYTM_MERCHANT_ID/PAYTM_MERCHANT_KEY, PAYTM_WEBSITE (WEBSTAGING vs WEBPROD), CALLBACK_URL not whitelisted
       throw new BadRequestException(
-        paytmMsg ? `Paytm: ${paytmMsg}` : 'Failed to initiate Paytm payment. Check PAYTM_MERCHANT_ID, PAYTM_MERCHANT_KEY, PAYTM_WEBSITE and PAYTM_CALLBACK_URL.',
+        paytmMsg
+          ? `Paytm: ${paytmMsg}`
+          : 'Failed to initiate Paytm payment. Check PAYTM_MERCHANT_ID, PAYTM_MERCHANT_KEY, PAYTM_WEBSITE and PAYTM_CALLBACK_URL.',
       );
     }
   }
@@ -216,10 +233,13 @@ export class PaytmProvider implements PaymentProvider {
       const checksum = this.generateChecksum(statusParams);
 
       // Query Paytm transaction status
-      const statusResponse = await this.httpClient.post('/merchant-status/api/v1/getTxnStatus', {
-        ...statusParams,
-        CHECKSUMHASH: checksum,
-      });
+      const statusResponse = await this.httpClient.post(
+        '/merchant-status/api/v1/getTxnStatus',
+        {
+          ...statusParams,
+          CHECKSUMHASH: checksum,
+        },
+      );
 
       if (!statusResponse.data) {
         throw new Error('Invalid response from Paytm status API');
@@ -255,10 +275,16 @@ export class PaytmProvider implements PaymentProvider {
         gatewayPaymentId: statusResponse.data.TXNID,
         amount: parseFloat(statusResponse.data.TXNAMOUNT || '0'),
         paidAt: paytmStatus === 'TXN_SUCCESS' ? new Date() : undefined,
-        failureReason: paytmStatus === 'TXN_FAILURE' ? statusResponse.data.RESPMSG : undefined,
+        failureReason:
+          paytmStatus === 'TXN_FAILURE'
+            ? statusResponse.data.RESPMSG
+            : undefined,
       };
     } catch (error) {
-      this.logger.error(`Paytm payment verification failed for order ${request.orderId}:`, error);
+      this.logger.error(
+        `Paytm payment verification failed for order ${request.orderId}:`,
+        error,
+      );
       // Return pending status on error to avoid false negatives
       return {
         status: PaymentStatus.PENDING,
@@ -297,11 +323,12 @@ export class PaytmProvider implements PaymentProvider {
       }
 
       // Verify Paytm checksum using official method
-      const isValidSignature = this.verifyPaytmChecksum(payload, receivedChecksum);
+      const isValidSignature = this.verifyPaytmChecksum(
+        payload,
+        receivedChecksum,
+      );
       if (!isValidSignature) {
-        this.logger.warn(
-          `Invalid Paytm webhook checksum for order ${orderId}`,
-        );
+        this.logger.warn(`Invalid Paytm webhook checksum for order ${orderId}`);
         return {
           valid: false,
           error: 'Invalid webhook checksum',
@@ -354,7 +381,7 @@ export class PaytmProvider implements PaymentProvider {
     // Sort parameters alphabetically
     const sortedKeys = Object.keys(params).sort();
     const checksumString = sortedKeys
-      .map(key => `${key}=${params[key]}`)
+      .map((key) => `${key}=${params[key]}`)
       .join('&');
 
     // Generate SHA256 hash with merchant key
@@ -378,7 +405,7 @@ export class PaytmProvider implements PaymentProvider {
     try {
       // Create parameters object excluding CHECKSUMHASH
       const params: Record<string, string> = {};
-      Object.keys(payload).forEach(key => {
+      Object.keys(payload).forEach((key) => {
         if (key !== 'CHECKSUMHASH') {
           params[key] = payload[key] as string;
         }

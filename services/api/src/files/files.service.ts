@@ -40,7 +40,7 @@ export interface PresignedUrlResponse {
  */
 export interface ValidateFileRequest {
   fileKey: string;
-  orderId: string;
+  orderId?: string;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -68,11 +68,14 @@ export class FilesService {
       region: this.s3Region,
       credentials: {
         accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID') || '',
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
+        secretAccessKey:
+          this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
       },
     });
 
-    this.logger.log(`FilesService initialized with S3 bucket: ${this.s3Bucket}`);
+    this.logger.log(
+      `FilesService initialized with S3 bucket: ${this.s3Bucket}`,
+    );
   }
 
   /**
@@ -90,11 +93,12 @@ export class FilesService {
       );
     }
 
-    // Generate unique file key
+    // Generate unique file key (use 'cart' prefix if no orderId)
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 15);
     const fileExtension = request.fileName.split('.').pop() || 'bin';
-    const fileKey = `orders/${request.orderId || 'draft'}/${timestamp}-${randomId}.${fileExtension}`;
+    const prefix = request.orderId ? `orders/${request.orderId}` : 'cart';
+    const fileKey = `${prefix}/${timestamp}-${randomId}.${fileExtension}`;
 
     // Create PutObject command for S3
     const putObjectCommand = new PutObjectCommand({
@@ -159,10 +163,10 @@ export class FilesService {
       };
     }
 
-    // Create file record in database
+    // Create file record in database (orderId optional for cart)
     const file = await this.prisma.prisma.file.create({
       data: {
-        orderId: request.orderId,
+        orderId: request.orderId ?? null,
         originalName: request.originalName,
         mimeType: request.mimeType,
         sizeBytes: request.sizeBytes,

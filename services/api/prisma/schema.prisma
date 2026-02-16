@@ -126,10 +126,14 @@ model User {
   updatedAt DateTime @updatedAt
   
   // Relations
-  orders    Order[]        @relation("UserOrders")
-  seller    Seller?        // One-to-one: User can be a Seller
-  otps      Otp[]          // OTP history
-  addresses UserAddress[]  // Saved delivery addresses
+  orders     Order[]        @relation("UserOrders")
+  seller     Seller?        // One-to-one: User can be a Seller
+  otps       Otp[]          // OTP history
+  addresses  UserAddress[]  // Saved delivery addresses
+  favorites  UserFavorite[] // Favorite shops
+  cart       Cart?          // One cart per user
+  productWishlist UserProductWishlist[]
+  productNotify    UserProductNotify[]
   
   @@index([phone])
   @@index([role])
@@ -200,6 +204,7 @@ model Seller {
   // Shop details
   shopName    String
   address     String
+  description String?      // Shop description/category info
   latitude    Decimal      @db.Decimal(10, 8) // Precision for accurate distance
   longitude   Decimal      @db.Decimal(11, 8)
   
@@ -210,8 +215,19 @@ model Seller {
   // Pricing (category-specific, MVP: printing only)
   pricePerPage     Decimal?     @db.Decimal(10, 2) // Price per page for printing
   
+  // Bulk discount (seller-specific)
+  discountThreshold Int?        // Pages threshold (e.g., 50)
+  discountPercent   Decimal?    @db.Decimal(5, 2) // Discount percentage (e.g., 10.00)
+  
   // Estimated prep time in minutes
   prepTimeMinutes  Int?         @default(15)
+  
+  // Shop image: S3 folder/file path only (e.g. "sellers/abc123/cover.jpg")
+  imagePath        String?
+  // Rating from Google Places (updated by cron)
+  rating           Decimal?     @db.Decimal(3, 2)
+  ratingUpdatedAt  DateTime?
+  googlePlaceId    String?      // For cron sync
   
   // Categories this seller supports
   categories       SellerCategory[]
@@ -224,8 +240,10 @@ model Seller {
   updatedAt   DateTime @updatedAt
   
   // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders      Order[]  @relation("SellerOrders")
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]        @relation("SellerOrders")
+  favoritedBy UserFavorite[]
+  cartItems   CartItem[]     // Items in user carts for this seller
   
   @@index([status]) // Critical: filter by ONLINE sellers
   @@index([latitude, longitude]) // Geospatial queries
@@ -248,6 +266,8 @@ model Category {
   
   // Order for display
   displayOrder Int           @default(0)
+  // Icon: S3 folder/file path (e.g. "categories/printing.png")
+  iconPath     String?
   
   // Timestamps
   createdAt   DateTime       @default(now())
@@ -298,9 +318,12 @@ model Product {
   name        String
   description String?
   category    String   // e.g. "Printing Services", "Plumbing Supplies", "Tools"
+  unit        String?  // e.g. "PER PAIR", "PER ITEM"
   price       Decimal  @db.Decimal(10, 2)
+  mrp         Decimal? @db.Decimal(10, 2) // Optional MRP for discounts
   image       String?
   inStock     Boolean  @default(true)
+  isBestSeller Boolean @default(false)
   
   // Timestamps
   createdAt   DateTime @default(now())
@@ -308,6 +331,9 @@ model Product {
   
   // Relations
   seller      Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  wishlistedBy UserProductWishlist[]
+  notifyBy     UserProductNotify[]
+  cartItems    CartItem[]
   
   @@unique([sellerId, name]) // Unique product names per seller
   @@index([sellerId])
@@ -611,11 +637,11 @@ model Delivery {
 // ========================================
 // Metadata for uploaded files (PDFs, images, etc.)
 // Actual files stored in S3
-// Immutable - files are never updated
+// Can be in cart before order creation (orderId nullable)
 
 model File {
   id              String   @id @default(cuid())
-  orderId         String
+  orderId         String?  // Nullable: file can be in cart before order creation
   
   // File details
   originalName    String   // Original filename
@@ -638,11 +664,166 @@ model File {
   createdAt       DateTime @default(now())
   
   // Relations
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  cartItemFiles   CartItemFile[] // Files can be attached to cart items
   
   @@index([orderId])
   @@index([storageKey])
   @@map("files")
+}
+
+// ========================================
+// USER FAVORITE (FAVORITE SHOPS)
+// ========================================
+
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  sellerId  String
+  createdAt DateTime @default(now())
+  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, sellerId])
+  @@index([userId])
+  @@index([sellerId])
+  @@map("user_favorites")
+}
+
+// ========================================
+// BANNER MODEL (HOME CAROUSEL)
+// ========================================
+// Admin-configurable promotional banners
+
+model Banner {
+  id          String   @id @default(cuid())
+  badge       String?  // e.g. "LIMITED OFFER"
+  title       String
+  subtitle    String?
+  imagePath   String   // S3 folder/file path
+  ctaText     String?  // e.g. "Shop Now"
+  ctaLink     String?  // Optional link/category
+  displayOrder Int     @default(0)
+  isActive    Boolean  @default(true)
+  startAt     DateTime?
+  endAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([isActive, displayOrder])
+  @@map("banners")
+}
+
+// ========================================
+// CART MODEL (SERVER-SIDE CART)
+// ========================================
+// One cart per user, created when first item added
+// Cart items reference files and seller
+
+model Cart {
+  id          String      @id @default(cuid())
+  userId      String      @unique // One cart per user
+  
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       CartItem[]
+  
+  @@index([userId])
+  @@map("carts")
+}
+
+// ========================================
+// CART ITEM MODEL
+// ========================================
+// File configuration in cart: color, paper size, copies
+
+model CartItem {
+  id          String   @id @default(cuid())
+  cartId      String
+  sellerId    String   // Seller for this item (multi-seller cart)
+  productId   String?  // Product selected (catalog item)
+  quantity    Int      @default(1)
+  payload     Json     // Category-specific configuration
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  cart        Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  seller      Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  files       CartItemFile[]
+  
+  @@index([cartId])
+  @@index([sellerId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+// ========================================
+// CART ITEM FILE MODEL
+// ========================================
+// Attach multiple files to a cart item (e.g. printing)
+
+model CartItemFile {
+  id         String   @id @default(cuid())
+  cartItemId String
+  fileId     String
+  payload    Json     // Per-file configuration (e.g. { color, paperSize, copies, pages })
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cartItem CartItem @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  file     File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([cartItemId, fileId])
+  @@index([cartItemId])
+  @@index([fileId])
+  @@map("cart_item_files")
+}
+
+// ========================================
+// PRODUCT WISHLIST
+// ========================================
+
+model UserProductWishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("user_product_wishlist")
+}
+
+// ========================================
+// PRODUCT NOTIFY ME (WAITLIST)
+// ========================================
+
+model UserProductNotify {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("user_product_notify")
 }
 
 // ========================================

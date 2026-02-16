@@ -85,10 +85,7 @@ export class NotificationsService {
    * @param message - SMS message
    * @returns Whether SMS was sent successfully
    */
-  async sendSmsNotification(
-    userId: string,
-    message: string,
-  ): Promise<boolean> {
+  async sendSmsNotification(userId: string, message: string): Promise<boolean> {
     try {
       // Get user phone number
       const user = await this.userRepository.findById(userId);
@@ -123,10 +120,7 @@ export class NotificationsService {
       // Log error but don't throw - notifications are non-critical
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Error sending SMS to user ${userId}:`,
-        errorMessage,
-      );
+      this.logger.error(`Error sending SMS to user ${userId}:`, errorMessage);
       return false;
     }
   }
@@ -138,15 +132,13 @@ export class NotificationsService {
    * @param intent - Notification intent
    * @returns Whether notification was sent successfully
    */
-  async sendNotificationIntent(
-    intent: {
-      type: 'PUSH' | 'SMS' | 'BOTH';
-      userId: string;
-      title: string;
-      body: string;
-      data?: Record<string, unknown>;
-    },
-  ): Promise<boolean> {
+  async sendNotificationIntent(intent: {
+    type: 'PUSH' | 'SMS' | 'BOTH';
+    userId: string;
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }): Promise<boolean> {
     let success = false;
 
     // Send push notification if requested

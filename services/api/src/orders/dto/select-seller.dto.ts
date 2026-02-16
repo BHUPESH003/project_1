@@ -7,7 +7,10 @@ import { ApiProperty } from '@nestjs/swagger';
  * Validates request to assign seller to order
  */
 export class SelectSellerDto {
-  @ApiProperty({ description: 'Seller ID to assign to the order', example: 'seller-123' })
+  @ApiProperty({
+    description: 'Seller ID to assign to the order',
+    example: 'seller-123',
+  })
   @IsString()
   sellerId!: string; // Seller ID to assign
 }

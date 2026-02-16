@@ -49,8 +49,12 @@ function validateEnvironment() {
   }
 
   if (missingVars.length > 0) {
-    logger.error(`❌ MISSING REQUIRED ENVIRONMENT VARIABLES: ${missingVars.join(', ')}`);
-    logger.error('🚨 SYSTEM CANNOT START - PRODUCTION INTEGRATIONS REQUIRE THESE VARIABLES');
+    logger.error(
+      `❌ MISSING REQUIRED ENVIRONMENT VARIABLES: ${missingVars.join(', ')}`,
+    );
+    logger.error(
+      '🚨 SYSTEM CANNOT START - PRODUCTION INTEGRATIONS REQUIRE THESE VARIABLES',
+    );
     process.exit(1);
   }
 
@@ -72,8 +76,6 @@ async function bootstrap() {
   // Security
   app.use(helmet());
 
- 
-
   // CORS
   // const corsEnabled = configService.get<boolean>('CORS_ENABLED', false);
   // logger.log(`CORS_ENABLED: ${corsEnabled}`);
@@ -90,22 +92,21 @@ async function bootstrap() {
   //   logger.log('CORS disabled');
   // }
   app.enableCors({
-  origin: (
-    origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void,
-  ) => {
-    // Allows requests from:
-    // - file:// (origin === undefined)
-    // - any http/https origin
-    if (!origin) {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // Allows requests from:
+      // - file:// (origin === undefined)
+      // - any http/https origin
+      if (!origin) {
+        return callback(null, true);
+      }
+
       return callback(null, true);
-    }
-
-    return callback(null, true);
-  },
-  credentials: true,
-});
-
+    },
+    credentials: true,
+  });
 
   // Global prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api');
@@ -168,9 +169,7 @@ async function bootstrap() {
   logger.log(
     `🚀 Application is running on: http://localhost:${port}/${apiPrefix}`,
   );
-  logger.log(
-    `📚 Swagger documentation: http://localhost:${port}/docs`,
-  );
+  logger.log(`📚 Swagger documentation: http://localhost:${port}/docs`);
 }
 
 bootstrap();

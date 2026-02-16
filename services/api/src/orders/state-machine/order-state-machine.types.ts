@@ -14,13 +14,14 @@ import { OrderStatus } from '@repo/types';
  * Valid state transitions
  * Maps from current state to array of allowed next states
  */
-export const ORDER_STATE_TRANSITIONS: Record<
-  OrderStatus,
-  OrderStatus[]
-> = {
+export const ORDER_STATE_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   // Success flow states
   CREATED: [OrderStatus.SELLER_SELECTED, OrderStatus.USER_CANCELLED],
-  SELLER_SELECTED: [OrderStatus.SELLER_SELECTED, OrderStatus.PAID, OrderStatus.USER_CANCELLED],
+  SELLER_SELECTED: [
+    OrderStatus.SELLER_SELECTED,
+    OrderStatus.PAID,
+    OrderStatus.USER_CANCELLED,
+  ],
   PAID: [
     OrderStatus.SELLER_ACCEPTED,
     OrderStatus.SELLER_REJECTED,
@@ -58,9 +59,7 @@ export function isValidTransition(
  * @param currentState - Current order state
  * @returns Array of valid next states
  */
-export function getValidNextStates(
-  currentState: OrderStatus,
-): OrderStatus[] {
+export function getValidNextStates(currentState: OrderStatus): OrderStatus[] {
   return ORDER_STATE_TRANSITIONS[currentState] || [];
 }
 

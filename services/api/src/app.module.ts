@@ -16,6 +16,13 @@ import { FilesModule } from './files/files.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { QueueModule } from './queue/queue.module';
+import { LocationModule } from './location/location.module';
+import { BannersModule } from './banners/banners.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { SearchModule } from './search/search.module';
+import { CartModule } from './cart/cart.module';
+import { ProductsModule } from './products/products.module';
+import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
@@ -46,7 +53,14 @@ import { QueueModule } from './queue/queue.module';
     FilesModule,
     AdminModule,
     NotificationsModule,
-    QueueModule, // Queue infrastructure (must be loaded early)
+    QueueModule,
+    LocationModule,
+    BannersModule,
+    FavoritesModule,
+    SearchModule,
+    CartModule,
+    ProductsModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],

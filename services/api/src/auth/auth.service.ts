@@ -154,9 +154,12 @@ export class AuthService {
     }
 
     // Generate new access token
-    const newAccessToken = this.jwtService.generateAccessTokenFromRefresh(payload);
+    const newAccessToken =
+      this.jwtService.generateAccessTokenFromRefresh(payload);
 
-    this.logger.log(`Access token refreshed for user ${user.id} (${user.phone})`);
+    this.logger.log(
+      `Access token refreshed for user ${user.id} (${user.phone})`,
+    );
 
     return {
       accessToken: newAccessToken.token,

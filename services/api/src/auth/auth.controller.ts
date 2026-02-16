@@ -26,10 +26,17 @@ export class AuthController {
    * Sends OTP to phone number for given role
    */
   @Post('request-otp')
-  @ApiOperation({ summary: 'Request OTP', description: 'Sends an OTP code to the provided phone number via SMS. The OTP is valid for 10 minutes.' })
+  @ApiOperation({
+    summary: 'Request OTP',
+    description:
+      'Sends an OTP code to the provided phone number via SMS. The OTP is valid for 10 minutes.',
+  })
   @ApiResponse({ status: 200, description: 'OTP sent successfully' })
   @ApiResponse({ status: 400, description: 'Invalid phone number or role' })
-  @ApiResponse({ status: 429, description: 'Too many OTP requests. Please try again later.' })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many OTP requests. Please try again later.',
+  })
   requestOtp(@Body() requestOtpDto: RequestOtpDto) {
     return this.authService.requestOtp(requestOtpDto);
   }
@@ -39,8 +46,15 @@ export class AuthController {
    * Verifies OTP and returns JWT token pair
    */
   @Post('verify-otp')
-  @ApiOperation({ summary: 'Verify OTP', description: 'Verifies the OTP code and returns JWT access and refresh tokens for authentication.' })
-  @ApiResponse({ status: 200, description: 'OTP verified successfully. Returns JWT tokens.' })
+  @ApiOperation({
+    summary: 'Verify OTP',
+    description:
+      'Verifies the OTP code and returns JWT access and refresh tokens for authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully. Returns JWT tokens.',
+  })
   @ApiResponse({ status: 400, description: 'Invalid OTP code or phone number' })
   @ApiResponse({ status: 401, description: 'Invalid or expired OTP code' })
   verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
@@ -52,8 +66,15 @@ export class AuthController {
    * Refreshes access token using refresh token
    */
   @Post('refresh-token')
-  @ApiOperation({ summary: 'Refresh Access Token', description: 'Exchanges a valid refresh token for a new access token. Refresh tokens have longer expiration (7 days by default).' })
-  @ApiResponse({ status: 200, description: 'New access token generated successfully.' })
+  @ApiOperation({
+    summary: 'Refresh Access Token',
+    description:
+      'Exchanges a valid refresh token for a new access token. Refresh tokens have longer expiration (7 days by default).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'New access token generated successfully.',
+  })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
   refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshToken(refreshTokenDto.refreshToken);

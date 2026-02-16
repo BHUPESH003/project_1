@@ -2,19 +2,24 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Param,
   Body,
   Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { BannersService } from '@/banners/banners.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
 import { UserRole } from '@repo/types';
 import { GetOrdersDto } from './dto/get-orders.dto';
 import { ReassignSellerDto } from './dto/reassign-seller.dto';
 import { ReassignDeliveryDto } from './dto/reassign-delivery.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { CreateBannerDto, UpdateBannerDto } from './dto/create-banner.dto';
 
 /**
  * Admin Controller - MVP Scope
@@ -36,9 +41,13 @@ import { CancelOrderDto } from './dto/cancel-order.dto';
  * - getUsers() - Too broad, privacy concern, not needed for ops
  * - updateUser() - User management not in admin scope for MVP
  */
+@ApiTags('Admin')
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly bannersService: BannersService,
+  ) {}
 
   /**
    * GET /v1/admin/orders
@@ -108,6 +117,64 @@ export class AdminController {
     @Request() req: { user: { id: string } },
   ) {
     return this.adminService.cancelOrder(id, cancelDto, req.user.id);
+  }
+
+  /** GET /admin/banners – list all banners (admin) */
+  @Get('banners')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all banners' })
+  getBanners() {
+    return this.bannersService.findAll();
+  }
+
+  /** GET /admin/banners/:id */
+  @Get('banners/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get banner by id' })
+  getBanner(@Param('id') id: string) {
+    return this.bannersService.findOne(id);
+  }
+
+  /** POST /admin/banners – create banner */
+  @Post('banners')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create banner' })
+  createBanner(@Body() dto: CreateBannerDto) {
+    return this.bannersService.create({
+      ...dto,
+      startAt: dto.startAt ? new Date(dto.startAt) : undefined,
+      endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+    });
+  }
+
+  /** PATCH /admin/banners/:id */
+  @Patch('banners/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update banner' })
+  updateBanner(@Param('id') id: string, @Body() dto: UpdateBannerDto) {
+    return this.bannersService.update(id, {
+      ...dto,
+      startAt: dto.startAt ? new Date(dto.startAt) : undefined,
+      endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+    });
+  }
+
+  /** DELETE /admin/banners/:id */
+  @Delete('banners/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete banner' })
+  deleteBanner(@Param('id') id: string) {
+    return this.bannersService.remove(id);
   }
 
   // ❌ REMOVED: getDashboard() - Analytics not in MVP

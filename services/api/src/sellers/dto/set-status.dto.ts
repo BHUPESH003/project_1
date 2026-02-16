@@ -8,10 +8,10 @@ import { SellerStatus } from '@repo/types';
  * Validates request to update seller availability status
  */
 export class SetStatusDto {
-  @ApiProperty({ 
-    description: 'Seller availability status', 
-    enum: SellerStatus, 
-    example: SellerStatus.ONLINE 
+  @ApiProperty({
+    description: 'Seller availability status',
+    enum: SellerStatus,
+    example: SellerStatus.ONLINE,
   })
   @IsEnum(SellerStatus, {
     message: 'Status must be either ONLINE or OFFLINE',

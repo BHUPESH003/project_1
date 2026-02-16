@@ -234,7 +234,7 @@ export class PaymentsService {
     razorpaySignature: string,
   ): Promise<VerifyPaymentResponse> {
     // Get payment record
-    let payment = await this.paymentRepository.findByOrderId(orderId);
+    const payment = await this.paymentRepository.findByOrderId(orderId);
     if (!payment) {
       throw new NotFoundException(`Payment not found for order ${orderId}`);
     }
@@ -325,9 +325,7 @@ export class PaymentsService {
       let payment = await this.paymentRepository.findByOrderId(orderId);
 
       if (!payment) {
-        this.logger.warn(
-          `Payment not found for order ${orderId} in webhook`,
-        );
+        this.logger.warn(`Payment not found for order ${orderId} in webhook`);
         return {
           processed: false,
           message: `Payment not found for order ${orderId}`,
@@ -353,7 +351,8 @@ export class PaymentsService {
       // Update payment record
       payment = await this.paymentRepository.update(payment.id, {
         status,
-        gatewayPaymentId: gatewayPaymentId || payment.gatewayPaymentId || undefined,
+        gatewayPaymentId:
+          gatewayPaymentId || payment.gatewayPaymentId || undefined,
         gatewaySignature: verification.signature,
         paidAt: status === PaymentStatus.SUCCESS ? new Date() : undefined,
         failureReason:
@@ -382,7 +381,9 @@ export class PaymentsService {
       return {
         processed: false,
         message:
-          error instanceof Error ? error.message : 'Unknown error processing webhook',
+          error instanceof Error
+            ? error.message
+            : 'Unknown error processing webhook',
       };
     }
   }
@@ -401,7 +402,9 @@ export class PaymentsService {
       // Get order to verify current state
       const order = await this.orderRepository.findById(orderId, false);
       if (!order) {
-        this.logger.error(`Order ${orderId} not found when processing payment success`);
+        this.logger.error(
+          `Order ${orderId} not found when processing payment success`,
+        );
         return;
       }
 
@@ -428,10 +431,7 @@ export class PaymentsService {
         );
       }
     } catch (error) {
-      this.logger.error(
-        `Error transitioning order ${orderId} to PAID:`,
-        error,
-      );
+      this.logger.error(`Error transitioning order ${orderId} to PAID:`, error);
       // Don't throw - webhook should return success even if state transition fails
       // State can be manually corrected by admin
     }

@@ -23,7 +23,10 @@ export class UserAddressRepository {
     return list.map((a) => this.map(a));
   }
 
-  async findByIdAndUser(id: string, userId: string): Promise<UserAddressEntity | null> {
+  async findByIdAndUser(
+    id: string,
+    userId: string,
+  ): Promise<UserAddressEntity | null> {
     const a = await this.prisma.prisma.userAddress.findFirst({
       where: { id, userId },
     });
@@ -56,7 +59,15 @@ export class UserAddressRepository {
     return result.count > 0;
   }
 
-  private map(a: { id: string; userId: string; label: string; addressLine: string; latitude: unknown; longitude: unknown; createdAt: Date }): UserAddressEntity {
+  private map(a: {
+    id: string;
+    userId: string;
+    label: string;
+    addressLine: string;
+    latitude: unknown;
+    longitude: unknown;
+    createdAt: Date;
+  }): UserAddressEntity {
     return {
       id: a.id,
       userId: a.userId,

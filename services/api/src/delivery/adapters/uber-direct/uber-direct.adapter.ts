@@ -72,7 +72,9 @@ export class UberDirectAdapter implements DeliveryAdapter {
     const environment = this.configService.get<string>('UBER_ENV') || 'sandbox';
 
     if (!clientId || !clientSecret || !customerId) {
-      throw new Error('Uber Direct integration requires UBER_CLIENT_ID, UBER_CLIENT_SECRET, and UBER_CUSTOMER_ID environment variables');
+      throw new Error(
+        'Uber Direct integration requires UBER_CLIENT_ID, UBER_CLIENT_SECRET, and UBER_CUSTOMER_ID environment variables',
+      );
     }
 
     const authBaseUrl = this.configService.get<string>('UBER_AUTH_BASE_URL');
@@ -83,14 +85,17 @@ export class UberDirectAdapter implements DeliveryAdapter {
       customerId,
       environment: (environment as 'sandbox' | 'production') || 'sandbox',
       // Uber Direct base URLs differ between sandbox and production
-      baseUrl: environment === 'production'
-        ? 'https://api.uber.com'
-        : 'https://api.uber.com', // Sandbox URL
+      baseUrl:
+        environment === 'production'
+          ? 'https://api.uber.com'
+          : 'https://api.uber.com', // Sandbox URL
       authBaseUrl:
-        authBaseUrl || (environment === 'production'
+        authBaseUrl ||
+        (environment === 'production'
           ? 'https://login.uber.com'
           : 'https://login.uber.com'),
-      webhookSecret: this.configService.get<string>('UBER_WEBHOOK_SECRET') || '',
+      webhookSecret:
+        this.configService.get<string>('UBER_WEBHOOK_SECRET') || '',
     };
 
     this.httpClient = axios.create({
@@ -137,7 +142,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
       console.log('Getting quote from Uber Direct for order:', request);
       // Parse address strings (expected format: "Street, City, State, ZipCode, Country")
       const parseAddress = (addressStr: string) => {
-        const parts = addressStr.split(',').map(p => p.trim());
+        const parts = addressStr.split(',').map((p) => p.trim());
         return {
           street_address: [parts[0]],
           city: parts[1] || 'Unknown',
@@ -158,7 +163,9 @@ export class UberDirectAdapter implements DeliveryAdapter {
         pickup_ready_dt: new Date().toISOString(),
         pickup_deadline_dt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes
         dropoff_ready_dt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        dropoff_deadline_dt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 60 minutes
+        dropoff_deadline_dt: new Date(
+          Date.now() + 60 * 60 * 1000,
+        ).toISOString(), // 60 minutes
         manifest_total_value: 0, // Will be updated when actual delivery is created
       };
       console.log('Quote payload:', quotePayload);
@@ -167,18 +174,18 @@ export class UberDirectAdapter implements DeliveryAdapter {
         estimatedFee: 20,
         estimatedDurationMinutes: 30,
         currency: 'INR',
-        quoteId: "quote.id",
+        quoteId: 'quote.id',
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      };;
+      };
       // Call Uber Direct quote API
       const response = await this.httpClient.post(
         `/v1/customers/${this.config.customerId}/delivery_quotes`,
         quotePayload,
         {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.data || typeof response.data.fee === 'undefined') {
@@ -200,11 +207,18 @@ export class UberDirectAdapter implements DeliveryAdapter {
         estimatedDurationMinutes: durationMinutes,
         currency: quote.currency_type || 'INR',
         quoteId: quote.id,
-        expiresAt: quote.expires ? new Date(quote.expires) : new Date(Date.now() + 15 * 60 * 1000),
+        expiresAt: quote.expires
+          ? new Date(quote.expires)
+          : new Date(Date.now() + 15 * 60 * 1000),
       };
     } catch (error) {
-      this.logger.error(`Uber Direct quote failed for order ${request.orderId}:`, error);
-      throw new BadRequestException('Failed to get delivery quote from Uber Direct');
+      this.logger.error(
+        `Uber Direct quote failed for order ${request.orderId}:`,
+        error,
+      );
+      throw new BadRequestException(
+        'Failed to get delivery quote from Uber Direct',
+      );
     }
   }
 
@@ -242,7 +256,7 @@ export class UberDirectAdapter implements DeliveryAdapter {
 
       // Parse address strings
       const parseAddress = (addressStr: string) => {
-        const parts = addressStr.split(',').map(p => p.trim());
+        const parts = addressStr.split(',').map((p) => p.trim());
         return {
           street_address: [parts[0]],
           city: parts[1] || 'Unknown',
@@ -276,11 +290,15 @@ export class UberDirectAdapter implements DeliveryAdapter {
           },
         ],
         manifest_reference: request.orderId,
-        manifest_total_value: Math.round((request.quote?.estimatedFee || 100) * 100), // in cents
+        manifest_total_value: Math.round(
+          (request.quote?.estimatedFee || 100) * 100,
+        ), // in cents
         pickup_ready_dt: new Date().toISOString(),
         pickup_deadline_dt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         dropoff_ready_dt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        dropoff_deadline_dt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        dropoff_deadline_dt: new Date(
+          Date.now() + 60 * 60 * 1000,
+        ).toISOString(),
         undeliverable_action: 'return',
       };
 
@@ -290,13 +308,15 @@ export class UberDirectAdapter implements DeliveryAdapter {
         deliveryPayload,
         {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.data || !response.data.id) {
-        throw new Error('Invalid response from Uber Direct delivery creation API');
+        throw new Error(
+          'Invalid response from Uber Direct delivery creation API',
+        );
       }
 
       const delivery = response.data;
@@ -310,13 +330,24 @@ export class UberDirectAdapter implements DeliveryAdapter {
         taskId: request.orderId,
         providerTaskId: delivery.id,
         status: DeliveryStatus.ASSIGNED,
-        trackingUrl: delivery.tracking_url || `https://delivery.uber.com/orders/${delivery.uuid}`,
-        estimatedPickupTime: delivery.pickup_eta ? new Date(delivery.pickup_eta) : new Date(Date.now() + 10 * 60 * 1000),
-        estimatedDeliveryTime: delivery.dropoff_eta ? new Date(delivery.dropoff_eta) : new Date(Date.now() + 30 * 60 * 1000),
+        trackingUrl:
+          delivery.tracking_url ||
+          `https://delivery.uber.com/orders/${delivery.uuid}`,
+        estimatedPickupTime: delivery.pickup_eta
+          ? new Date(delivery.pickup_eta)
+          : new Date(Date.now() + 10 * 60 * 1000),
+        estimatedDeliveryTime: delivery.dropoff_eta
+          ? new Date(delivery.dropoff_eta)
+          : new Date(Date.now() + 30 * 60 * 1000),
       };
     } catch (error) {
-      this.logger.error(`Uber Direct delivery creation failed for order ${request.orderId}:`, error);
-      throw new BadRequestException('Failed to create delivery task with Uber Direct');
+      this.logger.error(
+        `Uber Direct delivery creation failed for order ${request.orderId}:`,
+        error,
+      );
+      throw new BadRequestException(
+        'Failed to create delivery task with Uber Direct',
+      );
     }
   }
 
@@ -350,16 +381,19 @@ export class UberDirectAdapter implements DeliveryAdapter {
         cancelPayload,
         {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
           },
-        }
+        },
       );
 
       this.logger.log(
         `Uber Direct delivery task cancelled: ${request.providerTaskId} (reason: ${request.reason || 'No reason provided'})`,
       );
     } catch (error) {
-      this.logger.error(`Uber Direct delivery cancellation failed for task ${request.providerTaskId}:`, error);
+      this.logger.error(
+        `Uber Direct delivery cancellation failed for task ${request.providerTaskId}:`,
+        error,
+      );
       // Don't throw - cancellation failures should not block order processing
     }
   }
@@ -427,7 +461,9 @@ export class UberDirectAdapter implements DeliveryAdapter {
           deliveryEventType = 'IN_TRANSIT';
           break;
         default:
-          this.logger.warn(`Unknown Uber Deliveries API event type: ${eventType}`);
+          this.logger.warn(
+            `Unknown Uber Deliveries API event type: ${eventType}`,
+          );
           return {
             valid: false,
             error: `Unknown event type: ${eventType}`,
@@ -564,9 +600,9 @@ export class UberDirectAdapter implements DeliveryAdapter {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(this.toRadians(lat1)) *
-      Math.cos(this.toRadians(lat2)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
+        Math.cos(this.toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;

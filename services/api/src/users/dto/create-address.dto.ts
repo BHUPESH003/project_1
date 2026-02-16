@@ -6,7 +6,10 @@ export class CreateAddressDto {
   @IsString()
   label!: string;
 
-  @ApiProperty({ description: 'Full address line', example: '12 Main St, Bangalore' })
+  @ApiProperty({
+    description: 'Full address line',
+    example: '12 Main St, Bangalore',
+  })
   @IsString()
   addressLine!: string;
 

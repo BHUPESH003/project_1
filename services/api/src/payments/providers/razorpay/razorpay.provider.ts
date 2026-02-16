@@ -59,8 +59,11 @@ export class RazorpayProvider implements PaymentProvider {
     // Load Razorpay configuration from environment
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
-    const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
-    const environment = this.configService.get<string>('RAZORPAY_ENV') || 'sandbox';
+    const webhookSecret = this.configService.get<string>(
+      'RAZORPAY_WEBHOOK_SECRET',
+    );
+    const environment =
+      this.configService.get<string>('RAZORPAY_ENV') || 'sandbox';
 
     if (!keyId || !keySecret || !webhookSecret) {
       throw new Error(
@@ -143,7 +146,9 @@ export class RazorpayProvider implements PaymentProvider {
       });
 
       if (!orderResponse.data || !orderResponse.data.id) {
-        throw new Error(`Razorpay order creation failed: ${JSON.stringify(orderResponse.data)}`);
+        throw new Error(
+          `Razorpay order creation failed: ${JSON.stringify(orderResponse.data)}`,
+        );
       }
 
       const razorpayOrderId = orderResponse.data.id;
@@ -211,14 +216,20 @@ export class RazorpayProvider implements PaymentProvider {
   ): Promise<VerifyPaymentResponse> {
     try {
       if (!request.gatewayPaymentId) {
-        throw new BadRequestException('Razorpay payment ID is required for verification');
+        throw new BadRequestException(
+          'Razorpay payment ID is required for verification',
+        );
       }
 
       // Fetch payment details from Razorpay
-      const paymentResponse = await this.httpClient.get(`/payments/${request.gatewayPaymentId}`);
+      const paymentResponse = await this.httpClient.get(
+        `/payments/${request.gatewayPaymentId}`,
+      );
 
       if (!paymentResponse.data) {
-        throw new Error(`Payment not found on Razorpay: ${request.gatewayPaymentId}`);
+        throw new Error(
+          `Payment not found on Razorpay: ${request.gatewayPaymentId}`,
+        );
       }
 
       const payment = paymentResponse.data;
@@ -244,7 +255,9 @@ export class RazorpayProvider implements PaymentProvider {
         gatewayOrderId: payment.order_id,
         gatewayPaymentId: payment.id,
         amount: payment.amount / 100, // Convert from paise to rupees
-        paidAt: payment.created_at ? new Date(payment.created_at * 1000) : undefined,
+        paidAt: payment.created_at
+          ? new Date(payment.created_at * 1000)
+          : undefined,
         failureReason: payment.failure_reason || undefined,
       };
     } catch (error: any) {
@@ -318,7 +331,8 @@ export class RazorpayProvider implements PaymentProvider {
         status = PaymentStatus.SUCCESS;
       }
 
-      const orderId = entity.notes?.orderId || entity.receipt || entity.order_id;
+      const orderId =
+        entity.notes?.orderId || entity.receipt || entity.order_id;
 
       this.logger.log(
         `Razorpay webhook verified: event=${event}, orderId=${orderId}, status=${status}`,
@@ -368,7 +382,9 @@ export class RazorpayProvider implements PaymentProvider {
       // Timing-safe comparison to prevent timing attacks
       return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
     } catch (error: any) {
-      this.logger.error(`Webhook signature verification error: ${error?.message}`);
+      this.logger.error(
+        `Webhook signature verification error: ${error?.message}`,
+      );
       return false;
     }
   }

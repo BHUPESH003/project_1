@@ -60,7 +60,7 @@ export class StateChangeNotificationJob extends WorkerHost {
         },
       );
     }
-    return this.notificationService!;
+    return this.notificationService;
   }
 
   async process(job: Job<StateChangeNotificationJobData>): Promise<void> {

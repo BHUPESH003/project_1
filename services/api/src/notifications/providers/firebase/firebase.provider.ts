@@ -110,9 +110,11 @@ export class FirebaseProvider implements NotificationProvider, OnModuleInit {
           title: request.title,
           body: request.body,
         },
-        data: request.data ? Object.fromEntries(
-          Object.entries(request.data).map(([k, v]) => [k, String(v)])
-        ) : {},
+        data: request.data
+          ? Object.fromEntries(
+              Object.entries(request.data).map(([k, v]) => [k, String(v)]),
+            )
+          : {},
         token: fcmToken,
       };
 

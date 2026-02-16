@@ -14,15 +14,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { OrderStatus } from '@repo/types';
-import {
-  AssignDeliveryJobData,
-} from './jobs/order/assign-delivery.job';
-import {
-  OrderTimeoutJobData,
-} from './jobs/order/order-timeout.job';
-import {
-  StateChangeNotificationJobData,
-} from './jobs/notification/state-change-notification.job';
+import { AssignDeliveryJobData } from './jobs/order/assign-delivery.job';
+import { OrderTimeoutJobData } from './jobs/order/order-timeout.job';
+import { StateChangeNotificationJobData } from './jobs/notification/state-change-notification.job';
 
 @Injectable()
 export class QueueService {
@@ -83,15 +77,11 @@ export class QueueService {
     };
 
     // Schedule job to run after timeout period
-    await this.orderQueue.add(
-      'order-timeout',
-      jobData,
-      {
-        jobId: `order-timeout-${orderId}`, // Unique job ID for idempotency
-        delay: timeoutMinutes * 60 * 1000, // Delay in milliseconds
-        removeOnComplete: true,
-      },
-    );
+    await this.orderQueue.add('order-timeout', jobData, {
+      jobId: `order-timeout-${orderId}`, // Unique job ID for idempotency
+      delay: timeoutMinutes * 60 * 1000, // Delay in milliseconds
+      removeOnComplete: true,
+    });
 
     this.logger.log(
       `Enqueued timeout job for order ${orderId} (timeout: ${timeoutMinutes}min, scheduled for: ${new Date(Date.now() + timeoutMinutes * 60 * 1000).toISOString()})`,
@@ -130,14 +120,10 @@ export class QueueService {
 
     // Use orderId + toState as job ID for idempotency
     // Same state change won't create duplicate notifications
-    await this.notificationQueue.add(
-      'state-change-notification',
-      jobData,
-      {
-        jobId: `notification-${orderId}-${toState}`, // Unique job ID for idempotency
-        removeOnComplete: true,
-      },
-    );
+    await this.notificationQueue.add('state-change-notification', jobData, {
+      jobId: `notification-${orderId}-${toState}`, // Unique job ID for idempotency
+      removeOnComplete: true,
+    });
 
     this.logger.log(
       `Enqueued notification job for order ${orderId} (${fromState || 'CREATED'} → ${toState})`,

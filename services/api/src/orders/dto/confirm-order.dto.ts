@@ -8,11 +8,11 @@ import { PaymentMethod } from '@repo/types';
  * Validates request to confirm and pay for order
  */
 export class ConfirmOrderDto {
-  @ApiPropertyOptional({ 
-    description: 'Payment method', 
-    enum: PaymentMethod, 
+  @ApiPropertyOptional({
+    description: 'Payment method',
+    enum: PaymentMethod,
     example: PaymentMethod.UPI,
-    default: PaymentMethod.UPI 
+    default: PaymentMethod.UPI,
   })
   @IsEnum(PaymentMethod, {
     message: 'Payment method must be UPI, CASH, or CARD',

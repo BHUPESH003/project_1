@@ -23,7 +23,9 @@ describe('InfobipProvider', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn((key: string) => mockConfig[key as keyof typeof mockConfig]),
+            get: jest.fn(
+              (key: string) => mockConfig[key as keyof typeof mockConfig],
+            ),
           },
         },
       ],
@@ -49,7 +51,12 @@ describe('InfobipProvider', () => {
       messages: [
         {
           messageId: 'test-message-id',
-          status: { groupId: 1, groupName: 'PENDING', id: 7, name: 'PENDING_ENROUTE' },
+          status: {
+            groupId: 1,
+            groupName: 'PENDING',
+            id: 7,
+            name: 'PENDING_ENROUTE',
+          },
         },
       ],
     };
@@ -99,7 +106,9 @@ describe('InfobipProvider', () => {
   });
 
   it('should handle network error', async () => {
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    (global.fetch as jest.Mock).mockRejectedValueOnce(
+      new Error('Network error'),
+    );
 
     const result = await provider.sendOtp('+1234567890', '123456');
 
@@ -109,21 +118,26 @@ describe('InfobipProvider', () => {
 
   it('should handle missing configuration', async () => {
     // Create a new provider instance with missing config
-    const moduleWithMissingConfig: TestingModule = await Test.createTestingModule({
-      providers: [
-        InfobipProvider,
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn(() => ''), // Return empty string for all config
+    const moduleWithMissingConfig: TestingModule =
+      await Test.createTestingModule({
+        providers: [
+          InfobipProvider,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn(() => ''), // Return empty string for all config
+            },
           },
-        },
-      ],
-    }).compile();
+        ],
+      }).compile();
 
-    const providerWithMissingConfig = moduleWithMissingConfig.get<InfobipProvider>(InfobipProvider);
+    const providerWithMissingConfig =
+      moduleWithMissingConfig.get<InfobipProvider>(InfobipProvider);
 
-    const result = await providerWithMissingConfig.sendOtp('+1234567890', '123456');
+    const result = await providerWithMissingConfig.sendOtp(
+      '+1234567890',
+      '123456',
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Infobip configuration missing');

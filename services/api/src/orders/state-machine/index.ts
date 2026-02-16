@@ -13,4 +13,7 @@ export {
   isTerminalState,
   isFailureState,
 } from './order-state-machine.types';
-export type { TransitionOptions, TransitionResult } from './order-state-machine.service';
+export type {
+  TransitionOptions,
+  TransitionResult,
+} from './order-state-machine.service';

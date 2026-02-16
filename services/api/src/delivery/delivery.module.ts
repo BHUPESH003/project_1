@@ -51,6 +51,11 @@ import { OrdersModule } from '@/orders/orders.module';
       ],
     },
   ],
-  exports: [DeliveryService, DeliveryRepository, DeliveryPartnerRepository, DeliveryQuotationService],
+  exports: [
+    DeliveryService,
+    DeliveryRepository,
+    DeliveryPartnerRepository,
+    DeliveryQuotationService,
+  ],
 })
 export class DeliveryModule {}

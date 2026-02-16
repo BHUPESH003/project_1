@@ -8,10 +8,10 @@ import { OrderStatus } from '@repo/types';
  * Validates query parameters for seller order listing
  */
 export class GetSellerOrdersDto {
-  @ApiPropertyOptional({ 
-    description: 'Filter orders by status', 
-    enum: OrderStatus, 
-    example: OrderStatus.CREATED 
+  @ApiPropertyOptional({
+    description: 'Filter orders by status',
+    enum: OrderStatus,
+    example: OrderStatus.CREATED,
   })
   @IsEnum(OrderStatus, {
     message: 'Status must be a valid OrderStatus',

@@ -67,7 +67,7 @@ export class InfobipProvider implements OtpProvider {
       const response = await fetch(`${this.baseUrl}/sms/2/text/advanced`, {
         method: 'POST',
         headers: {
-          'Authorization': `App ${this.apiKey}`,
+          Authorization: `App ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -83,7 +83,8 @@ export class InfobipProvider implements OtpProvider {
       const responseData = await response.json();
 
       // Extract message ID from response
-      const messageId = responseData.messages?.[0]?.messageId || `infobip-${Date.now()}`;
+      const messageId =
+        responseData.messages?.[0]?.messageId || `infobip-${Date.now()}`;
 
       this.logger.log(
         `OTP sent to ${phone} via Infobip. Message ID: ${messageId}`,

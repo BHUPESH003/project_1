@@ -41,8 +41,15 @@ export class FilesController {
    */
   @Post('presigned-url')
   @ApiTags('Files (Internal)')
-  @ApiOperation({ summary: 'Get presigned URL for file upload', description: 'Generates a presigned S3 URL for direct file upload. Used by frontend before order creation.' })
-  @ApiResponse({ status: 200, description: 'Presigned URL generated successfully' })
+  @ApiOperation({
+    summary: 'Get presigned URL for file upload',
+    description:
+      'Generates a presigned S3 URL for direct file upload. Used by frontend before order creation.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned URL generated successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid file size or type' })
   getPresignedUrl(@Body() dto: PresignedUrlDto, @Req() req: Request) {
     // Log the received DTO for debugging
@@ -60,7 +67,11 @@ export class FilesController {
    */
   @Post('validate')
   @ApiTags('Files (Internal)')
-  @ApiOperation({ summary: 'Validate uploaded file', description: 'Validates file after upload. Checks size, type, and creates file record in database.' })
+  @ApiOperation({
+    summary: 'Validate uploaded file',
+    description:
+      'Validates file after upload. Checks size, type, and creates file record in database.',
+  })
   @ApiResponse({ status: 200, description: 'File validated successfully' })
   @ApiResponse({ status: 400, description: 'File validation failed' })
   validateFile(@Body() dto: ValidateFileDto) {

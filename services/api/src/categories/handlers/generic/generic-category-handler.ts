@@ -1,13 +1,18 @@
 /**
  * Generic Category Handler
- * 
+ *
  * Handles any category that doesn't have a specific handler.
  * Supports product-based orders (hardware, stationary, grocery, etc.)
  */
 
 import { Injectable, Logger } from '@nestjs/common';
 import { Seller } from '@prisma/client';
-import { CategoryHandler, ValidationResult, PriceBreakdown, FileRequirements } from '../category-handler.interface';
+import {
+  CategoryHandler,
+  ValidationResult,
+  PriceBreakdown,
+  FileRequirements,
+} from '../category-handler.interface';
 
 @Injectable()
 export class GenericCategoryHandler implements CategoryHandler {
@@ -82,9 +87,13 @@ export class GenericCategoryHandler implements CategoryHandler {
    */
   async processOrder(orderId: string, payload: any): Promise<void> {
     if (payload.items) {
-      this.logger.log(`Processing product order ${orderId} with ${payload.items.length} items`);
+      this.logger.log(
+        `Processing product order ${orderId} with ${payload.items.length} items`,
+      );
     } else if (payload.fileUrl) {
-      this.logger.log(`Processing printing order ${orderId} with ${payload.pages || 1} pages`);
+      this.logger.log(
+        `Processing printing order ${orderId} with ${payload.pages || 1} pages`,
+      );
     }
   }
 

@@ -24,13 +24,17 @@ import { GenericCategoryHandler } from './handlers/generic/generic-category-hand
       ) => {
         // Register generic handler first (fallback)
         registry.register(genericHandler);
-        
+
         // Register specific handlers (take precedence)
         registry.register(printingHandler);
-        
+
         return true;
       },
-      inject: [CategoryRegistry, PrintingCategoryHandler, GenericCategoryHandler],
+      inject: [
+        CategoryRegistry,
+        PrintingCategoryHandler,
+        GenericCategoryHandler,
+      ],
     },
   ],
   exports: [CategoriesService, CategoryRegistry], // Export registry for use in OrdersService

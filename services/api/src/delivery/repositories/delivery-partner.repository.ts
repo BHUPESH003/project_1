@@ -26,15 +26,10 @@ export class DeliveryPartnerRepository {
   /**
    * Get delivery partner by ID or provider name
    */
-  async getPartner(
-    idOrName: string,
-  ): Promise<any | null> {
+  async getPartner(idOrName: string): Promise<any | null> {
     return this.prismaService.prisma.deliveryPartner.findFirst({
       where: {
-        OR: [
-          { id: idOrName },
-          { providerName: idOrName },
-        ],
+        OR: [{ id: idOrName }, { providerName: idOrName }],
       },
     });
   }

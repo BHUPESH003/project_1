@@ -13,12 +13,19 @@ export class PresignedUrlDto {
   @IsString()
   mimeType!: string;
 
-  @ApiProperty({ description: 'File size in bytes', example: 1024000, minimum: 1 })
+  @ApiProperty({
+    description: 'File size in bytes',
+    example: 1024000,
+    minimum: 1,
+  })
   @IsNumber()
   @Min(1)
   fileSize!: number;
 
-  @ApiPropertyOptional({ description: 'Order ID if file is for existing order', example: 'order-123' })
+  @ApiPropertyOptional({
+    description: 'Order ID if file is for existing order',
+    example: 'order-123',
+  })
   @IsOptional()
   @IsString()
   orderId?: string;

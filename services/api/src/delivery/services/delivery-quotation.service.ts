@@ -41,7 +41,9 @@ export class DeliveryQuotationService {
     request: QuotationRequest,
     orderId?: string,
   ): Promise<AvailableDeliveryPartnersResponse> {
-    this.logger.log(`Fetching quotations for delivery: ${JSON.stringify(request)}`);
+    this.logger.log(
+      `Fetching quotations for delivery: ${JSON.stringify(request)}`,
+    );
 
     // Check cache for recent quotations
     if (!orderId) {
@@ -54,7 +56,9 @@ export class DeliveryQuotationService {
       );
 
       if (cachedQuotations.length > 0) {
-        this.logger.log(`Using cached quotations: ${cachedQuotations.length} partners`);
+        this.logger.log(
+          `Using cached quotations: ${cachedQuotations.length} partners`,
+        );
         return this.formatResponse(cachedQuotations);
       }
     }
@@ -80,11 +84,13 @@ export class DeliveryQuotationService {
 
     const successfulQuotations = quotationResults
       .filter((result) => result.status === 'fulfilled')
-      .map((result) => (result as PromiseFulfilledResult<DeliveryPartnerQuotation>).value)
+      .map((result) => result.value)
       .filter((q) => q.isAvailable)
       .sort((a, b) => a.priority - b.priority); // Sort by priority
 
-    this.logger.log(`Received ${successfulQuotations.length} valid quotations from ${partners.length} partners`);
+    this.logger.log(
+      `Received ${successfulQuotations.length} valid quotations from ${partners.length} partners`,
+    );
 
     return this.formatResponse(successfulQuotations);
   }
@@ -141,7 +147,9 @@ export class DeliveryQuotationService {
             quotedFeeRupees: quote.estimatedFee,
             estimatedMinutes: quote.estimatedDurationMinutes,
             providerQuoteId: quote.quoteId,
-            expiresAt: new Date(Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000),
+            expiresAt: new Date(
+              Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000,
+            ),
           });
 
           return this.formatPartnerQuotation(saved, partner);
@@ -157,7 +165,8 @@ export class DeliveryQuotationService {
         return this.generateMockQuotation(partner, request);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
         `Failed to get quotation from ${partner.displayName}: ${errorMessage}`,
       );
@@ -172,8 +181,10 @@ export class DeliveryQuotationService {
         isAvailable: false,
         unavailabilityReason: `Unable to get quote: ${errorMessage}`,
         priority: partner.priority,
-        successRatePercent: (partner.successRate?.toNumber() || 95),
-        expiresAt: new Date(Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000),
+        successRatePercent: partner.successRate?.toNumber() || 95,
+        expiresAt: new Date(
+          Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000,
+        ),
       };
     }
   }
@@ -193,7 +204,7 @@ export class DeliveryQuotationService {
       estimatedMinutes: saved.estimatedMinutes,
       isAvailable: true,
       priority: partner.priority,
-      successRatePercent: (partner.successRate?.toNumber() || 95),
+      successRatePercent: partner.successRate?.toNumber() || 95,
       expiresAt: saved.expiresAt,
     });
   }
@@ -230,8 +241,10 @@ export class DeliveryQuotationService {
       estimatedMinutes,
       isAvailable: true,
       priority: partner.priority,
-      successRatePercent: (partner.successRate?.toNumber() || 95),
-      expiresAt: new Date(Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000),
+      successRatePercent: partner.successRate?.toNumber() || 95,
+      expiresAt: new Date(
+        Date.now() + this.QUOTATION_VALIDITY_MINUTES * 60 * 1000,
+      ),
     });
   }
 
@@ -261,30 +274,33 @@ export class DeliveryQuotationService {
   /**
    * Format multiple quotations into response
    */
-  private formatResponse(
-    quotations: any[],
-  ): AvailableDeliveryPartnersResponse {
-    const partners = quotations.map((q) =>
-      new DeliveryPartnerQuotation({
-        quotationId: q.id,
-        providerName: q.deliveryPartner.displayName,
-        providerId: q.deliveryPartner.providerName,
-        quotedFeeRupees: q.quotedFeeRupees.toNumber(),
-        estimatedMinutes: q.estimatedMinutes,
-        isAvailable: true,
-        priority: q.deliveryPartner.priority,
-        successRatePercent: (q.deliveryPartner.successRate?.toNumber() || 95),
-        expiresAt: q.expiresAt,
-      }),
+  private formatResponse(quotations: any[]): AvailableDeliveryPartnersResponse {
+    const partners = quotations.map(
+      (q) =>
+        new DeliveryPartnerQuotation({
+          quotationId: q.id,
+          providerName: q.deliveryPartner.displayName,
+          providerId: q.deliveryPartner.providerName,
+          quotedFeeRupees: q.quotedFeeRupees.toNumber(),
+          estimatedMinutes: q.estimatedMinutes,
+          isAvailable: true,
+          priority: q.deliveryPartner.priority,
+          successRatePercent: q.deliveryPartner.successRate?.toNumber() || 95,
+          expiresAt: q.expiresAt,
+        }),
     );
 
-    const cheapest = [...partners].sort((a, b) => a.quotedFeeRupees - b.quotedFeeRupees)[0];
-    const fastest = [...partners].sort((a, b) => a.estimatedMinutes - b.estimatedMinutes)[0];
+    const cheapest = [...partners].sort(
+      (a, b) => a.quotedFeeRupees - b.quotedFeeRupees,
+    )[0];
+    const fastest = [...partners].sort(
+      (a, b) => a.estimatedMinutes - b.estimatedMinutes,
+    )[0];
 
     // Recommended = best balance of price and speed (using simple scoring)
     const recommended = [...partners].sort((a, b) => {
-      const scoreA = (a.quotedFeeRupees / 100) + (a.estimatedMinutes / 10);
-      const scoreB = (b.quotedFeeRupees / 100) + (b.estimatedMinutes / 10);
+      const scoreA = a.quotedFeeRupees / 100 + a.estimatedMinutes / 10;
+      const scoreB = b.quotedFeeRupees / 100 + b.estimatedMinutes / 10;
       return scoreA - scoreB;
     })[0];
 

@@ -361,12 +361,8 @@ export class OrderRepository {
       itemCost: order.itemCost ? Number(order.itemCost) : null,
       deliveryFee: order.deliveryFee ? Number(order.deliveryFee) : null,
       totalAmount: order.totalAmount ? Number(order.totalAmount) : null,
-      dropLatitude: order.dropLatitude
-        ? Number(order.dropLatitude)
-        : null,
-      dropLongitude: order.dropLongitude
-        ? Number(order.dropLongitude)
-        : null,
+      dropLatitude: order.dropLatitude ? Number(order.dropLatitude) : null,
+      dropLongitude: order.dropLongitude ? Number(order.dropLongitude) : null,
       dropAddress: order.dropAddress,
       failureReason: order.failureReason,
       createdAt: order.createdAt,
@@ -375,11 +371,12 @@ export class OrderRepository {
       user: order.user,
       seller: order.seller,
       category: order.category,
-      files: order.files?.map((f: any) => ({
-        id: f.id,
-        url: f.storageUrl,
-        type: f.mimeType,
-      })) || [],
+      files:
+        order.files?.map((f: any) => ({
+          id: f.id,
+          url: f.storageUrl,
+          type: f.mimeType,
+        })) || [],
       stateHistory: order.stateHistory?.map((h: any) => ({
         ...h,
         fromStatus: h.fromStatus as OrderStatus | null,

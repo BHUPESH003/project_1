@@ -56,7 +56,7 @@ export class OrderTimeoutJob extends WorkerHost {
         strict: false,
       });
     }
-    return this.orderRepository!;
+    return this.orderRepository;
   }
 
   async process(job: Job<OrderTimeoutJobData>): Promise<void> {
@@ -130,7 +130,10 @@ export class OrderTimeoutJob extends WorkerHost {
       );
 
       // If order already in ORDER_EXPIRED or terminal state, this is idempotent
-      if (error instanceof Error && error.message.includes('Invalid state transition')) {
+      if (
+        error instanceof Error &&
+        error.message.includes('Invalid state transition')
+      ) {
         this.logger.log(
           `Order ${orderId} already in terminal state - timeout check idempotent (job: ${job.id})`,
         );

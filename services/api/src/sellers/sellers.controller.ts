@@ -17,10 +17,17 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { SellersService } from './sellers.service';
-import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
+import {
+  JwtAuthGuard,
+  OptionalJwtAuthGuard,
+  RolesGuard,
+  Roles,
+} from '@/common/guards';
 import { UserRole } from '@repo/types';
 import { SetStatusDto } from './dto/set-status.dto';
 import { FindAvailableSellersDto } from './dto/find-available-sellers.dto';
+import { GetSellerQueryDto } from './dto/get-seller.dto';
+import { SellerProductsQueryDto } from './dto/seller-products-query.dto';
 
 /**
  * Sellers Controller - MVP Scope
@@ -50,14 +57,32 @@ export class SellersController {
    * Public endpoint (no auth required for discovery)
    */
   @Get()
-  @ApiOperation({ summary: 'Find available sellers', description: 'Returns list of ONLINE sellers. Can be filtered by category and location. Public endpoint, no authentication required.' })
-  @ApiQuery({ name: 'category', required: false, description: 'Category ID to filter sellers', example: 'cat-printing-123' })
-  @ApiQuery({ name: 'lat', required: false, description: 'Latitude for location-based filtering', example: 28.6139 })
-  @ApiQuery({ name: 'lng', required: false, description: 'Longitude for location-based filtering', example: 77.2090 })
-  @ApiQuery({ name: 'maxDistanceKm', required: false, description: 'Max radius in km when lat/lng provided (default 50)', example: 50 })
-  @ApiResponse({ status: 200, description: 'List of available sellers retrieved successfully' })
-  findAvailableSellers(@Query() query: FindAvailableSellersDto) {
-    return this.sellersService.findAvailableSellers(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Find available sellers',
+    description:
+      'Returns paginated list of ONLINE sellers with imageUrl, rating, categories. Send Bearer token for isFavorited.',
+  })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'lat', required: false })
+  @ApiQuery({ name: 'lng', required: false })
+  @ApiQuery({ name: 'maxDistanceKm', required: false })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Page size (default 20)',
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    description: 'Offset for pagination',
+  })
+  @ApiResponse({ status: 200, description: 'List of sellers with pagination' })
+  findAvailableSellers(
+    @Query() query: FindAvailableSellersDto,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.findAvailableSellers(query, req.user?.id);
   }
 
   /**
@@ -66,13 +91,19 @@ export class SellersController {
    * Public endpoint
    */
   @Get(':id/products')
-  @ApiOperation({ 
-    summary: 'Get seller products', 
-    description: 'Retrieves all products/services offered by a seller, grouped by category. Public endpoint, no authentication required.' 
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get seller products',
+    description:
+      'Seller catalog products with pagination and filter chips. Send Bearer token to get wishlist/notify flags.',
   })
-  @ApiParam({ name: 'id', description: 'Seller ID', example: 'clh9qh3j90001q6qz6z8z8z8z' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiParam({
+    name: 'id',
+    description: 'Seller ID',
+    example: 'clh9qh3j90001q6qz6z8z8z8z',
+  })
+  @ApiResponse({
+    status: 200,
     description: 'Products retrieved successfully',
     example: [
       {
@@ -81,46 +112,71 @@ export class SellersController {
         name: 'B&W Document Print',
         description: 'Standard 80gsm A4 paper',
         category: 'Printing Services',
-        price: 0.50,
+        price: 0.5,
         image: 'https://images.unsplash.com/...',
         inStock: true,
-      }
-    ]
+      },
+    ],
   })
   @ApiResponse({ status: 404, description: 'Seller not found' })
-  getSellerProducts(@Param('id') id: string) {
-    return this.sellersService.getSellerProducts(id);
+  getSellerProducts(
+    @Param('id') id: string,
+    @Query() query: SellerProductsQueryDto,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.getSellerProducts(id, query, req.user?.id);
   }
 
   /**
    * GET /v1/sellers/:id
    * Get seller profile (for display in order flow)
+   * Optionally accepts lat/lng query params to calculate distance
    * Public endpoint
    */
   @Get(':id')
-  @ApiOperation({ 
-    summary: 'Get seller profile', 
-    description: 'Retrieves seller profile details including shop information, location, and categories. Public endpoint, no authentication required.' 
+  @ApiOperation({
+    summary: 'Get seller profile',
+    description:
+      'Retrieves seller profile details including shop information, location, categories, rating, discount rules. Optionally accepts lat/lng to calculate distance. Public endpoint, no authentication required.',
   })
-  @ApiParam({ name: 'id', description: 'Seller ID', example: 'clh9qh3j90001q6qz6z8z8z8z' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiParam({
+    name: 'id',
+    description: 'Seller ID',
+    example: 'clh9qh3j90001q6qz6z8z8z8z',
+  })
+  @ApiQuery({
+    name: 'lat',
+    required: false,
+    description: 'User latitude for distance calculation',
+  })
+  @ApiQuery({
+    name: 'lng',
+    required: false,
+    description: 'User longitude for distance calculation',
+  })
+  @ApiResponse({
+    status: 200,
     description: 'Seller profile retrieved successfully',
     example: {
       id: 'clh9qh3j90001q6qz6z8z8z8z',
       shopName: 'Fast Print Shop',
       address: '123 Main Street, Delhi',
+      description: 'Professional document printing & binding services',
       latitude: '28.6139',
       longitude: '77.209',
       pricePerPage: '2.00',
       prepTimeMinutes: 30,
       status: 'ONLINE',
+      rating: 4.9,
+      discountThreshold: 50,
+      discountPercent: 10.0,
+      distance_km: 0.5,
       categories: [{ id: 'printing', name: 'Printing' }],
-    }
+    },
   })
   @ApiResponse({ status: 404, description: 'Seller not found' })
-  findOne(@Param('id') id: string) {
-    return this.sellersService.findOne(id);
+  findOne(@Param('id') id: string, @Query() query: GetSellerQueryDto) {
+    return this.sellersService.findOne(id, query.lat, query.lng);
   }
 
   /**
@@ -136,8 +192,15 @@ export class SellersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Set seller status', description: 'Updates the authenticated seller\'s availability status (ONLINE/OFFLINE). Requires SELLER role.' })
-  @ApiResponse({ status: 200, description: 'Seller status updated successfully' })
+  @ApiOperation({
+    summary: 'Set seller status',
+    description:
+      "Updates the authenticated seller's availability status (ONLINE/OFFLINE). Requires SELLER role.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Seller status updated successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid status value' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   setStatus(

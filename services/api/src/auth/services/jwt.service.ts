@@ -184,7 +184,9 @@ export class JwtService {
    */
   verifyRefreshToken(token: string): JwtPayload | null {
     try {
-      const payload = this.jwtService.verify<JwtPayload & { type?: string }>(token);
+      const payload = this.jwtService.verify<JwtPayload & { type?: string }>(
+        token,
+      );
 
       // Ensure it's actually a refresh token
       if (payload.type !== 'refresh') {
@@ -204,7 +206,9 @@ export class JwtService {
    * @param refreshTokenPayload - Validated refresh token payload
    * @returns New access token response
    */
-  generateAccessTokenFromRefresh(refreshTokenPayload: JwtPayload & { type?: string }): JwtTokenResponse {
+  generateAccessTokenFromRefresh(
+    refreshTokenPayload: JwtPayload & { type?: string },
+  ): JwtTokenResponse {
     const { type, iat, exp, ...payload } = refreshTokenPayload; // Remove refresh-specific fields
 
     const accessToken = this.jwtService.sign(payload, {

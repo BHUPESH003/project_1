@@ -7,10 +7,10 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
  * Validates request to reject an order
  */
 export class RejectOrderDto {
-  @ApiPropertyOptional({ 
-    description: 'Reason for rejecting the order', 
+  @ApiPropertyOptional({
+    description: 'Reason for rejecting the order',
     example: 'Currently too busy to handle this order',
-    maxLength: 500 
+    maxLength: 500,
   })
   @IsString()
   @IsOptional()

@@ -393,7 +393,8 @@ export class AdminService {
       // Actual refund processing is manual (admin-triggered only)
       // TODO: Add refundStatus field to Payment model in Prisma schema
       // For now, we'll update via Prisma directly
-      const prisma = (this.paymentRepository as any).prismaService as PrismaService;
+      const prisma = (this.paymentRepository as any)
+        .prismaService as PrismaService;
       await prisma.prisma.payment.update({
         where: { id: payment.id },
         data: {

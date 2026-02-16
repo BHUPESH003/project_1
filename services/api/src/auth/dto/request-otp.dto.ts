@@ -9,10 +9,10 @@ import { PHONE_CONFIG } from '@/constants';
  * Validates request to send OTP to phone number
  */
 export class RequestOtpDto {
-  @ApiProperty({ 
-    description: 'Phone number in E.164 format', 
+  @ApiProperty({
+    description: 'Phone number in E.164 format',
     example: PHONE_CONFIG.E164_EXAMPLE,
-    pattern: PHONE_CONFIG.E164_PATTERN.source 
+    pattern: PHONE_CONFIG.E164_PATTERN.source,
   })
   @IsString()
   @Matches(PHONE_CONFIG.E164_PATTERN, {
@@ -20,10 +20,10 @@ export class RequestOtpDto {
   })
   phone!: string;
 
-  @ApiProperty({ 
-    description: 'User role', 
-    enum: UserRole, 
-    example: UserRole.USER 
+  @ApiProperty({
+    description: 'User role',
+    enum: UserRole,
+    example: UserRole.USER,
   })
   @IsEnum(UserRole, {
     message: 'Role must be one of: USER, SELLER, ADMIN',
