@@ -12,7 +12,7 @@ import { ShopCard } from '@/components/ShopCard';
 import { SortPill } from '@/components/SortPill';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Loader } from '@/components/Loader';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { sellersApi, type SellerListItem } from '@/api/sellers.api';
@@ -45,6 +45,8 @@ function mapSellerToCard(s: SellerListItem) {
 }
 
 export default function SellersScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -228,7 +230,7 @@ export default function SellersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',

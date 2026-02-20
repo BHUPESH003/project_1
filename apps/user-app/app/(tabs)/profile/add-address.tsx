@@ -8,13 +8,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { usersApi } from '@/api/users.api';
 import { useLocationStore } from '@/store/location.store';
 
 export default function AddAddressScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams();
@@ -119,7 +121,7 @@ export default function AddAddressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',

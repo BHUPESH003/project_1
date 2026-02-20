@@ -5,8 +5,13 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { useAuthStore } from '@/store/auth.store';
 import { setOnSessionExpired } from '@/api/client';
+import { ThemeProvider, useResolvedThemeMode } from '@/theme';
+import { workSansFonts } from '@/constants/typography';
+import { ToastHost } from '@/components/ToastHost';
 
 setOnSessionExpired(() => {
   useAuthStore.getState().clearSession();
@@ -40,17 +45,36 @@ function AuthSync() {
 
 export default function RootLayout() {
   const restoreToken = useAuthStore((s) => s.restoreToken);
+  const [fontsLoaded] = useFonts(workSansFonts);
 
   useEffect(() => {
     restoreToken();
   }, [restoreToken]);
 
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <AuthSync />
-        <Stack screenOptions={{ headerShown: false }} />
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <AppShell />
+        </SafeAreaProvider>
+      </ThemeProvider>
     </QueryClientProvider>
+  );
+}
+
+function AppShell() {
+  const resolvedThemeMode = useResolvedThemeMode();
+
+  return (
+    <>
+      <StatusBar style={resolvedThemeMode === 'dark' ? 'light' : 'dark'} />
+      <AuthSync />
+      <Stack screenOptions={{ headerShown: false }} />
+      <ToastHost />
+    </>
   );
 }

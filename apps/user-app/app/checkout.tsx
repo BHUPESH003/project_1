@@ -16,12 +16,12 @@
  * The order is finalized with current cart state at checkout.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
@@ -47,6 +47,8 @@ function getCategoryIdFromName(categoryName?: string): string {
 }
 
 export default function CheckoutScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { coords: deviceLocation } = useLocation();
@@ -541,7 +543,7 @@ export default function CheckoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,7 +570,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'colors.primaryLight',
   },
   shopLabel: {
     ...typography.meta,
@@ -760,7 +762,7 @@ const styles = StyleSheet.create({
   errorContainer: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: colors.errorBg,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.error,
@@ -832,7 +834,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'colors.primaryLight',
   },
   addressLabel: {
     ...typography.secondary,

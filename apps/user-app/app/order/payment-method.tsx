@@ -12,7 +12,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Loader } from '@/components/Loader';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { useOrderDraftStore } from '@/store/order-draft.store';
 import { ordersApi } from '@/api/orders.api';
 import { paymentsApi, PaymentProvider } from '@/api/payments.api';
@@ -20,6 +20,8 @@ import { paymentsApi, PaymentProvider } from '@/api/payments.api';
 type PaymentMethodType = 'razorpay' | 'paytm';
 
 export default function PaymentMethodScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const orderId = useOrderDraftStore((s) => s.orderId);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType>('razorpay');
@@ -214,7 +216,7 @@ export default function PaymentMethodScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',

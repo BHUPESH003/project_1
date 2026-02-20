@@ -2,15 +2,18 @@
  * Booking Confirmed – Shows confirmation after Pick & Drop booking
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
 
 export default function BookingConfirmedScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   
   const pickupLocation = useCartStore((state) => state.pickupLocation);
@@ -51,7 +54,7 @@ export default function BookingConfirmedScreen() {
           <View style={styles.locationSection}>
             <View style={styles.locationTypeRow}>
               <View style={styles.locationTypeBadge}>
-                <MaterialIcons name="location-on" size={18} color="#4CAF50" />
+                <MaterialIcons name="location-on" size={18} color="colors.success" />
                 <Text style={styles.locationTypeText}>PICKUP</Text>
               </View>
             </View>
@@ -72,12 +75,12 @@ export default function BookingConfirmedScreen() {
           <View style={styles.locationSection}>
             <View style={styles.locationTypeRow}>
               <View style={[styles.locationTypeBadge, styles.dropBadge]}>
-                <MaterialIcons name="place" size={18} color="#FF6B6B" />
-                <Text style={[styles.locationTypeText, { color: '#FF6B6B' }]}>DROP</Text>
+                <MaterialIcons name="place" size={18} color="colors.error" />
+                <Text style={[styles.locationTypeText, { color: 'colors.error' }]}>DROP</Text>
               </View>
             </View>
             <View style={styles.locationBox}>
-              <MaterialIcons name="location-on" size={24} color="#FF6B6B" />
+              <MaterialIcons name="location-on" size={24} color="colors.error" />
               <Text style={styles.locationAddress} numberOfLines={2}>{dropLocation?.address || 'Drop Location'}</Text>
             </View>
           </View>
@@ -178,7 +181,7 @@ export default function BookingConfirmedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   scroll: {
     flex: 1,
   },
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,
@@ -251,18 +254,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'colors.successBg',
     borderRadius: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs - 2,
     alignSelf: 'flex-start',
   },
   dropBadge: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'colors.errorBg',
   },
   locationTypeText: {
     ...typography.overline,
-    color: '#4CAF50',
+    color: 'colors.success',
     fontWeight: 'bold',
     fontSize: 11,
   },
@@ -384,7 +387,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    backgroundColor: colors.primaryLight,
     borderRadius: 10,
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,

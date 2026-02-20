@@ -11,12 +11,12 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
@@ -27,6 +27,8 @@ import { Loader } from '@/components/Loader';
 
 
 export default function ShopDetailScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const { shopId } = useLocalSearchParams();
   const [search, setSearch] = useState('');
@@ -94,10 +96,10 @@ export default function ShopDetailScreen() {
   const products = useMemo(() => {
     const sellerId = Array.isArray(shopId) ? shopId[0] : shopId;
     // Return only API data, no fallback to demo products
-    if (!productsData || productsData.length === 0) {
+    if (!Array.isArray(productsData) || productsData.length === 0) {
       return [];
     }
-    return productsData.map(p => ({
+    return productsData.map((p) => ({
       ...p,
       sellerId: sellerId || p.sellerId,
     }));
@@ -480,7 +482,7 @@ export default function ShopDetailScreen() {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.shopTitle} numberOfLines={2}>{shopInfo.name}</Text>
             <View style={styles.shopMetaRow}>
-              <MaterialIcons name="star" size={14} color="#FFD700" />
+              <MaterialIcons name="star" size={14} color="colors.ratingStar" />
               <Text style={styles.shopRating}>{shopInfo.rating}</Text>
               <Text style={styles.shopReviews}>({shopInfo.reviews} reviews)</Text>
               <Text style={styles.shopDistance}>{shopInfo.distance}</Text>
@@ -766,7 +768,7 @@ export default function ShopDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

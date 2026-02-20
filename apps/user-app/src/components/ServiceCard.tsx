@@ -4,10 +4,10 @@
  */
 import React from 'react';
 import { View, Text, Image, StyleSheet, ImageSourcePropType } from 'react-native';
-import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
-import { elevation } from '../constants/elevation';
+import { getElevation } from '../constants/elevation';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 export type ServiceCardAvailability = 'available' | 'soon';
 
@@ -29,6 +29,9 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   availability,
   iconPlaceholder,
 }) => {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const elevation = getElevation(colors);
   const isAvailable = availability === 'available';
   const badgeLabel = isAvailable ? BADGE_AVAILABLE : BADGE_SOON;
 
@@ -58,96 +61,97 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 12,
-    backgroundColor: colors.cardDark,
-    padding: spacing.sm,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  cardDisabled: {
-    backgroundColor: colors.cardDisabled,
-    opacity: 0.72,
-  },
-  imageContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: spacing.xs,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceMuted,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  badge: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-    borderRadius: 9999,
-  },
-  badgeAvailable: {
-    backgroundColor: colors.successBg,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
-  },
-  badgeSoon: {
-    backgroundColor: colors.soonBadgeBg,
-  },
-  badgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-  },
-  badgeText: {
-    ...typography.overline,
-    textTransform: 'uppercase',
-  },
-  badgeTextAvailable: {
-    color: colors.successLight,
-  },
-  badgeTextSoon: {
-    color: colors.textMuted,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xxs,
-    paddingBottom: spacing.xxs,
-  },
-  title: {
-    ...typography.primary,
-    color: colors.textPrimary,
-  },
-  titleDisabled: {
-    color: colors.textTertiary,
-    fontWeight: '600',
-  },
-  subtitle: {
-    ...typography.meta,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  subtitleDisabled: {
-    color: colors.textDisabled,
-  },
-  iconSlot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    card: {
+      borderRadius: 12,
+      backgroundColor: colors.surfaceDark,
+      padding: spacing.sm,
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    cardDisabled: {
+      backgroundColor: colors.cardDisabled,
+      opacity: 0.72,
+    },
+    imageContainer: {
+      width: '100%',
+      aspectRatio: 16 / 9,
+      borderRadius: spacing.xs,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceMuted,
+    },
+    image: {
+      width: '100%',
+      height: '100%',
+    },
+    badge: {
+      position: 'absolute',
+      top: spacing.xs,
+      right: spacing.xs,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xxs,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: spacing.xxs,
+      borderRadius: 9999,
+    },
+    badgeAvailable: {
+      backgroundColor: colors.successBg,
+      borderWidth: 1,
+      borderColor: colors.successBorder,
+    },
+    badgeSoon: {
+      backgroundColor: colors.soonBadgeBg,
+    },
+    badgeDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.success,
+    },
+    badgeText: {
+      ...typography.overline,
+      textTransform: 'uppercase',
+    },
+    badgeTextAvailable: {
+      color: colors.successLight,
+    },
+    badgeTextSoon: {
+      color: colors.textMuted,
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.xxs,
+      paddingBottom: spacing.xxs,
+    },
+    title: {
+      ...typography.primary,
+      color: colors.textPrimary,
+    },
+    titleDisabled: {
+      color: colors.textTertiary,
+      fontWeight: '600',
+    },
+    subtitle: {
+      ...typography.meta,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    subtitleDisabled: {
+      color: colors.textDisabled,
+    },
+    iconSlot: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primaryTint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
 
 export default ServiceCard;

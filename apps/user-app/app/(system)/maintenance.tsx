@@ -7,9 +7,11 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 export default function MaintenanceScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
 
   return (
@@ -28,7 +30,7 @@ export default function MaintenanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
@@ -39,7 +41,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: colors.warningBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,

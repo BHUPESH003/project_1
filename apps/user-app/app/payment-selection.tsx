@@ -2,11 +2,11 @@
  * Payment Selection – Choose between UPI, Cards, QR code
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useCartStore } from '@/store/cart.store';
@@ -40,6 +40,8 @@ const PAYMENT_METHODS: Array<{ id: 'upi' | 'card' | 'qr'; name: string; descript
 ];
 
 export default function PaymentSelectionScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
@@ -176,7 +178,7 @@ export default function PaymentSelectionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -203,7 +205,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'colors.primaryLight',
   },
   amountLabel: {
     ...typography.meta,
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'colors.primaryLight',
   },
   infoText: {
     flex: 1,
@@ -256,7 +258,7 @@ const styles = StyleSheet.create({
   },
   methodCardSelected: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(13, 89, 242, 0.05)',
+    backgroundColor: 'colors.primaryLight',
   },
   methodContent: {
     flex: 1,

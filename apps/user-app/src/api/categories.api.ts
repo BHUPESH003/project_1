@@ -9,6 +9,7 @@ import { unwrap } from './unwrap';
 export interface Category {
   id: string;
   name: string;
+  iconUrl?: string | null;
   status: string;
 }
 

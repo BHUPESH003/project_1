@@ -40,6 +40,7 @@ export const authApi = {
    * Phone must be E.164 (e.g. +919876543210).
    */
   async requestOtp(phone: string, role: 'USER' | 'SELLER' | 'ADMIN' = 'USER'): Promise<RequestOtpResponse> {
+    console.log('Requesting OTP for phone:', phone, 'role:', role);
     const res = await client.post<ApiResponse<RequestOtpResponse>>(`${AUTH_BASE}/request-otp`, {
       phone,
       role,

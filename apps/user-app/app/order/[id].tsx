@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { ordersApi, type OrderStateHistoryItem } from '@/api/orders.api';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,6 +47,8 @@ function buildTimeline(history: OrderStateHistoryItem[] | undefined) {
 }
 
 export default function OrderTrackingScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
   const id = (params.id as string) ?? '';
@@ -144,7 +146,7 @@ export default function OrderTrackingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -175,12 +177,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
-    borderColor: 'rgba(13, 89, 242, 0.3)',
+    borderColor: 'colors.primaryGlow',
   },
   badgeText: { fontSize: 12, fontWeight: '500', color: colors.primary },
   badgeSuccess: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
   badgeSuccessText: { fontSize: 12, fontWeight: '500', color: colors.successLight },
-  badgeFailure: { backgroundColor: colors.errorBg ?? '#fde8e8', borderColor: colors.error },
+  badgeFailure: { backgroundColor: colors.errorBg, borderColor: colors.error },
   badgeFailureText: { color: colors.error },
   timeline: { paddingLeft: 4 },
   timelineRow: { flexDirection: 'row', marginBottom: 0 },

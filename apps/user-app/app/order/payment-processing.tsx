@@ -7,11 +7,13 @@ import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { useOrderDraftStore } from '@/store/order-draft.store';
 import { paymentsApi } from '@/api/payments.api';
 
 export default function PaymentProcessingScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const { paymentId, method } = useLocalSearchParams();
   const orderId = useOrderDraftStore((s) => s.orderId);
@@ -96,7 +98,7 @@ export default function PaymentProcessingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',

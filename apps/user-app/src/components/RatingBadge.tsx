@@ -5,9 +5,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 export interface RatingBadgeProps {
   rating: number;
@@ -15,6 +15,9 @@ export interface RatingBadgeProps {
 }
 
 export const RatingBadge: React.FC<RatingBadgeProps> = ({ rating, reviewCount }) => {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.container}>
       <MaterialIcons name="star" size={14} color={colors.ratingStar} style={styles.star} />
@@ -24,24 +27,25 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({ rating, reviewCount })
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-  },
-  star: {
-    marginTop: 1,
-  },
-  rating: {
-    ...typography.meta,
-    fontWeight: '500',
-    color: colors.textTertiary,
-  },
-  reviews: {
-    ...typography.meta,
-    color: colors.textMuted,
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xxs,
+    },
+    star: {
+      marginTop: 1,
+    },
+    rating: {
+      ...typography.meta,
+      fontWeight: '500',
+      color: colors.textTertiary,
+    },
+    reviews: {
+      ...typography.meta,
+      color: colors.textMuted,
+    },
+  });
 
 export default RatingBadge;

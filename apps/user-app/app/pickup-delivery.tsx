@@ -9,14 +9,13 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  SafeAreaView,
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useLocationStore } from '@/store/location.store';
@@ -103,6 +102,8 @@ const VEHICLE_TYPES_BY_PARTNER: Record<string, Array<{ id: string; name: string;
 };
 
 export default function PickupDeliveryScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -535,7 +536,7 @@ export default function PickupDeliveryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -577,7 +578,7 @@ const styles = StyleSheet.create({
   },
   locationTypeText: {
     ...typography.overline,
-    color: '#4CAF50',
+    color: 'colors.success',
     fontWeight: '800',
     fontSize: 12,
     letterSpacing: 0.5,

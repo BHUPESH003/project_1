@@ -16,6 +16,28 @@ export interface SellerListItem {
   distance_km?: number;
 }
 
+export interface SellerCategoryTag {
+  id: string;
+  name: string;
+}
+
+export interface NearbySeller {
+  id: string;
+  shopName: string;
+  address: string;
+  distance: number;
+  rating: number;
+  imageUrl?: string | null;
+  isOpen: boolean;
+  isFavorited: boolean;
+  categories: SellerCategoryTag[];
+}
+
+export interface NearbySellersPage {
+  sellers: NearbySeller[];
+  total: number;
+}
+
 /** Response from GET /sellers/:id - seller profile details */
 export interface SellerDetail {
   id: string;
@@ -51,11 +73,52 @@ export const sellersApi = {
     const { lat, lng, ...rest } = params;
     const maxDistanceKm = params.maxDistanceKm ?? (lat != null && lng != null ? DEFAULT_SERVICE_RADIUS_KM : undefined);
     const res = await client.get('/sellers', { params: { ...rest, lat, lng, maxDistanceKm } });
-    return unwrap(res) as SellerListItem[];
+    const payload = unwrap<any>(res);
+    if (Array.isArray(payload)) return payload as SellerListItem[];
+    if (Array.isArray(payload?.sellers)) return payload.sellers as SellerListItem[];
+    if (Array.isArray(payload?.data?.sellers)) return payload.data.sellers as SellerListItem[];
+    return [];
   },
 
   async getSeller(id: string): Promise<SellerDetail> {
     const res = await client.get(`/sellers/${id}`);
     return unwrap(res) as SellerDetail;
+  },
+
+  async getNearbySellers(params: {
+    lat: number;
+    lng: number;
+    categoryId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<NearbySellersPage> {
+    const res = await client.get('/sellers', {
+      params: {
+        lat: params.lat,
+        lng: params.lng,
+        categoryId: params.categoryId,
+        limit: params.limit ?? 20,
+        offset: params.offset ?? 0,
+      },
+    });
+    const payload = unwrap<any>(res);
+    const sellersRaw = Array.isArray(payload) ? payload : payload?.sellers ?? [];
+    const total = typeof payload?.total === 'number' ? payload.total : sellersRaw.length;
+
+    const sellers = sellersRaw.map((seller: any) => ({
+      id: String(seller.id ?? seller.seller_id ?? ''),
+      shopName: String(seller.shopName ?? seller.shop_name ?? 'Unknown Shop'),
+      address: String(seller.address ?? ''),
+      distance: Number(seller.distance ?? seller.distance_km ?? 0),
+      rating: Number(seller.rating ?? 0),
+      imageUrl: seller.imageUrl ?? seller.image_url ?? null,
+      isOpen: Boolean(seller.isOpen ?? (seller.status ? String(seller.status).toUpperCase() === 'ONLINE' : true)),
+      isFavorited: Boolean(seller.isFavorited ?? false),
+      categories: Array.isArray(seller.categories)
+        ? seller.categories.map((c: any) => ({ id: String(c.id ?? ''), name: String(c.name ?? '') }))
+        : [],
+    }));
+
+    return { sellers, total };
   },
 };

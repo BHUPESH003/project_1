@@ -9,13 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { usersApi } from '@/api/users.api';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function ProfileScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const logout = useAuthStore((s) => s.logout);
@@ -93,6 +95,11 @@ export default function ProfileScreen() {
             <Text style={styles.menuLabel} numberOfLines={1}>Notification Settings</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.textMuted} />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/(tabs)/profile/appearance')} activeOpacity={0.85}>
+            <MaterialIcons name="palette" size={22} color={colors.primary} />
+            <Text style={styles.menuLabel} numberOfLines={1}>Appearance</Text>
+            <MaterialIcons name="chevron-right" size={24} color={colors.textMuted} />
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.menuRow, styles.logoutRow]} onPress={handleLogout} activeOpacity={0.85}>
             <MaterialIcons name="logout" size={22} color={colors.error} />
             <Text style={styles.logoutText}>Log out</Text>
@@ -103,7 +110,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: { paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.borderDark },
   title: { ...typography.screenTitle, color: colors.textPrimary },
   loaderWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },

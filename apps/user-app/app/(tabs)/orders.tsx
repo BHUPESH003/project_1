@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { ordersApi, type OrderListItem } from '@/api/orders.api';
@@ -71,6 +71,8 @@ function formatDate(iso?: string): string {
 }
 
 export default function OrdersScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const orderId = useOrderDraftStore((s) => s.orderId);
@@ -231,7 +233,7 @@ export default function OrdersScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.driverName}>{(activeOrder as any)?.driver?.name || DEMO_ACTIVE_ORDER.driver.name}</Text>
                     <View style={styles.ratingRow}>
-                      <MaterialIcons name="star" size={14} color="#FFD700" />
+                      <MaterialIcons name="star" size={14} color="colors.ratingStar" />
                       <Text style={styles.driverRating}>{(activeOrder as any)?.driver?.rating || DEMO_ACTIVE_ORDER.driver.rating}</Text>
                     </View>
                   </View>
@@ -279,7 +281,7 @@ export default function OrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,

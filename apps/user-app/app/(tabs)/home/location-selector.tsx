@@ -7,12 +7,14 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { colors } from '@/constants/colors';
+import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useLocationStore } from '@/store/location.store';
 
 export default function LocationSelectorScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const fetchLocation = useLocationStore((s) => s.fetchLocation);
   const setLabel = useLocationStore((s) => s.setLabel);
@@ -73,7 +75,7 @@ export default function LocationSelectorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,8 +4,8 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { useThemedStyles } from '@/theme';
 
 /** Horizontal padding from screen edge (in addition to safe area). */
 const SCREEN_HORIZONTAL_PADDING = spacing.lg;
@@ -18,6 +18,7 @@ interface ScreenWrapperProps {
 
 export function ScreenWrapper({ children, style, noPadding }: ScreenWrapperProps) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const horizontalPadding = noPadding ? 0 : SCREEN_HORIZONTAL_PADDING;
   return (
     <View
@@ -37,11 +38,12 @@ export function ScreenWrapper({ children, style, noPadding }: ScreenWrapperProps
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundDark,
-  },
-});
+const createStyles = (colors: { background: string }) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+  });
 
 export default ScreenWrapper;

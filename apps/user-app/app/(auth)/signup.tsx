@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 export default function Signup() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -11,7 +14,7 @@ export default function Signup() {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.backButton}>
-        <Ionicons name="arrow-back" size={32} color="#A259FF" />
+        <Ionicons name="arrow-back" size={32} color="colors.primary" />
       </TouchableOpacity>
       <View style={styles.progressBarContainer}>
         <View style={styles.progressBarBg} />
@@ -20,22 +23,22 @@ export default function Signup() {
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>Join your local community and start booking services today.</Text>
       <View style={styles.inputContainer}>
-        <Ionicons name="person-outline" size={24} color="#A259FF" style={styles.inputIcon} />
+        <Ionicons name="person-outline" size={24} color="colors.primary" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
           placeholder="John Doe"
-          placeholderTextColor="#A1A1A1"
+          placeholderTextColor="colors.textMuted"
           value={fullName}
           onChangeText={setFullName}
         />
       </View>
       <Text style={styles.label}>Email Address <Text style={styles.optional}>(OPTIONAL)</Text></Text>
       <View style={styles.inputContainer}>
-        <Ionicons name="mail-outline" size={24} color="#A259FF" style={styles.inputIcon} />
+        <Ionicons name="mail-outline" size={24} color="colors.primary" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
           placeholder="example@mail.com"
-          placeholderTextColor="#A1A1A1"
+          placeholderTextColor="colors.textMuted"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -48,7 +51,7 @@ export default function Signup() {
         <TextInput
           style={styles.input}
           placeholder="(555) 000-0000"
-          placeholderTextColor="#A1A1A1"
+          placeholderTextColor="colors.textMuted"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
@@ -72,7 +75,7 @@ export default function Signup() {
           <Text style={styles.socialText}>Google</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.socialButton}>
-          <Ionicons name="logo-apple" size={24} color="#fff" style={styles.socialIcon} />
+          <Ionicons name="logo-apple" size={24} color="colors.textLight" style={styles.socialIcon} />
           <Text style={styles.socialText}>Apple</Text>
         </TouchableOpacity>
       </View>
@@ -83,10 +86,10 @@ export default function Signup() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#18102B',
+    backgroundColor: 'colors.backgroundDark',
     padding: 24,
     justifyContent: 'center',
   },
@@ -105,7 +108,7 @@ const styles = StyleSheet.create({
   progressBarBg: {
     flex: 1,
     height: 6,
-    backgroundColor: '#2D2343',
+    backgroundColor: 'colors.surfaceMuted',
     borderRadius: 3,
   },
   progressBarFg: {
@@ -113,34 +116,34 @@ const styles = StyleSheet.create({
     left: 0,
     width: '40%',
     height: 6,
-    backgroundColor: '#A259FF',
+    backgroundColor: 'colors.primary',
     borderRadius: 3,
   },
   title: {
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 36,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   subtitle: {
-    color: '#A1A1A1',
+    color: 'colors.textMuted',
     fontSize: 18,
     marginBottom: 32,
   },
   label: {
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 16,
     marginTop: 16,
     marginBottom: 4,
   },
   optional: {
-    color: '#A1A1A1',
+    color: 'colors.textMuted',
     fontSize: 14,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#231A3A',
+    backgroundColor: 'colors.surfaceDark',
     borderRadius: 16,
     paddingHorizontal: 16,
     marginBottom: 12,
@@ -156,13 +159,13 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   countryCode: {
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 16,
     marginRight: 8,
   },
   input: {
     flex: 1,
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 16,
   },
   termsRow: {
@@ -175,7 +178,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#A259FF',
+    borderColor: 'colors.primary',
     marginRight: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -183,33 +186,33 @@ const styles = StyleSheet.create({
   checked: {
     width: 12,
     height: 12,
-    backgroundColor: '#A259FF',
+    backgroundColor: 'colors.primary',
     borderRadius: 2,
   },
   termsText: {
-    color: '#A1A1A1',
+    color: 'colors.textMuted',
     fontSize: 14,
     flex: 1,
     flexWrap: 'wrap',
   },
   link: {
-    color: '#A259FF',
+    color: 'colors.primary',
     textDecorationLine: 'underline',
   },
   signupButton: {
-    backgroundColor: '#A259FF',
+    backgroundColor: 'colors.primary',
     borderRadius: 32,
     paddingVertical: 18,
     alignItems: 'center',
     marginBottom: 16,
   },
   signupButtonText: {
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 20,
     fontWeight: 'bold',
   },
   orText: {
-    color: '#A1A1A1',
+    color: 'colors.textMuted',
     textAlign: 'center',
     marginVertical: 12,
     letterSpacing: 2,
@@ -222,7 +225,7 @@ const styles = StyleSheet.create({
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#231A3A',
+    backgroundColor: 'colors.surfaceDark',
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 24,
@@ -235,17 +238,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   socialText: {
-    color: '#fff',
+    color: 'colors.textLight',
     fontSize: 16,
   },
   loginText: {
-    color: '#A1A1A1',
+    color: 'colors.textMuted',
     textAlign: 'center',
     marginTop: 16,
     fontSize: 16,
   },
   loginLink: {
-    color: '#A259FF',
+    color: 'colors.primary',
     fontWeight: 'bold',
   },
 });

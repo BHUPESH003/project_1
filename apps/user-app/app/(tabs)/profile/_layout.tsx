@@ -9,6 +9,7 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="addresses" />
       <Stack.Screen name="add-address" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="appearance" />
     </Stack>
   );
 }

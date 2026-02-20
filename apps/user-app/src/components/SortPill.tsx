@@ -3,9 +3,9 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
+import { useThemedStyles } from '@/theme';
 
 export type SortPillLabel = 'Recommended' | 'Lowest Price' | 'Fastest';
 
@@ -21,6 +21,7 @@ const LABELS: Record<SortPillLabel, string> = {
 };
 
 export const SortPill: React.FC<SortPillProps> = ({ label, active }) => {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}>
       <Text style={[styles.text, active ? styles.textActive : styles.textInactive]}>
@@ -30,31 +31,32 @@ export const SortPill: React.FC<SortPillProps> = ({ label, active }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  pill: {
-    height: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: 9999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pillActive: {
-    backgroundColor: colors.primary,
-  },
-  pillInactive: {
-    backgroundColor: colors.surfaceDark,
-    borderWidth: 1,
-    borderColor: colors.borderDark,
-  },
-  text: {
-    ...typography.secondary,
-  },
-  textActive: {
-    color: colors.textPrimary,
-  },
-  textInactive: {
-    color: colors.textTertiary,
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    pill: {
+      height: 36,
+      paddingHorizontal: spacing.md,
+      borderRadius: 9999,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    pillActive: {
+      backgroundColor: colors.primary,
+    },
+    pillInactive: {
+      backgroundColor: colors.surfaceDark,
+      borderWidth: 1,
+      borderColor: colors.borderDark,
+    },
+    text: {
+      ...typography.secondary,
+    },
+    textActive: {
+      color: colors.textPrimary,
+    },
+    textInactive: {
+      color: colors.textTertiary,
+    },
+  });
 
 export default SortPill;
