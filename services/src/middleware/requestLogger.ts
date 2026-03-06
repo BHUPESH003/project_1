@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
 
 /**
  * Request Logger Middleware
- * Logs incoming requests with timestamp
+ * Logs ALL incoming requests with timing
  */
 export const requestLogger = (
   req: Request,
@@ -11,16 +12,12 @@ export const requestLogger = (
 ): void => {
   const start = Date.now();
   const method = req.method;
-  const url = req.url;
+  const path = req.path;
 
   res.on('finish', () => {
     const duration = Date.now() - start;
     const statusCode = res.statusCode;
-    const timestamp = new Date().toISOString();
-
-    console.log(
-      `[${timestamp}] ${method} ${url} - Status: ${statusCode} - Duration: ${duration}ms`
-    );
+    logger.request(method, path, statusCode, duration);
   });
 
   next();

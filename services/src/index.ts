@@ -12,6 +12,7 @@ import { healthRoutes } from './routes/health';
 import { apiRoutes } from './routes/api';
 import { swaggerOptions, swaggerUiOptions } from './config/swagger';
 import { connectDB, disconnectDB } from './db';
+import { logger } from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -81,10 +82,6 @@ app.use((req: Request, res: Response) => {
 
 app.use(errorHandler);
 
-// ============================================
-// SERVER STARTUP
-// ============================================
-
 /**
  * Start server and connect to MongoDB
  */
@@ -94,35 +91,31 @@ async function startServer() {
     await connectDB();
 
     const server = app.listen(PORT, () => {
-      console.log(`
-    ╔════════════════════════════════════════╗
-    ║  Express Server Started Successfully!  ║
-    ║  ✓ Server running on port ${PORT}         ║
-    ║  ✓ Environment: ${process.env.NODE_ENV}            ║
-    ║  ✓ CORS enabled: ${process.env.CORS_ORIGIN}                     ║
-    ║  ✓ Database connected                  ║
-    ╚════════════════════════════════════════╝
-  `);
+      logger.info('Express server started', {
+        port: PORT,
+        environment: process.env.NODE_ENV,
+        corsEnabled: process.env.CORS_ORIGIN,
+      });
     });
 
     // Handle graceful shutdown
     const gracefulShutdown = async (signal: string) => {
-      console.log(`\n${signal} signal received: closing application`);
+      logger.info(`Shutdown signal received: ${signal}`);
       
       server.close(async () => {
         try {
           await disconnectDB();
-          console.log('✅ Application shutdown successfully');
+          logger.info('Application shutdown successfully');
           process.exit(0);
         } catch (error) {
-          console.error('❌ Error during shutdown:', error);
+          logger.error('Error during shutdown', error as Error);
           process.exit(1);
         }
       });
 
       // Force shutdown after 10 seconds
       setTimeout(() => {
-        console.error('❌ Forced shutdown after timeout');
+        logger.error('Forced shutdown after timeout');
         process.exit(1);
       }, 10000);
     };
@@ -130,7 +123,7 @@ async function startServer() {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error('Failed to start server', error as Error);
     process.exit(1);
   }
 }

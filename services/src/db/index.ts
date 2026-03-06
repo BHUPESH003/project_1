@@ -1,5 +1,6 @@
 import mongoose, { Connection } from 'mongoose';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
 dotenv.config();
 
@@ -15,17 +16,14 @@ let cachedConnection: Connection | null = null;
 export const connectDB = async (): Promise<Connection> => {
   // Return cached connection if available
   if (cachedConnection) {
-    console.log('📦 Using cached MongoDB connection');
+    logger.debug('Using cached MongoDB connection');
     return cachedConnection;
   }
 
   try {
-    console.log('🔄 Connecting to MongoDB...');
-    console.log(`📍 Database: ${NODE_ENV}`);
-    console.log(`🌐 URI: ${MONGODB_URI.replace(/mongodb\+srv:\/\/.*:.*@/, 'mongodb+srv://***:***@')}`);
+    logger.info('Connecting to MongoDB...', { environment: NODE_ENV });
 
     const connection = await mongoose.connect(MONGODB_URI, {
-      dbName: 'express-api',
       retryWrites: true,
       w: 'majority',
       serverSelectionTimeoutMS: 5000,
@@ -34,27 +32,28 @@ export const connectDB = async (): Promise<Connection> => {
 
     cachedConnection = connection.connection;
 
-    console.log('✅ MongoDB connected successfully');
-    console.log(`📊 Host: ${connection.connection.host}`);
-    console.log(`📦 Database: ${connection.connection.db?.databaseName}`);
+    logger.info('MongoDB connected successfully', {
+      host: connection.connection.host,
+      database: connection.connection.db?.databaseName,
+    });
 
     // Handle connection events
     mongoose.connection.on('disconnected', () => {
-      console.log('⚠️  MongoDB disconnected');
+      logger.warn('MongoDB disconnected');
       cachedConnection = null;
     });
 
     mongoose.connection.on('reconnect', () => {
-      console.log('✅ MongoDB reconnected');
+      logger.info('MongoDB reconnected');
     });
 
     mongoose.connection.on('error', (error) => {
-      console.error('❌ MongoDB connection error:', error);
+      logger.error('MongoDB connection error', error);
     });
 
     return connection.connection;
   } catch (error) {
-    console.error('❌ Failed to connect to MongoDB:', error);
+    logger.error('Failed to connect to MongoDB', error as Error);
     cachedConnection = null;
     throw error;
   }
@@ -68,10 +67,10 @@ export const disconnectDB = async (): Promise<void> => {
     if (mongoose.connection.readyState === 1) {
       await mongoose.disconnect();
       cachedConnection = null;
-      console.log('✅ MongoDB disconnected');
+      logger.info('MongoDB disconnected');
     }
   } catch (error) {
-    console.error('❌ Error disconnecting from MongoDB:', error);
+    logger.error('Error disconnecting from MongoDB', error as Error);
     throw error;
   }
 };

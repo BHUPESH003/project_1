@@ -1,28 +1,9 @@
-import { Request, Response } from 'express';
-import { apiResponse, isValidEmail, generateId } from '../utils/helpers';
-import { AppError } from '../middleware/errorHandler';
-
 /**
- * Example User Controller
- * This is a template for creating structured controllers
+ * User Controller - Currently unused
+ * Available for future use
  */
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: Date;
-}
-
-// In-memory user storage (replace with database in production)
-const users: User[] = [
-  {
-    id: generateId('user_'),
-    name: 'John Doe',
-    email: 'john@example.com',
-    createdAt: new Date(),
-  },
-];
+// Placeholder file - all endpoints have been removed
 
 /**
  * Get All Users

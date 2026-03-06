@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
 
 /**
  * Custom Error Class
@@ -15,7 +16,7 @@ export class AppError extends Error {
 
 /**
  * Error Handler Middleware
- * Catches and formats all errors
+ * Catches and formats all errors with context
  */
 export const errorHandler = (
   err: AppError | Error,
@@ -23,14 +24,15 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  const statusCode =
-    err instanceof AppError ? err.statusCode : 500;
-  const message =
-    err instanceof AppError
-      ? err.message
-      : 'Internal Server Error';
+  const statusCode = err instanceof AppError ? err.statusCode : 500;
+  const message = err instanceof AppError ? err.message : 'Internal Server Error';
 
-  console.error(`[ERROR] ${statusCode} - ${message}`, err);
+  // Log error with context
+  logger.error(`${req.method} ${req.path}`, err, {
+    statusCode,
+    endpoint: `${req.method} ${req.path}`,
+    body: req.body,
+  });
 
   res.status(statusCode).json({
     success: false,
