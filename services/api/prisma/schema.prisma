@@ -211,6 +211,7 @@ model Seller {
   // Availability (CRITICAL for order routing)
   status           SellerStatus @default(OFFLINE) // Default OFFLINE after login
   statusUpdatedAt  DateTime?                      // Set ONLY when seller changes availability status (nullable initially)
+  isTrending       Boolean      @default(false)   // Admin flag for trending/advertised shops
   
   // Pricing (category-specific, MVP: printing only)
   pricePerPage     Decimal?     @db.Decimal(10, 2) // Price per page for printing

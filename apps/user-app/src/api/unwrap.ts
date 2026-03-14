@@ -10,6 +10,7 @@ export interface ApiResponse<T> {
 }
 
 export function unwrap<T>(response: { data: ApiResponse<T> | T }): T {
+  if (!response) return response as T;
   const body = response.data;
   if (body && typeof body === 'object' && 'data' in body && 'code' in body) {
     return (body as ApiResponse<T>).data;

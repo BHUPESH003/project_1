@@ -174,6 +174,11 @@ export class DeliveryService {
       estimatedDurationMinutes: number;
       quoteId?: string;
       expiresAt?: Date;
+      vehicleOptions?: Array<{
+        vehicleType: string;
+        estimatedFee: number;
+        estimatedDurationMinutes: number;
+      }>;
     }[]
   > {
     const registeredProviders = this.adapterRegistry.getRegisteredProviders();
@@ -205,6 +210,7 @@ export class DeliveryService {
           estimatedDurationMinutes: quote.estimatedDurationMinutes,
           quoteId: quote.quoteId,
           expiresAt: quote.expiresAt,
+          vehicleOptions: quote.vehicleOptions,
         };
       } catch (error) {
         const errorMsg =

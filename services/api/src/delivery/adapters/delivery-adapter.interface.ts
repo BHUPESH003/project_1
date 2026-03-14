@@ -45,6 +45,11 @@ export interface DeliveryQuote {
   currency: string;
   quoteId?: string; // Provider-specific quote ID
   expiresAt?: Date; // Quote expiration time
+  vehicleOptions?: Array<{
+    vehicleType: string;
+    estimatedFee: number;
+    estimatedDurationMinutes: number;
+  }>;
 }
 
 /**

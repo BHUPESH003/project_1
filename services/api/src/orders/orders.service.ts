@@ -229,6 +229,23 @@ export class OrdersService {
       userId,
     );
 
+    // Auto-select seller if inferred or provided (skip explicit selectSeller step)
+    if (sellerId) {
+      try {
+        await this.selectSeller(order.id, userId, { sellerId });
+        // Retrieve updated order so we return the latest status
+        const updatedOrder = await this.orderRepository.findById(order.id, false);
+        if (updatedOrder) {
+          order.status = updatedOrder.status;
+          order.itemCost = updatedOrder.itemCost;
+          order.sellerId = updatedOrder.sellerId;
+        }
+      } catch (err: any) {
+        this.logger.error(`Auto-select seller failed for order ${order.id}: ${err.message}`);
+        throw err;
+      }
+    }
+
     // Optional: Process order via handler (if handler implements it)
     if (handler.processOrder) {
       await handler.processOrder(order.id, validation.normalizedPayload);
@@ -491,13 +508,36 @@ export class OrdersService {
       throw new BadRequestException('Seller is not available (must be ONLINE)');
     }
 
-    // Verify seller supports this category
+    // Verify seller supports this category (auto-link if missing)
     const sellerCategories =
       seller.categories?.map((sc) => sc.category.id) || [];
     if (!sellerCategories.includes(order.categoryId)) {
-      throw new BadRequestException(
-        `Seller does not support category ${order.categoryId}`,
-      );
+      // Auto-link the category to the seller if not already linked
+      try {
+        await this.prismaService.prisma.sellerCategory.upsert({
+          where: {
+            sellerId_categoryId: {
+              sellerId: sellerDto.sellerId,
+              categoryId: order.categoryId,
+            },
+          },
+          update: {},
+          create: {
+            sellerId: sellerDto.sellerId,
+            categoryId: order.categoryId,
+          },
+        });
+        this.logger.log(
+          `Auto-linked category ${order.categoryId} to seller ${sellerDto.sellerId}`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to auto-link category ${order.categoryId} to seller: ${err}`,
+        );
+        throw new BadRequestException(
+          `Seller does not support category ${order.categoryId}. Please select a different seller.`,
+        );
+      }
     }
 
     // Get category handler to calculate price
@@ -663,6 +703,7 @@ export class OrdersService {
         quoteId: quote.quoteId,
         expiresAt: quote.expiresAt,
         rating: this.getProviderRating(quote.provider),
+        vehicleOptions: quote.vehicleOptions,
       }));
 
       // Sort by fee (cheapest first)

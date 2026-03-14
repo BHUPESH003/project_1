@@ -63,6 +63,11 @@ export interface DeliveryQuoteOption {
   rating?: number; // Provider rating
   quoteId?: string; // Provider quote ID
   expiresAt?: string; // Expiration timestamp
+  vehicleOptions?: Array<{
+    vehicleType: string;
+    estimatedFee: number;
+    estimatedDurationMinutes: number;
+  }>;
 }
 
 /** Location object included in delivery Quote response */

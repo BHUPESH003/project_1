@@ -30,7 +30,11 @@ export class SellersService {
    * Find available sellers (ONLINE only) with pagination.
    * Optionally pass userId to include isFavorited per seller.
    */
-  async findAvailableSellers(query: FindAvailableSellersDto, userId?: string) {
+  async findAvailableSellers(
+    query: FindAvailableSellersDto,
+    userId?: string,
+    options?: { isTrending?: boolean; orderBy?: 'distance' | 'newest' }
+  ) {
     const hasLocation = query.lat != null && query.lng != null;
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
@@ -42,6 +46,8 @@ export class SellersService {
       maxDistanceKm: query.maxDistanceKm,
       limit,
       offset,
+      isTrending: options?.isTrending,
+      orderBy: options?.orderBy,
     });
 
     const favoriteIds =
@@ -76,7 +82,11 @@ export class SellersService {
         is_favorited: userId != null ? favoriteIds.has(seller.id) : undefined,
       };
       if ('distanceKm' in seller) {
-        result.distance_km = Math.round((seller as any).distanceKm * 100) / 100;
+        const dist = (seller as any).distanceKm;
+        result.distance_km = Math.round(dist * 100) / 100;
+        result.estimated_delivery_time_mins = seller.prepTimeMinutes + Math.ceil(dist * 5);
+      } else {
+        result.estimated_delivery_time_mins = seller.prepTimeMinutes;
       }
       return result;
     });
@@ -85,6 +95,14 @@ export class SellersService {
       sellers: list,
       pagination: { total, limit, offset },
     };
+  }
+
+  async findNewlyAddedSellers(query: FindAvailableSellersDto, userId?: string) {
+    return this.findAvailableSellers(query, userId, { orderBy: 'newest' });
+  }
+
+  async findTrendingSellers(query: FindAvailableSellersDto, userId?: string) {
+    return this.findAvailableSellers(query, userId, { isTrending: true });
   }
 
   /**

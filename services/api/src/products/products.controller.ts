@@ -6,21 +6,42 @@ import {
   Param,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
-import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
+import { JwtAuthGuard, RolesGuard, Roles, OptionalJwtAuthGuard } from '@/common/guards';
 import { UserRole } from '@repo/types';
 
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
+
+  // Deals Hub
+  @Get('deals')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get best deals from nearby sellers' })
+  @ApiQuery({ name: 'lat', required: false, type: Number })
+  @ApiQuery({ name: 'lng', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getDeals(
+    @Query('lat') lat?: number,
+    @Query('lng') lng?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productsService.getDeals(
+      lat ? Number(lat) : undefined,
+      lng ? Number(lng) : undefined,
+      limit ? Number(limit) : undefined
+    );
+  }
 
   // Wishlist
   @Get('wishlist')

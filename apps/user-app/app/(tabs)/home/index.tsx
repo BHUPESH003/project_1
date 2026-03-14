@@ -9,6 +9,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ImageBackground,
   Linking,
   useWindowDimensions,
   RefreshControl,
@@ -16,9 +17,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import { Loader } from '@/components/Loader';
 import { Skeleton } from '@/components/Skeleton';
 import { useThemeColors, useThemedStyles } from '@/theme';
@@ -36,21 +36,27 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/store/auth.store';
 import { useLocationStore } from '@/store/location.store';
 
-const FOOTER_HEIGHT = 100;
 const FALLBACK_LOCATION_LABEL = 'Tap to set location';
 const CATEGORY_ALL = 'all';
-const BANNER_AUTO_ADVANCE_MS = 3500;
 const SELLERS_PAGE_LIMIT = 20;
 
 const SERVICE_ICONS: Record<string, any> = {
   printing: 'print',
-  hardware: 'construction',
-  stationary: 'edit-note',
-  pickup: 'local-shipping',
-  grocery: 'shopping-bag',
-  pharmacy: 'local-pharmacy',
-  default: 'construction',
+  hardware: 'build',
+  stationary: 'create',
+  pickup: 'bus',
+  grocery: 'basket',
+  pharmacy: 'medkit',
+  default: 'build',
 };
+
+// Filter pills for the top row
+const FILTER_PILLS = [
+  { id: 'near_fast', label: 'Near & Fast' },
+  { id: 'new_added', label: 'New Added' },
+  { id: 'offers', label: 'Offers', isPrimary: true },
+  { id: 'under_x', label: 'Items Under ₹99' },
+];
 
 export default function HomeScreen() {
   const colors = useThemeColors();
@@ -65,14 +71,12 @@ export default function HomeScreen() {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
-  const bannerScrollRef = useRef<ScrollView | null>(null);
-  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORY_ALL);
   const [favoriteOverrides, setFavoriteOverrides] = useState<Record<string, boolean>>({});
-  const bannerCardWidth = useMemo(() => Math.max(280, screenWidth - spacing.md * 2), [screenWidth]);
 
   // Fetch categories from API
-  const { data: categoriesData, isLoading: categoriesLoading, isError: categoriesError } = useQuery({
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: () => categoriesApi.getCategories(),
   });
@@ -116,7 +120,7 @@ export default function HomeScreen() {
     queryFn: () => ordersApi.getMyOrders?.(),
   });
 
-  // Resolve current area name from backend location endpoint.
+  // Resolve current area name
   const { data: locationAddressData, isLoading: locationAddressLoading } = useQuery({
     queryKey: ['location-address', locationCoords?.latitude, locationCoords?.longitude],
     queryFn: async () => {
@@ -152,7 +156,6 @@ export default function HomeScreen() {
       ? `${locationCoords.latitude.toFixed(2)}, ${locationCoords.longitude.toFixed(2)}`
       : FALLBACK_LOCATION_LABEL);
 
-  // Normalize categories - use API data only
   const categories = useMemo(() => {
     if (categoriesData && Array.isArray(categoriesData)) {
       return categoriesData;
@@ -160,7 +163,6 @@ export default function HomeScreen() {
     return [];
   }, [categoriesData]);
 
-  // Use sellers data from API only
   const shops = useMemo(() => {
     const sellers = sellersPages?.pages.flatMap((p) => p.sellers) ?? [];
     return sellers.map((seller) => ({
@@ -168,6 +170,10 @@ export default function HomeScreen() {
       isFavorited: favoriteOverrides[seller.id] ?? seller.isFavorited,
     }));
   }, [sellersPages, favoriteOverrides]);
+
+  const dealHubItems = useMemo(() => shops.slice(0, 3), [shops]);
+  const spotlightShop = useMemo(() => shops[0], [shops]);
+  const trendingShops = useMemo(() => shops.slice(0, 5), [shops]);
 
   const favoriteMutation = useMutation({
     mutationFn: async ({ sellerId, currentlyFavorited }: { sellerId: string; currentlyFavorited: boolean }) => {
@@ -192,27 +198,6 @@ export default function HomeScreen() {
     },
   });
 
-  // Get last completed order from API
-  const lastOrder = useMemo(() => {
-    if (ordersData && Array.isArray(ordersData) && ordersData.length > 0) {
-      return ordersData[0];
-    }
-    return null;
-  }, [ordersData]);
-
-  useEffect(() => {
-    if (bannersData.length <= 1) return;
-    const interval = setInterval(() => {
-      setActiveBannerIndex((prev) => {
-        const next = (prev + 1) % bannersData.length;
-        bannerScrollRef.current?.scrollTo({ x: next * bannerCardWidth, animated: true });
-        return next;
-      });
-    }, BANNER_AUTO_ADVANCE_MS);
-    return () => clearInterval(interval);
-  }, [bannersData.length, bannerCardWidth]);
-
-  // Auto-fetch location on component mount
   useEffect(() => {
     if (!locationCoords && !locationLoading) {
       fetchLocation();
@@ -226,381 +211,282 @@ export default function HomeScreen() {
       params: { category: selectedCategoryId },
     });
   const onNotificationPress = () => router.push('/(tabs)/profile/notifications');
-  const onBannerPress = async (banner: PromoBanner) => {
-    if (!banner.ctaLink) return;
-    if (banner.ctaLink.startsWith('/')) {
-      router.push(banner.ctaLink as any);
-      return;
-    }
-    await Linking.openURL(banner.ctaLink);
-  };
-  const onCreateOrder = () => router.push('/pickup-delivery');
   const onShopPress = (id: string) => {
     router.push({
       pathname: '/shop-detail',
       params: { shopId: id },
     });
   };
-  const onToggleFavorite = (shop: NearbySeller) => {
-    if (!token || !user) {
-      showToast({ type: 'info', message: 'Please login to manage favorites' });
-      router.replace('/(auth)/login');
-      return;
-    }
-    if (favoriteMutation.isPending) return;
-    favoriteMutation.mutate({ sellerId: shop.id, currentlyFavorited: shop.isFavorited });
-  };
-
-  const footerPaddingBottom = spacing.xl + insets.bottom;
 
   return (
     <ScreenWrapper>
       <View style={[styles.headerSurface, { paddingTop: spacing.md + insets.top * 0.2 }]}>
         <View style={styles.headerTopRow}>
-          <View style={styles.locationRow}>
+          <TouchableOpacity
+             style={styles.locationRow}
+             onPress={onLocationPress}
+             activeOpacity={0.85}
+             disabled={locationLoading}
+          >
             <View style={styles.locationIconBubble}>
-              <MaterialIcons name="location-on" size={20} color={colors.textLight} />
+              <Ionicons name="location" size={24} color={colors.primary} />
             </View>
-            <TouchableOpacity
-              style={styles.locationTextWrap}
-              onPress={onLocationPress}
-              activeOpacity={0.85}
-              disabled={locationLoading}
-            >
-              <Text style={styles.headerLabel}>CURRENT LOCATION</Text>
+            <View style={styles.locationTextWrap}>
+              <Text style={styles.headerLabel}>DELIVER TO</Text>
               <View style={styles.locationValueRow}>
                 <Text style={styles.locationText} numberOfLines={1}>
                   {locationLoading || locationAddressLoading ? 'Getting location...' : locationDisplay}
                 </Text>
-                <MaterialIcons name="expand-more" size={18} color={colors.textLight} />
               </View>
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
 
           <TouchableOpacity activeOpacity={0.8} style={styles.notificationButton} onPress={onNotificationPress}>
-            <MaterialIcons name="notifications-none" size={22} color={colors.textLight} />
+            <Ionicons name="notifications" size={24} color={colors.textPrimary} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.searchShell} onPress={onSearchPress} activeOpacity={0.9}>
-          <MaterialIcons name="search" size={22} color={colors.textMuted} />
-          <Text style={styles.searchPlaceholder}>Search shops, items or services...</Text>
-          <View style={styles.searchActionIcon}>
-            <MaterialIcons name="tune" size={20} color={colors.textSecondary} />
-          </View>
+          <Ionicons name="search" size={20} color={colors.textMuted} />
+          <Text style={styles.searchPlaceholder}>Search for snacks, sweets or shops</Text>
         </TouchableOpacity>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
+           {FILTER_PILLS.map((pill) => (
+             <TouchableOpacity
+               key={pill.id}
+               style={[styles.pill, pill.isPrimary && styles.pillPrimary]}
+             >
+                <Text style={[styles.pillText, pill.isPrimary && styles.pillTextPrimary]}>
+                  {pill.label}
+                </Text>
+             </TouchableOpacity>
+           ))}
+        </ScrollView>
       </View>
 
-      {categoriesLoading ? (
-        <View style={styles.loaderWrap}>
-          <Loader />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: FOOTER_HEIGHT + footerPaddingBottom }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={sellersRefreshing}
-              onRefresh={() => refetchSellers()}
-              tintColor={colors.primary}
-            />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={sellersRefreshing}
+            onRefresh={() => refetchSellers()}
+            tintColor={colors.primary}
+          />
+        }
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          const nearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 240;
+          if (nearBottom && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
           }
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-            const nearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 240;
-            if (nearBottom && hasNextPage && !isFetchingNextPage) {
-              fetchNextPage();
-            }
-          }}
-          scrollEventThrottle={120}
-        >
-          {bannersLoading ? (
-            <View style={styles.promoSkeletonWrap}>
-              <Skeleton height={260} borderRadius={radius['3xl']} />
-            </View>
-          ) : bannersData.length > 0 ? (
-            <View style={styles.promoCarouselWrap}>
-              <ScrollView
-                ref={bannerScrollRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(event) => {
-                  const offsetX = event.nativeEvent.contentOffset.x;
-                  const nextIndex = Math.round(offsetX / bannerCardWidth);
-                  setActiveBannerIndex(nextIndex);
-                }}
-              >
-                {bannersData.map((banner) => (
-                  <TouchableOpacity
-                    key={banner.id}
-                    activeOpacity={0.92}
-                    onPress={() => onBannerPress(banner)}
-                    style={[styles.promoCard, { width: bannerCardWidth }]}
-                  >
-                    <Image source={{ uri: banner.imageUrl }} style={styles.promoImage} />
-                    <View style={styles.promoOverlay} />
-                    <View style={styles.promoContent}>
-                      {banner.badge ? (
-                        <View style={styles.promoBadge}>
-                          <Text style={styles.promoBadgeText}>{banner.badge}</Text>
-                        </View>
-                      ) : null}
-                      <Text style={styles.promoTitle}>{banner.title}</Text>
-                      {banner.subtitle ? (
-                        <Text style={styles.promoSubtitle}>{banner.subtitle}</Text>
-                      ) : null}
-                      {banner.ctaText ? (
-                        <View style={styles.promoCtaPill}>
-                          <Text style={styles.promoCtaText}>{banner.ctaText}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <View style={styles.promoDots}>
-                {bannersData.map((banner, index) => (
-                  <View
-                    key={`${banner.id}-dot`}
-                    style={[styles.promoDot, index === activeBannerIndex && styles.promoDotActive]}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
+        }}
+        scrollEventThrottle={120}
+      >
 
-          {/* Re-book Last Service */}
-          {/* Re-book Last Service - Only show if there are past orders */}
-          {lastOrder && (
-            <TouchableOpacity style={styles.lastServiceCard} onPress={() => router.push('/(tabs)/orders')}>
-              <View style={styles.lastServiceContent}>
-                <View style={styles.lastServiceIconWrap}>
-                  <MaterialIcons name="history" size={24} color={colors.primary} />
-                </View>
-                <View style={styles.lastServiceTextWrap}>
-                  <Text style={styles.lastServiceLabel}>RE-BOOK LAST SERVICE</Text>
-                  <Text style={styles.lastServiceTitle} numberOfLines={1}>
-                    {(lastOrder as any).order_id || 'Previous Order'}
-                  </Text>
-                  <Text style={styles.lastServiceShop} numberOfLines={1}>
-                    {lastOrder.status || 'Completed'}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-
-          {/* Shop by Category */}
-          {categoriesLoading ? (
-            <View style={styles.sectionLoadingWrap}>
-              <Loader />
-              <Text style={styles.loadingText}>Loading categories...</Text>
+        {/* Deal Hub Container */}
+        <View style={styles.dealHubHeader}>
+            <View style={styles.dealHubTitleWrap}>
+                <Ionicons name="flash" size={20} color="#f59e0b" />
+                <Text style={styles.sectionTitle}>Deal Hub</Text>
             </View>
-          ) : categories.length > 0 ? (
-            <>
-              <View style={styles.categoryHeaderRow}>
-                <Text style={styles.sectionTitle}>Shop by Category</Text>
-                <TouchableOpacity onPress={() => setSelectedCategoryId(CATEGORY_ALL)}>
-                  <Text style={styles.viewAllText}>See All</Text>
+            <View style={styles.timerBadge}>
+               <Ionicons name="time-outline" size={14} color="#b45309" />
+               <Text style={styles.timerBadgeText}>ENDS IN 02:45:10</Text>
+            </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollPadding}>
+             {dealHubItems.map((shop, i) => (
+                <TouchableOpacity key={shop.id} style={styles.dealCard} onPress={() => onShopPress(shop.id)}>
+                   <View style={styles.dealImageContainer}>
+                      <Image source={{ uri: shop.imageUrl ?? 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80' }} style={styles.dealImage} />
+                      <View style={styles.dealTag}>
+                         <Text style={styles.dealTagText}>{i === 0 ? '₹50 OFF' : 'FREE ITEM'}</Text>
+                      </View>
+                   </View>
+                   <View style={styles.dealInfo}>
+                      <Text style={styles.dealShopTitle} numberOfLines={1}>{shop.shopName}</Text>
+                      <Text style={styles.dealItemTitle} numberOfLines={1}>Combo Box Offer</Text>
+                      <View style={styles.dealPriceWrap}>
+                         <Text style={styles.dealPriceNow}>₹{i === 0 ? '150' : '0.00'}</Text>
+                         <Text style={styles.dealPriceOld}>₹{i === 0 ? '200' : '240'}</Text>
+                      </View>
+                   </View>
                 </TouchableOpacity>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoriesRow}
-              >
-                <TouchableOpacity
-                  key={CATEGORY_ALL}
-                  style={styles.categoryItem}
-                  onPress={() => setSelectedCategoryId(CATEGORY_ALL)}
-                  activeOpacity={0.85}
+             ))}
+             {dealHubItems.length === 0 && sellersLoading && (
+                <Skeleton width={160} height={200} borderRadius={12} style={{marginRight: 16}} />
+             )}
+        </ScrollView>
+
+        {/* Shop Spotlight */}
+        <Text style={[styles.sectionTitle, { marginHorizontal: 16, marginTop: 24 }]}>Shop Spotlight</Text>
+        {spotlightShop ? (
+            <TouchableOpacity style={styles.spotlightCard} onPress={() => onShopPress(spotlightShop.id)}>
+                <ImageBackground
+                    source={{ uri: spotlightShop.imageUrl ?? 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80' }}
+                    style={styles.spotlightImage}
+                    imageStyle={{ borderRadius: 16 }}
                 >
-                  <View style={[styles.categoryIconWrap, selectedCategoryId === CATEGORY_ALL && styles.categoryIconWrapActive]}>
-                    <MaterialIcons
-                      name="apps"
-                      size={30}
-                      color={selectedCategoryId === CATEGORY_ALL ? colors.primary : colors.textSecondary}
-                    />
-                  </View>
-                  <Text style={[styles.categoryName, selectedCategoryId === CATEGORY_ALL && styles.categoryNameActive]}>
-                    All
-                  </Text>
-                </TouchableOpacity>
-                {categories.map((category: any) => (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={styles.categoryItem}
-                    onPress={() => setSelectedCategoryId(category.id)}
-                    activeOpacity={0.85}
-                  >
-                    <View
-                      style={[
-                        styles.categoryIconWrap,
-                        selectedCategoryId === category.id && styles.categoryIconWrapActive,
-                      ]}
-                    >
-                      {category.iconUrl ? (
-                        <Image source={{ uri: category.iconUrl }} style={styles.categoryIconImage} />
-                      ) : (
-                        <MaterialIcons
-                          name={SERVICE_ICONS[category.id] || SERVICE_ICONS.default}
-                          size={30}
-                          color={selectedCategoryId === category.id ? colors.primary : colors.textSecondary}
-                        />
-                      )}
+                    <View style={styles.spotlightTag}>
+                        <Text style={styles.spotlightTagText}>NEW ADDED</Text>
                     </View>
-                    <Text
-                      style={[
-                        styles.categoryName,
-                        selectedCategoryId === category.id && styles.categoryNameActive,
-                      ]}
-                    >
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </>
-          ) : (
-            <View style={styles.emptyStateWrap}>
-              <MaterialIcons name="category" size={48} color={colors.textMuted} />
-              <Text style={styles.emptyStateText}>No services available</Text>
-            </View>
-          )}
+                    <View style={styles.spotlightOverlay}>
+                        <View style={styles.spotlightContent}>
+                           <View>
+                               <View style={styles.spotlightTitleRow}>
+                                  <Text style={styles.spotlightTitle}>{spotlightShop.shopName}</Text>
+                                  <View style={styles.spotlightNewBadge}>
+                                    <Ionicons name="star" size={10} color={colors.primaryDark} />
+                                    <Text style={styles.spotlightNewText}>New</Text>
+                                  </View>
+                               </View>
+                               <Text style={styles.spotlightSubtitle}>Premium Supplies & Hand-crafted Tools</Text>
+                           </View>
 
-          {/* Free Delivery Banner */}
-          <View style={styles.bannerContainer}>
-            <View style={styles.bannerContent}>
-              <Text style={styles.bannerTitle}>Free delivery</Text>
-              <Text style={styles.bannerSubtitle}>on your first order</Text>
-              <TouchableOpacity style={styles.claimButton}>
-                <Text style={styles.claimButtonText}>CLAIM NOW</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.bannerDecor}>
-              <MaterialIcons name="local-shipping" size={80} color={colors.primary} opacity={0.1} />
-            </View>
-          </View>
+                           <View style={styles.spotlightBottomRow}>
+                                <View style={styles.spotlightMetaRow}>
+                                    <Ionicons name="paper-plane" size={14} color="#d1d5db" />
+                                    <Text style={styles.spotlightMetaText}>{spotlightShop.distance.toFixed(1)} km</Text>
+                                    <View style={styles.spotlightDiscount}>
+                                       <Ionicons name="pricetag" size={14} color="#d97706" />
+                                       <Text style={styles.spotlightDiscountText}>Flat 20% OFF</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.spotlightBtn}>
+                                    <Text style={styles.spotlightBtnText}>Explore</Text>
+                                </View>
+                           </View>
+                        </View>
+                    </View>
+                </ImageBackground>
+            </TouchableOpacity>
+        ) : sellersLoading && (
+            <Skeleton height={240} borderRadius={16} style={{marginHorizontal: 16, marginBottom: 24}} />
+        )}
 
-          {/* Nearby Shops Section */}
-          <View style={styles.nearbyHeader}>
-            <Text style={styles.sectionTitle}>
-              Nearby Shops {sellersLoading ? '' : `(${shops.length})`}
-            </Text>
-            <View style={styles.filterRow}>
-              <MaterialIcons name="tune" size={16} color={colors.textMuted} />
-              <Text style={styles.filterText}>Filter</Text>
-            </View>
-          </View>
+        {/* Trending Local Shops */}
+        <Text style={[styles.sectionTitle, { marginHorizontal: 16, marginTop: 24 }]}>Trending Local Shops</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollPadding}>
+             {trendingShops.map((shop) => (
+                <TouchableOpacity key={shop.id} style={styles.trendingCard} onPress={() => onShopPress(shop.id)}>
+                   <Image source={{ uri: shop.imageUrl ?? 'https://images.unsplash.com/photo-1512418490979-92798e1465e6?auto=format&fit=crop&w=400&q=80' }} style={styles.trendingImage} />
+                   <View style={styles.trendingInfo}>
+                      <Text style={styles.trendingTitle} numberOfLines={1}>{shop.shopName}</Text>
+                      <Text style={styles.trendingSubtitle} numberOfLines={2}>Premium tools and home improvement gear.</Text>
+                   </View>
+                </TouchableOpacity>
+             ))}
+             {trendingShops.length === 0 && sellersLoading && (
+                <Skeleton width={180} height={180} borderRadius={12} style={{marginRight: 16}} />
+             )}
+        </ScrollView>
 
-          {sellersLoading && (
+        {/* Category Sticky Headers */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.horizontalScrollPadding, { marginTop: 12, marginBottom: 16 }]}>
+            <TouchableOpacity
+                   style={[styles.categoryTab, selectedCategoryId === CATEGORY_ALL && styles.categoryTabActive]}
+                   onPress={() => setSelectedCategoryId(CATEGORY_ALL)}
+            >
+                   <Text style={[styles.categoryTabText, selectedCategoryId === CATEGORY_ALL && styles.categoryTabTextActive]}>All</Text>
+            </TouchableOpacity>
+            {categories.map((c: any) => (
+               <TouchableOpacity
+                   key={c.id}
+                   style={[styles.categoryTab, selectedCategoryId === c.id && styles.categoryTabActive]}
+                   onPress={() => setSelectedCategoryId(c.id)}
+               >
+                   <Text style={[styles.categoryTabText, selectedCategoryId === c.id && styles.categoryTabTextActive]}>{c.name}</Text>
+               </TouchableOpacity>
+            ))}
+        </ScrollView>
+
+        {/* Nearby Shops Section */}
+        <View style={styles.nearbyHeader}>
+            <Text style={styles.sectionTitle}>Nearby Shops</Text>
+            <TouchableOpacity>
+               <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+        </View>
+
+        {sellersLoading && shops.length === 0 && (
             <View style={styles.loadingContainer}>
               <Loader />
-              <Text style={styles.loadingText}>Finding nearby shops...</Text>
             </View>
-          )}
+        )}
 
-          {!sellersLoading && shops.length === 0 && locationCoords && (
+        {!sellersLoading && shops.length === 0 && locationCoords && (
             <View style={styles.noShopsContainer}>
-              <MaterialIcons name="store" size={48} color={colors.textMuted} />
+              <Ionicons name="storefront" size={48} color={colors.textMuted} />
               <Text style={styles.noShopsText}>No shops found nearby</Text>
               <Text style={styles.noShopsSubtext}>Try expanding your search radius or change location</Text>
             </View>
-          )}
+        )}
 
-          {shops.map((shop: NearbySeller) => (
+        {shops.map((shop: NearbySeller, i) => (
             <TouchableOpacity
               key={shop.id}
-              style={styles.nearbyCard}
+              style={styles.verticalShopCard}
               onPress={() => onShopPress(shop.id)}
               activeOpacity={0.8}
             >
-              <Image
-                source={{
-                  uri:
-                    shop.imageUrl ??
-                    'https://images.unsplash.com/photo-1606986628025-35d57e735ae0?auto=format&fit=crop&w=400&q=80',
-                }}
-                style={styles.nearbyImage}
-              />
-              <View style={styles.nearbyRatingBadge}>
-                <Text style={styles.nearbyRatingText}>{shop.rating.toFixed(1)}</Text>
-                <MaterialIcons name="star" size={12} color="#f59e0b" />
+              <View style={styles.verticalShopImageContainer}>
+                 <Image
+                    source={{
+                      uri: shop.imageUrl ?? 'https://images.unsplash.com/photo-1606986628025-35d57e735ae0?auto=format&fit=crop&w=400&q=80',
+                    }}
+                    style={styles.verticalShopImage}
+                 />
+                 <View style={styles.verticalShopBadge}>
+                    <Ionicons name="pricetag" size={12} color="#fff" />
+                    <Text style={styles.verticalShopBadgeText}>₹100 OFF ABOVE ₹499</Text>
+                 </View>
               </View>
-              <View style={styles.nearbyInfo}>
-                <View style={styles.nearbyTopRow}>
-                  <Text style={styles.nearbyName} numberOfLines={1}>
-                    {shop.shopName}
-                  </Text>
-                  <TouchableOpacity onPress={() => onToggleFavorite(shop)} hitSlop={8}>
-                    <MaterialIcons
-                      name={shop.isFavorited ? 'favorite' : 'favorite-border'}
-                      size={22}
-                      color={shop.isFavorited ? colors.error : colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.nearbyMeta}>
-                  <MaterialIcons name="location-on" size={12} color={colors.textMuted} /> {shop.distance.toFixed(1)} km
-                  {' • '}
-                  {shop.address}
-                </Text>
-                <View style={styles.nearbyTagsRow}>
-                  {(shop.categories.length ? shop.categories : [{ id: 'default', name: 'General' }])
-                    .slice(0, 2)
-                    .map((tag) => (
-                      <View key={tag.id} style={styles.categoryTag}>
-                        <Text style={styles.categoryTagText}>{tag.name}</Text>
-                      </View>
-                    ))}
-                  <View style={[styles.openBadge, shop.isOpen ? styles.openBadgeOn : styles.openBadgeOff]}>
-                    <Text style={[styles.openBadgeText, shop.isOpen ? styles.openBadgeTextOn : styles.openBadgeTextOff]}>
-                      {shop.isOpen ? 'Open Now' : 'Closed'}
-                    </Text>
-                  </View>
-                </View>
+
+              <View style={styles.verticalShopInfo}>
+                 <View style={styles.verticalShopRow}>
+                    <Text style={styles.verticalShopName} numberOfLines={1}>{shop.shopName}</Text>
+                    <View style={styles.verticalShopRating}>
+                        <Ionicons name="star" size={10} color="#f59e0b" />
+                        <Text style={styles.verticalShopRatingText}>{shop.rating.toFixed(1)}</Text>
+                    </View>
+                 </View>
+                 <Text style={styles.verticalShopDesc} numberOfLines={1}>{
+                    (shop as any).description 
+                      ? (shop as any).description
+                      : shop.categories?.map(c => c.name).join(', ') || 'Various Categories'
+                 }</Text>
+
+                 <View style={styles.verticalShopMetaRow}>
+                    <Ionicons name="time" size={14} color={colors.textSecondary} />
+                    <Text style={styles.verticalShopMetaText}>{(shop as any).prepTimeMinutes ? `${(shop as any).prepTimeMinutes} min` : '15-20 min'}</Text>
+                    <Ionicons name="bicycle" size={14} color={colors.primary} style={{marginLeft: 12}} />
+                    <Text style={styles.verticalShopDeliveryText}>{(shop as any).deliveryFee === 0 ? 'Free Delivery' : 'Standard Delivery'}</Text>
+                 </View>
               </View>
             </TouchableOpacity>
-          ))}
+        ))}
 
-          {isFetchingNextPage ? (
+        {isFetchingNextPage ? (
             <View style={styles.paginationLoader}>
               <Loader />
             </View>
-          ) : null}
-        </ScrollView>
-      )}
-
-      {/* Footer Button */}
-      <View style={[styles.footer, { paddingBottom: footerPaddingBottom }]}>
-        <PrimaryButton
-          label="Create Order"
-          onPress={onCreateOrder}
-          icon={<MaterialIcons name="add-circle" size={20} color={colors.textPrimary} />}
-        />
-      </View>
+        ) : null}
+      </ScrollView>
     </ScreenWrapper>
   );
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
   headerSurface: {
-    backgroundColor: '#0f7f79',
-    borderBottomLeftRadius: radius['3xl'],
-    borderBottomRightRadius: radius['3xl'],
+    backgroundColor: '#ffffff',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
-    marginBottom: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -615,10 +501,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginRight: spacing.sm,
   },
   locationIconBubble: {
-    width: 56,
-    height: 56,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: '#e6f8f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
@@ -628,27 +514,27 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   headerLabel: {
     ...typography.meta,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 2,
-    fontWeight: '600',
-    letterSpacing: 0.6,
+    color: colors.textSecondary,
+    marginBottom: 0,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   locationValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
   },
   locationText: {
-    ...typography.heading3,
-    color: colors.textLight,
-    fontWeight: '700',
+    ...typography.bodyLarge,
+    color: colors.textPrimary,
+    fontWeight: '800',
     maxWidth: 210,
   },
   notificationButton: {
-    width: 56,
-    height: 56,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -658,431 +544,415 @@ const createStyles = (colors: any) => StyleSheet.create({
     height: 10,
     borderRadius: radius.full,
     backgroundColor: colors.error,
-    top: 14,
-    right: 15,
-    borderWidth: 1,
-    borderColor: colors.textLight,
-  },
-  loaderWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: spacing.md },
-  promoSkeletonWrap: {
-    marginBottom: spacing.lg,
-  },
-  promoCarouselWrap: {
-    marginBottom: spacing.lg,
-  },
-  promoCard: {
-    height: 260,
-    borderRadius: radius['3xl'],
-    overflow: 'hidden',
-    marginRight: spacing.md,
-  },
-  promoImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: undefined,
-    height: undefined,
-  },
-  promoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(7, 16, 35, 0.45)',
-  },
-  promoContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  promoBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#b45309',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  promoBadgeText: {
-    ...typography.labelMedium,
-    color: colors.textLight,
-    fontWeight: '700',
-  },
-  promoTitle: {
-    ...typography.displayMedium,
-    color: colors.textLight,
-    fontWeight: '700',
-    lineHeight: 34,
-  },
-  promoSubtitle: {
-    ...typography.bodyLarge,
-    color: colors.textLight,
-    opacity: 0.94,
-  },
-  promoCtaPill: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.xs,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  promoCtaText: {
-    ...typography.labelLarge,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  promoDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  promoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.full,
-    backgroundColor: '#9ca3af',
-  },
-  promoDotActive: {
-    backgroundColor: colors.textLight,
-    width: 10,
-    height: 10,
+    top: 10,
+    right: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   searchShell: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceLight,
-    borderRadius: radius['2xl'],
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
-    minHeight: 60,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    height: 48,
+    marginBottom: spacing.md,
   },
   searchPlaceholder: {
     flex: 1,
     marginLeft: spacing.sm,
-    ...typography.bodyLarge,
+    ...typography.bodyMedium,
     color: colors.textMuted,
   },
-  searchActionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lastServiceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surfaceDark,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderDark,
-  },
-  lastServiceContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  lastServiceIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: colors.primaryTint,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lastServiceTextWrap: {
-    flex: 1,
-  },
-  lastServiceLabel: {
-    ...typography.meta,
-    color: colors.textMuted,
-    marginBottom: spacing.xxs,
-    fontWeight: '600',
-  },
-  lastServiceTitle: {
-    ...typography.secondary,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.xxs,
-  },
-  lastServiceShop: {
-    ...typography.meta,
-    color: colors.textSecondary,
-  },
-  sectionTitle: {
-    ...typography.sectionHeader,
-    color: colors.textPrimary,
-    marginBottom: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  categoryHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  categoriesRow: {
-    paddingBottom: spacing.sm,
+  pillsRow: {
+    gap: spacing.sm,
     paddingRight: spacing.md,
-    marginBottom: spacing.xl,
   },
-  categoryItem: {
-    alignItems: 'center',
-    marginRight: spacing.lg,
-    width: 88,
-  },
-  categoryIconWrap: {
-    width: 86,
-    height: 86,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceMuted,
+  pill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
   },
-  categoryIconWrapActive: {
+  pillPrimary: {
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
   },
-  categoryIconImage: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    resizeMode: 'contain',
-  },
-  categoryName: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  categoryNameActive: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  bannerContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'colors.primary',
-    borderRadius: 16,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    overflow: 'hidden',
-  },
-  bannerContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  bannerTitle: {
-    ...typography.sectionHeader,
-    color: 'colors.textLight',
-    marginBottom: spacing.xs - 2,
-  },
-  bannerSubtitle: {
-    ...typography.secondary,
-    fontWeight: '700',
-    color: 'colors.textLight',
-    marginBottom: spacing.md,
-  },
-  claimButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'colors.textLight',
-    paddingVertical: spacing.sm - 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 6,
-  },
-  claimButtonText: {
+  pillText: {
     ...typography.meta,
     fontWeight: '700',
-    color: 'colors.primary',
+    color: colors.textPrimary,
   },
-  bannerDecor: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    width: 100,
+  pillTextPrimary: {
+    color: '#fff',
+  },
+  scroll: { flex: 1, backgroundColor: '#f9fafb' },
+  scrollContent: { flexGrow: 1 },
+  horizontalScrollPadding: { paddingHorizontal: 16, paddingBottom: 16, gap: 16 },
+  sectionTitle: {
+    ...typography.heading3,
+    color: colors.textPrimary,
+    fontWeight: '800',
+  },
+  dealHubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  dealHubTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    gap: 4,
+  },
+  timerBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  dealCard: {
+    width: 160,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    overflow: 'hidden',
+  },
+  dealImageContainer: {
+    height: 110,
+    position: 'relative',
+    backgroundColor: colors.surfaceDark,
+  },
+  dealImage: {
+    ...StyleSheet.absoluteFillObject,
+    resizeMode: 'cover',
+  },
+  dealTag: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: colors.error,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  dealTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  dealInfo: {
+    padding: 12,
+  },
+  dealShopTitle: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dealItemTitle: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  dealPriceWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dealPriceNow: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primaryDark,
+  },
+  dealPriceOld: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  spotlightCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    height: 240,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  spotlightImage: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  spotlightOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+    borderRadius: 16,
+  },
+  spotlightTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    margin: 16,
+    position: 'zIndex',
+    zIndex: 10,
+  },
+  spotlightTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  spotlightContent: {
+    padding: 16,
+    gap: 16,
+  },
+  spotlightTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  spotlightTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  spotlightNewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+  },
+  spotlightNewText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  spotlightSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
+  spotlightBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  spotlightMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  spotlightMetaText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  spotlightDiscount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  spotlightDiscountText: {
+    fontSize: 12,
+    color: '#d97706',
+    fontWeight: '800',
+  },
+  spotlightBtn: {
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  spotlightBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  trendingCard: {
+    width: 180,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: 8,
+  },
+  trendingImage: {
+    width: '100%',
+    height: 100,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  trendingInfo: {
+    paddingHorizontal: 4,
+    paddingBottom: 4,
+  },
+  trendingTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  trendingSubtitle: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  categoryTab: {
+    paddingBottom: 8,
+  },
+  categoryTabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  categoryTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  categoryTabTextActive: {
+    color: colors.primaryDark,
+    fontWeight: '800',
   },
   nearbyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  filterText: {
-    ...typography.bodyMedium,
-    color: colors.textMuted,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   viewAllText: {
-    ...typography.meta,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: colors.primary,
   },
-  nearbyCard: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: radius['2xl'],
-    padding: spacing.md,
-    flexDirection: 'row',
-    marginBottom: spacing.lg,
+  verticalShopCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderDark,
-    gap: spacing.md,
+    borderColor: colors.borderLight,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
-  nearbyImage: {
-    width: 104,
-    height: 104,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surfaceDark,
+  verticalShopImageContainer: {
+    height: 140,
+    position: 'relative',
+    backgroundColor: colors.surfaceMuted,
   },
-  nearbyRatingBadge: {
+  verticalShopImage: {
+    ...StyleSheet.absoluteFillObject,
+    resizeMode: 'cover',
+  },
+  verticalShopBadge: {
     position: 'absolute',
-    top: spacing.md - 4,
-    left: spacing.md + 72,
+    top: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    paddingVertical: spacing.xs - 2,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 6,
-    gap: spacing.xxs,
+    backgroundColor: colors.error,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    gap: 4,
   },
-  nearbyRatingText: {
-    ...typography.meta,
-    color: colors.textPrimary,
-    fontWeight: '600',
+  verticalShopBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
   },
-  nearbyInfo: {
-    flex: 1,
-    justifyContent: 'center',
+  verticalShopInfo: {
+    padding: 16,
   },
-  nearbyTopRow: {
+  verticalShopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  nearbyName: {
-    ...typography.secondary,
-    fontWeight: '700',
+  verticalShopName: {
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.textPrimary,
     flex: 1,
   },
-  nearbyMeta: {
-    ...typography.meta,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  nearbyTagsRow: {
+  verticalShopRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
   },
-  categoryTag: {
-    paddingVertical: spacing.xs - 1,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    backgroundColor: colors.surfaceMuted,
-  },
-  categoryTagText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  openBadge: {
-    marginLeft: 'auto',
-    paddingVertical: spacing.xs - 1,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.xl,
-  },
-  openBadgeOn: {
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
-  },
-  openBadgeOff: {
-    backgroundColor: 'rgba(239, 68, 68, 0.14)',
-  },
-  openBadgeText: {
-    ...typography.bodySmall,
+  verticalShopRatingText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: colors.textPrimary,
   },
-  openBadgeTextOn: {
-    color: colors.success,
+  verticalShopDesc: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 12,
   },
-  openBadgeTextOff: {
-    color: colors.error,
+  verticalShopMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verticalShopMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginLeft: 4,
+  },
+  verticalShopDeliveryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+    marginLeft: 4,
   },
   paginationLoader: {
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
   loadingContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: spacing.xl,
-    gap: spacing.md,
-  },
-  loadingText: {
-    ...typography.secondary,
-    color: colors.textMuted,
-    fontWeight: '500',
+    alignItems: 'center',
   },
   noShopsContainer: {
-    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,
-    gap: spacing.md,
   },
   noShopsText: {
     ...typography.secondary,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.textPrimary,
+    marginTop: 12,
   },
   noShopsSubtext: {
     ...typography.meta,
     color: colors.textMuted,
+    marginTop: 4,
     textAlign: 'center',
-  },
-  sectionLoadingWrap: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl,
-    gap: spacing.md,
-  },
-  emptyStateWrap: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
-    gap: spacing.md,
-  },
-  emptyStateText: {
-    ...typography.secondary,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    backgroundColor: colors.backgroundDark,
   },
 });

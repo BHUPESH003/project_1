@@ -38,7 +38,7 @@ export class CartController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get my cart' })
   @ApiResponse({ status: 200, description: 'Cart with items' })
@@ -48,7 +48,7 @@ export class CartController {
 
   @Post('items')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add product to cart' })
   @ApiResponse({ status: 201, description: 'Item added to cart' })
@@ -61,7 +61,7 @@ export class CartController {
 
   @Patch('items/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Cart item ID' })
   @ApiOperation({ summary: 'Update cart item (quantity/payload)' })
@@ -76,7 +76,7 @@ export class CartController {
 
   @Delete('items/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Cart item ID' })
   @ApiOperation({
@@ -93,7 +93,7 @@ export class CartController {
 
   @Post('items/:id/files')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Cart item ID' })
   @ApiOperation({ summary: 'Attach file to cart item (printing)' })
@@ -107,7 +107,7 @@ export class CartController {
 
   @Patch('items/:id/files/:fileId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Cart item ID' })
   @ApiParam({ name: 'fileId', description: 'File ID' })
@@ -123,7 +123,7 @@ export class CartController {
 
   @Delete('items/:id/files/:fileId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Cart item ID' })
   @ApiParam({ name: 'fileId', description: 'File ID' })
@@ -140,7 +140,7 @@ export class CartController {
 
   @Get('calculate-price')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Calculate cart pricing (grouped by seller, supports printing)',

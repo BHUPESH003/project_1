@@ -13,22 +13,17 @@ import {
   Pressable,
   useWindowDimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Button } from '@/components/Button';
-import { radius } from '@/constants/radius';
-import { spacing } from '@/constants/spacing';
-import { typography } from '@/constants/typography';
+import { Ionicons } from '@expo/vector-icons';
 import { useResolvedThemeMode, useThemeColors, useThemedStyles } from '@/theme';
 import { useAuthStore } from '@/store/auth.store';
 import { toE164 } from '@/utils/phone';
 import { showToast } from '@/lib/toast';
 
-const PHONE_PLACEHOLDER = 'Phone number';
+const PHONE_PLACEHOLDER = '000 000 0000';
 
 export default function LoginScreen() {
   const colors = useThemeColors();
@@ -41,8 +36,6 @@ export default function LoginScreen() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const heroMinHeight = Math.max(260, Math.floor(viewportHeight * 0.48));
-  const sheetMinHeight = Math.max(320, Math.floor(viewportHeight * 0.52));
 
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
@@ -94,9 +87,6 @@ export default function LoginScreen() {
   const handleInputFocus = () => {
     setIsInputFocused(true);
     setPhoneError(null);
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(140, Math.floor(viewportHeight * 0.18)), animated: true });
-    }, 80);
   };
 
   const handleInputBlur = () => {
@@ -108,123 +98,130 @@ export default function LoginScreen() {
     }
   };
 
-  const handleCreateAccount = () => {
-    if (!digitsOnly.length) {
-      showToast({ type: 'info', message: 'Enter your phone number to get started' });
-      return;
-    }
-    handleContinue();
-  };
-
   return (
     <View style={styles.screen}>
-      <View style={styles.blobTopRight} />
-      <View style={styles.blobLeftMid} />
-
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + spacing.lg}
       >
         <ScrollView
           ref={scrollRef}
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           onScrollBeginDrag={Keyboard.dismiss}
-          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <View style={[styles.heroSection, { minHeight: heroMinHeight, paddingTop: insets.top + spacing['2xl'] }]}>
-            <LinearGradient
-              colors={[colors.primaryLight, 'rgba(13, 242, 242, 0.04)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCircle}
-            >
-              <View style={styles.heroCircleInner}>
-                <MaterialIcons name="storefront" size={112} color={colors.primary} />
-              </View>
-            </LinearGradient>
+          {/* Header Bar */}
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Local Shop</Text>
+            <View style={{ width: 24 }} />
           </View>
 
-          <View style={[styles.sheetContainer, { minHeight: sheetMinHeight }]}>
-            <BlurView
-              intensity={mode === 'dark' ? 28 : 36}
-              tint={mode === 'dark' ? 'dark' : 'light'}
-              style={styles.sheetBlur}
-            >
-              <View style={[styles.sheet, { paddingBottom: spacing['3xl'] + insets.bottom }]}>
-                <View style={styles.headerWrap}>
-                  <Text style={styles.title}>Login</Text>
-                  <Text style={styles.subtitle}>Access the best local shops nearby.</Text>
-                </View>
-
-                {showValidationError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
-                {!showValidationError && error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                <View
-                  style={[
-                    styles.inputWrap,
-                    isInputFocused && styles.inputWrapFocused,
-                    showValidationError && styles.inputWrapError,
-                  ]}
-                >
-                  <MaterialIcons name="phone" size={20} color={colors.textMuted} style={styles.leftIcon} />
-                  <View style={styles.prefixPill}>
-                    <Text style={styles.prefixText}>+91</Text>
-                  </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={PHONE_PLACEHOLDER}
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    value={digitsOnly}
-                    onChangeText={(text) => {
-                      if (phoneError) setPhoneError(null);
-                      setPhone(text.replace(/\D/g, ''));
-                    }}
-                    onFocus={handleInputFocus}
-                    onBlur={handleInputBlur}
-                    maxLength={10}
-                    editable={!isLoading}
-                  />
-                  {digitsOnly.length ? (
-                    <Pressable
-                      onPress={() => {
-                        setPhone('');
-                        setPhoneError(null);
-                      }}
-                      hitSlop={8}
-                      style={styles.clearButton}
-                    >
-                      <MaterialIcons name="close" size={18} color={colors.textMuted} />
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                <Button
-                  title={isLoading ? 'Sending...' : 'SEND OTP'}
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  onPress={handleContinue}
-                  disabled={!canSubmit}
-                  loading={isLoading}
+          {/* Illustration */}
+          <View style={styles.illustrationContainer}>
+             {/* Using a placeholder view for the illustration instead of a random image link to match structure without broken links */}
+            <View style={styles.illustrationPlaceholder}>
+                <Image 
+                  source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2953/2953363.png' }} 
+                  style={{ width: 120, height: 120, opacity: 0.8 }} 
+                  resizeMode="contain" 
+                  tintColor={colors.primaryDark}
                 />
+            </View>
+          </View>
 
-                <View style={styles.footerRow}>
-                  <Text style={styles.footerText}>New here? </Text>
-                  <Pressable onPress={handleCreateAccount} hitSlop={8}>
-                    <Text style={[styles.footerLink, mode === 'dark' ? styles.footerLinkDark : null]}>
-                      Create account
-                    </Text>
-                  </Pressable>
-                </View>
+          {/* Text Content */}
+          <View style={styles.textContent}>
+            <Text style={styles.title}>Speedy Access</Text>
+            <Text style={styles.subtitle}>
+              Enter your number to get shopping instantly.
+            </Text>
+          </View>
+
+          {showValidationError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+          {!showValidationError && error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          {/* Input Section */}
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Mobile Number</Text>
+            <View style={styles.inputRow}>
+              {/* Country Code Dropdown */}
+              <View style={styles.countryDropdown}>
+                <Image source={{ uri: 'https://flagcdn.com/w40/us.png' }} style={styles.flagIcon} />
+                <Text style={styles.countryCode}>+1</Text>
+                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
               </View>
-            </BlurView>
+
+              {/* Phone Input */}
+              <View
+                style={[
+                  styles.inputWrap,
+                  isInputFocused && styles.inputWrapFocused,
+                  showValidationError && styles.inputWrapError,
+                ]}
+              >
+                <TextInput
+                  style={styles.input}
+                  placeholder={PHONE_PLACEHOLDER}
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  value={digitsOnly}
+                  onChangeText={(text) => {
+                    if (phoneError) setPhoneError(null);
+                    setPhone(text.replace(/\D/g, ''));
+                  }}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  maxLength={10}
+                  editable={!isLoading}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Send OTP Button */}
+          <Pressable
+            style={[styles.primaryButton, (!canSubmit || isLoading) && styles.primaryButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!canSubmit || isLoading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isLoading ? 'Sending...' : 'Send OTP'}
+            </Text>
+          </Pressable>
+
+          {/* Separator */}
+          <View style={styles.separatorContainer}>
+            <View style={styles.separatorLine} />
+            <Text style={styles.separatorText}>OTHER WAYS TO LOG IN</Text>
+            <View style={styles.separatorLine} />
+          </View>
+
+          {/* Social Icons */}
+          <View style={styles.socialRow}>
+            <Pressable style={styles.socialIconBtn}>
+              <Image 
+                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
+                style={styles.socialImage} 
+              />
+            </Pressable>
+            <Pressable style={styles.socialIconBtn}>
+              <Ionicons name="logo-apple" size={24} color={mode === 'dark' ? 'white' : 'black'} />
+            </Pressable>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>New here? </Text>
+            <Pressable onPress={() => router.push('/(auth)/signup')} hitSlop={8}>
+              <Text style={styles.footerLink}>Join the community</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -235,182 +232,179 @@ export default function LoginScreen() {
 const createStyles = (colors: any) =>
   StyleSheet.create({
     flex: { flex: 1 },
-    scrollContent: {
-      flexGrow: 1,
-      justifyContent: 'space-between',
-    },
     screen: {
       flex: 1,
-      backgroundColor: colors.background,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    blobTopRight: {
-      position: 'absolute',
-      width: 260,
-      height: 260,
-      borderRadius: radius.full,
-      backgroundColor: 'rgba(13, 242, 242, 0.22)',
-      top: -130,
-      right: -110,
-      shadowColor: '#0df2f2',
-      shadowOpacity: 0.4,
-      shadowRadius: 40,
-      shadowOffset: { width: 0, height: 0 },
-    },
-    blobLeftMid: {
-      position: 'absolute',
-      width: 200,
-      height: 200,
-      borderRadius: radius.full,
-      backgroundColor: 'rgba(13, 242, 242, 0.12)',
-      top: '28%',
-      left: -100,
-      shadowColor: '#0df2f2',
-      shadowOpacity: 0.3,
-      shadowRadius: 32,
-      shadowOffset: { width: 0, height: 0 },
-    },
-    heroSection: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: spacing['3xl'],
-      paddingBottom: spacing.lg,
-    },
-    heroCircle: {
-      width: '100%',
-      maxWidth: 280,
-      aspectRatio: 1,
-      borderRadius: radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    heroCircleInner: {
-      width: '92%',
-      height: '92%',
-      borderRadius: radius.full,
-      backgroundColor: 'rgba(255,255,255,0.18)',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    sheetContainer: {
-      borderTopLeftRadius: radius.sheet,
-      borderTopRightRadius: radius.sheet,
-      overflow: 'hidden',
-    },
-    sheetBlur: {
-      borderTopLeftRadius: radius.sheet,
-      borderTopRightRadius: radius.sheet,
-      overflow: 'hidden',
-    },
-    sheet: {
-      backgroundColor:
-        colors.textPrimary === colors.textLight
-          ? 'rgba(21, 42, 42, 0.9)'
-          : 'rgba(255, 255, 255, 0.8)',
-      borderTopLeftRadius: radius.sheet,
-      borderTopRightRadius: radius.sheet,
-      borderTopWidth: 1,
-      borderTopColor: 'rgba(255,255,255,0.2)',
-      paddingHorizontal: spacing['3xl'],
-      paddingTop: spacing['3xl'],
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -10 },
-      shadowOpacity: 0.1,
-      shadowRadius: 40,
-      elevation: 10,
-      gap: spacing.lg,
-    },
-    headerWrap: {
-      alignItems: 'center',
-      gap: spacing.sm,
-      marginBottom: spacing.sm,
-    },
-    title: {
-      ...typography.displayLarge,
-      color: colors.textPrimary,
-      letterSpacing: -0.64,
-    },
-    subtitle: {
-      ...typography.bodyMedium,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      fontFamily: typography.bodyMedium.fontFamily,
-      fontWeight: '500',
-    },
-    errorText: {
-      ...typography.bodySmall,
-      color: colors.error,
-      textAlign: 'center',
-      marginBottom: spacing.xs,
-    },
-    inputWrap: {
-      minHeight: 56,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceMuted,
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      gap: spacing.sm,
-    },
-    inputWrapFocused: {
-      borderWidth: 2,
-      borderColor: colors.primary,
       backgroundColor: colors.surface,
     },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 32,
+    },
+    closeButton: {
+      padding: 4,
+    },
+    headerTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    illustrationContainer: {
+      alignItems: 'center',
+      marginBottom: 32,
+    },
+    illustrationPlaceholder: {
+      width: '100%',
+      aspectRatio: 1.2,
+      backgroundColor: '#FEF0D6',
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    textContent: {
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: colors.textPrimary,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      lineHeight: 24,
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.error,
+      marginBottom: 12,
+    },
+    inputSection: {
+      marginBottom: 24,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      marginBottom: 8,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    countryDropdown: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      height: 56,
+      gap: 8,
+    },
+    flagIcon: {
+      width: 24,
+      height: 16,
+      borderRadius: 2,
+    },
+    countryCode: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    inputWrap: {
+      flex: 1,
+      height: 56,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      paddingHorizontal: 16,
+    },
+    inputWrapFocused: {
+      borderColor: colors.primary,
+    },
     inputWrapError: {
-      borderWidth: 2,
       borderColor: colors.error,
     },
-    leftIcon: {
-      marginRight: spacing.xs,
-    },
-    prefixPill: {
-      minWidth: 46,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.lg,
-      backgroundColor: colors.primaryLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    prefixText: {
-      ...typography.labelLarge,
-      color: colors.textPrimary,
-      letterSpacing: 0.2,
-    },
     input: {
-      flex: 1,
-      ...typography.bodyLarge,
+      fontSize: 16,
       color: colors.textPrimary,
-      paddingVertical: spacing.lg,
-      paddingRight: spacing.sm,
+      letterSpacing: 1,
     },
-    clearButton: {
-      width: 28,
-      height: 28,
-      borderRadius: radius.full,
+    primaryButton: {
+      backgroundColor: colors.primary,
+      height: 56,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
+      marginBottom: 32,
+    },
+    primaryButtonDisabled: {
+      opacity: 0.7,
+    },
+    primaryButtonText: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    separatorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    separatorLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.borderLight,
+    },
+    separatorText: {
+      marginHorizontal: 16,
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textMuted,
+      letterSpacing: 1,
+    },
+    socialRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 20,
+      marginBottom: 40,
+    },
+    socialIconBtn: {
+      width: 56,
+      height: 56,
+      borderRadius: 56,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    socialImage: {
+      width: 24,
+      height: 24,
     },
     footerRow: {
-      marginTop: spacing.sm,
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
     },
     footerText: {
-      ...typography.bodyMedium,
+      fontSize: 14,
       color: colors.textSecondary,
     },
     footerLink: {
-      ...typography.bodyMedium,
+      fontSize: 14,
       fontWeight: '700',
-      color: colors.textPrimary,
-    },
-    footerLinkDark: {
       color: colors.primary,
     },
   });

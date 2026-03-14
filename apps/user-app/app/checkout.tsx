@@ -33,17 +33,22 @@ import { useLocation } from '@/hooks/useLocation';
  * Map category display names to category IDs
  */
 function getCategoryIdFromName(categoryName?: string): string {
-  if (!categoryName) return 'printing'; // Default to 'printing' instead of 'generic' (which doesn't exist in DB)
+  if (!categoryName) return 'printing'; // Default to 'printing' if unknown
+  
+  const lowerName = categoryName.toLowerCase();
   
   const categoryMap: { [key: string]: string } = {
-    'Printing Services': 'printing',
-    'Printing': 'printing',
-    'Popular Stationery': 'stationery',
-    'Stationery': 'stationery',
-    'Hardware': 'hardware',
+    'printing services': 'printing',
+    'printing': 'printing',
+    'popular stationery': 'stationery',
+    'stationery': 'stationery',
+    'hardware': 'hardware',
+    'sports': 'sports',
+    'electronics': 'electronics'
   };
   
-  return categoryMap[categoryName] || 'printing'; // Fallback to 'printing' if category not found
+  // Return matching ID from map, or just format the string to be ID-like
+  return categoryMap[lowerName] || lowerName.replace(/\s+/g, '-');
 }
 
 export default function CheckoutScreen() {
@@ -62,6 +67,9 @@ export default function CheckoutScreen() {
   const selectedShopName = useCartStore((state) => state.selectedShopName);
   const selectedProvider = useCartStore((state) => state.selectedDeliveryProvider);
   const paymentMethod = useCartStore((state) => state.paymentMethod);
+  
+  // Track specifically which vehicle type the user chose under the provider
+  const [selectedVehicleType, setSelectedVehicleType] = useState<string>('bike');
   const subtotal = useCartStore((state) => state.getSubtotal());
   const cartDropLocation = useCartStore((state) => state.dropLocation);
   const cartOrderId = useCartStore((state) => state.orderId); // Get orderId from cart store
@@ -78,24 +86,37 @@ export default function CheckoutScreen() {
   const setDeliveryFeeOD = useOrderDraftStore((state) => state.setDeliveryFee);
 
   // Get drop location - prioritize cart drop location, fallback to device location
-  const dropLocation = cartDropLocation || (deviceLocation ? {
-    lat: deviceLocation.latitude,
-    lng: deviceLocation.longitude,
-    address: 'Current Location'
-  } : null);
+  const dropLocation = React.useMemo(() => {
+    if (cartDropLocation) return cartDropLocation;
+    if (deviceLocation) {
+      return {
+        lat: deviceLocation.latitude,
+        lng: deviceLocation.longitude,
+        address: 'Current Location'
+      };
+    }
+    return null;
+  }, [cartDropLocation, deviceLocation]);
 
   // Local state for tracking order ID during creation
   const [orderId, setLocalOrderId] = useState<string | null>(null);
   const [initialOrderLoading, setInitialOrderLoading] = useState(true);
 
   const selectedPartner = deliveryPartners.find(p => p.provider === selectedProvider);
-  const deliveryFee = selectedPartner?.estimatedFee || 0;
+  const deliveryFee = useCartStore((state) => state.deliveryFee) || 0; // Use stored fee to handle dynamic vehicle selections
   const total = paymentMethod === 'postpay' ? subtotal : subtotal + deliveryFee;
 
-
-  const handleSelectProvider = (provider: DeliveryQuoteOption) => {
+  const handleSelectProvider = (provider: DeliveryQuoteOption, vehicleType?: { type: string, fee: number }) => {
     setDeliveryProvider(provider.provider);
-    setDeliveryFee(provider.estimatedFee);
+    
+    // If provider has multi-vehicle options, set specific vehicle properties, else fallback to standard quote
+    if (vehicleType) {
+      setSelectedVehicleType(vehicleType.type);
+      setDeliveryFee(vehicleType.fee);
+    } else {
+      setSelectedVehicleType('standard');
+      setDeliveryFee(provider.estimatedFee);
+    }
   };
 
   // Load delivery partners on checkout page load
@@ -144,6 +165,7 @@ export default function CheckoutScreen() {
 
           const createPayload = {
             categoryId,
+            sellerId: selectedSellerId || undefined,
             orderPayload,
           };
 
@@ -153,13 +175,6 @@ export default function CheckoutScreen() {
           setCartOrderId(createdOrderId); // Store in cart store for persistence
         } else {
           setLocalOrderId(createdOrderId);
-        }
-
-        // Select seller for this order (if not already selected)
-        try {
-          await ordersApi.selectSeller(createdOrderId, selectedSellerId);
-        } catch (err: any) {
-          console.warn('Failed to select seller:', err);
         }
 
         // Fetch delivery quotes
@@ -205,6 +220,7 @@ export default function CheckoutScreen() {
         dropLatitude: dropLocation.lat,
         dropLongitude: dropLocation.lng,
         dropAddress: dropLocation.address || 'Delivery Location',
+        vehicleType: selectedVehicleType,
       };
 
       // For printing category, fileUrl is mandatory
@@ -219,21 +235,14 @@ export default function CheckoutScreen() {
       // Step 1: Create draft order with drop location
       const createPayload = {
         categoryId,
+        sellerId: selectedSellerId || undefined,
         orderPayload,
       };
             const response = await ordersApi.createOrder(createPayload);
       const createdOrderId = response.order_id;
       setCartOrderId(createdOrderId); // Save to cart store for persistence
       
-      // Step 2: Immediately select the seller for this order
-      try {
-        await ordersApi.selectSeller(createdOrderId, selectedSellerId);
-      } catch (err: any) {
-        console.warn('Failed to select seller, order still created:', err);
-        // Continue anyway - order was created successfully
-      }
-      
-      // Step 3: Fetch delivery quotes for this order (fallback if useEffect didn't load them)
+      // Step 2: Fetch delivery quotes for this order (fallback if useEffect didn't load them)
       try {
         const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId);
         setDeliveryPartners(quotesResponse.providers || []);
@@ -247,8 +256,10 @@ export default function CheckoutScreen() {
     onSuccess: async (resolvedOrderId) => {
       // Store order ID for payment flow
       setOrderId(resolvedOrderId);
-      setDeliveryProviderOD(selectedProvider || null);
+      setDeliveryProviderOD(selectedProvider ?? null);
       setDeliveryFeeOD(deliveryFee);
+      // Temporarily store the vehicle type if we need it for UI on order progress page
+      // Optionally could add this to order draft store: setVehicleTypeOD(selectedVehicleType);
       
       // Navigate to payment method
       router.push('/order/payment-method');
@@ -390,41 +401,96 @@ export default function CheckoutScreen() {
                 <Text style={styles.emptyText}>No delivery partners available</Text>
               </View>
             ) : (
-              deliveryPartners.map((partner) => (
-                <TouchableOpacity
-                  key={partner.provider}
-                  style={[
-                    styles.partnerCard,
-                    selectedProvider === partner.provider && styles.partnerCardSelected,
-                  ]}
-                  onPress={() => handleSelectProvider(partner)}
-                >
-                  <View style={styles.partnerIconWrap}>
-                    <MaterialIcons name="local-shipping" size={28} color={colors.primary} />
-                  </View>
-                  <View style={styles.partnerContent}>
-                    <View style={styles.partnerNameRow}>
-                      <Text style={styles.partnerName}>{partner.displayName}</Text>
-                    </View>
-                    <Text style={styles.partnerTime}>
-                      {partner.estimatedDurationMinutes} mins • {partner.currency} {partner.estimatedFee}
-                    </Text>
-                  </View>
-                  <View style={styles.partnerFeeWrap}>
-                    <Text style={styles.partnerFee}>₹{partner.estimatedFee}</Text>
-                    <View
+              deliveryPartners.map((partner) => {
+                const isSelectedPartner = selectedProvider === partner.provider;
+                
+                // If it doesn't have multiple options, show just the single card fee
+                const defaultFee = partner.vehicleOptions && partner.vehicleOptions.length > 0 
+                                      ? partner.vehicleOptions[0].estimatedFee 
+                                      : partner.estimatedFee;
+                                      
+                return (
+                  <View key={partner.provider} style={{ marginBottom: spacing.md }}>
+                    <TouchableOpacity
                       style={[
-                        styles.partnerRadio,
-                        selectedProvider === partner.provider && styles.partnerRadioSelected,
+                        styles.partnerCard,
+                        isSelectedPartner && styles.partnerCardSelected,
+                        { marginBottom: isSelectedPartner && partner.vehicleOptions ? 0 : spacing.md, 
+                          borderBottomLeftRadius: isSelectedPartner && partner.vehicleOptions ? 0 : 12,
+                          borderBottomRightRadius: isSelectedPartner && partner.vehicleOptions ? 0 : 12,
+                          borderBottomWidth: isSelectedPartner && partner.vehicleOptions ? 0 : 2
+                        }
                       ]}
+                      onPress={() => handleSelectProvider(partner, 
+                          partner.vehicleOptions ? { type: partner.vehicleOptions[0].vehicleType, fee: partner.vehicleOptions[0].estimatedFee } : undefined)}
                     >
-                      {selectedProvider === partner.provider && (
-                        <View style={styles.partnerRadioInner} />
-                      )}
-                    </View>
+                      <View style={styles.partnerIconWrap}>
+                        <MaterialIcons name="local-shipping" size={28} color={colors.primary} />
+                      </View>
+                      <View style={styles.partnerContent}>
+                        <View style={styles.partnerNameRow}>
+                          <Text style={styles.partnerName}>{partner.displayName}</Text>
+                        </View>
+                        <Text style={styles.partnerTime}>
+                          {partner.estimatedDurationMinutes} mins
+                        </Text>
+                      </View>
+                      <View style={styles.partnerFeeWrap}>
+                         <Text style={styles.partnerFee}>From ₹{defaultFee}</Text>
+                        <View
+                          style={[
+                            styles.partnerRadio,
+                            isSelectedPartner && styles.partnerRadioSelected,
+                          ]}
+                        >
+                          {isSelectedPartner && (
+                            <View style={styles.partnerRadioInner} />
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    
+                    {/* Render sub-vehicle options if partner is selected */}
+                    {isSelectedPartner && partner.vehicleOptions && partner.vehicleOptions.length > 0 && (
+                      <View style={[styles.vehicleOptionsContainer, { borderColor: colors.primary }]}>
+                         <Text style={styles.vehicleOptionsTitle}>Select Vehicle Type:</Text>
+                         {partner.vehicleOptions.map((vehicle) => (
+                           <TouchableOpacity 
+                              key={vehicle.vehicleType}
+                              style={[
+                                styles.vehicleOptionCard, 
+                                selectedVehicleType === vehicle.vehicleType && styles.vehicleOptionCardSelected
+                              ]}
+                              onPress={() => handleSelectProvider(partner, { type: vehicle.vehicleType, fee: vehicle.estimatedFee })}
+                           >
+                              <View style={styles.vehicleContentLeft}>
+                                 <MaterialIcons 
+                                    name={vehicle.vehicleType === 'bike' ? 'two-wheeler' : vehicle.vehicleType === 'van' ? 'airport-shuttle' : 'local-shipping'} 
+                                    size={24} 
+                                    color={selectedVehicleType === vehicle.vehicleType ? colors.primary : colors.textMuted} 
+                                    style={{marginRight: 10}}
+                                  />
+                                 <View>
+                                    <Text style={[styles.vehicleTypeName, selectedVehicleType === vehicle.vehicleType && {color: colors.primary}]}>
+                                      {vehicle.vehicleType.charAt(0).toUpperCase() + vehicle.vehicleType.slice(1)}
+                                    </Text>
+                                    <Text style={styles.vehicleTypeTime}>
+                                      {vehicle.estimatedDurationMinutes} mins
+                                    </Text>
+                                 </View>
+                              </View>
+                              <View style={styles.vehicleContentRight}>
+                                 <Text style={[styles.vehicleTypeFee, selectedVehicleType === vehicle.vehicleType && {color: colors.primary}]}>
+                                    ₹{vehicle.estimatedFee}
+                                 </Text>
+                              </View>
+                           </TouchableOpacity>
+                         ))}
+                      </View>
+                    )}
                   </View>
-                </TouchableOpacity>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -506,7 +572,7 @@ export default function CheckoutScreen() {
               <Text style={styles.pricingValue}>₹{subtotal.toFixed(2)}</Text>
             </View>
             <View style={styles.pricingRow}>
-              <Text style={styles.pricingLabel}>Delivery ({selectedPartner?.name || 'Partner'})</Text>
+              <Text style={styles.pricingLabel}>Delivery ({selectedPartner?.displayName || 'Partner'})</Text>
               <Text style={styles.pricingValue}>
                 {selectedPartner ? (
                   paymentMethod === 'postpay' ? 'Payable at delivery' : `+₹${deliveryFee.toFixed(2)}`
@@ -894,9 +960,58 @@ const createStyles = (colors: any) => StyleSheet.create({
     opacity: 0.5,
   },
   confirmBtnText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  vehicleOptionsContainer: {
+    backgroundColor: colors.surfaceDark,
+    borderWidth: 2,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    padding: spacing.md,
+    paddingTop: 0,
+    marginTop: -2,
+  },
+  vehicleOptionsTitle: {
+    ...typography.overline,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  vehicleOptionCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.backgroundDark,
+  },
+  vehicleOptionCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
+  },
+  vehicleContentLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vehicleTypeName: {
+    ...typography.secondary,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  vehicleTypeTime: {
+    ...typography.meta,
+    color: colors.textSecondary,
+  },
+  vehicleContentRight: {
+    alignItems: 'flex-end',
+  },
+  vehicleTypeFee: {
     ...typography.secondary,
     fontWeight: '700',
     color: colors.textPrimary,
-    fontSize: 16,
   },
 });

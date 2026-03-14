@@ -76,7 +76,7 @@ export class OrdersController {
    */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create a new draft order',
@@ -106,7 +106,7 @@ export class OrdersController {
    */
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Update draft order items or location',
@@ -136,7 +136,7 @@ export class OrdersController {
    */
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'List my orders',
@@ -189,7 +189,7 @@ export class OrdersController {
    */
   @Post(':id/select-seller')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Select seller for order (optional)',
@@ -224,7 +224,7 @@ export class OrdersController {
    */
   @Get(':id/delivery-quotes')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get available delivery quotes for order',
@@ -257,7 +257,7 @@ export class OrdersController {
    */
   @Post(':id/create-payment-intent')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create payment intent',
@@ -294,7 +294,7 @@ export class OrdersController {
    */
   @Post(':id/verify-payment')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Verify payment',
@@ -321,7 +321,7 @@ export class OrdersController {
    */
   @Post(':id/confirm')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.USER)
+  @Roles(UserRole.USER, UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Confirm and pay for order',

@@ -15,6 +15,7 @@ export interface SellerEntity {
   longitude: unknown;
   status: SellerStatus;
   statusUpdatedAt: Date | null;
+  isTrending: boolean;
   pricePerPage: unknown;
   prepTimeMinutes: number;
   imagePath: string | null;
@@ -102,9 +103,12 @@ export class SellerRepository {
     maxDistanceKm?: number;
     limit?: number;
     offset?: number;
+    isTrending?: boolean;
+    orderBy?: 'distance' | 'newest';
   }): Promise<{ sellers: SellerEntity[]; total: number }> {
     const where: {
       status: SellerStatus;
+      isTrending?: boolean;
       categories?: {
         some: {
           categoryId: string;
@@ -120,6 +124,10 @@ export class SellerRepository {
           categoryId: filters.categoryId,
         },
       };
+    }
+
+    if (filters?.isTrending !== undefined) {
+      where.isTrending = filters.isTrending;
     }
 
     const limit = Math.min(Math.max(filters?.limit ?? 20, 1), 100);
@@ -177,8 +185,11 @@ export class SellerRepository {
             distanceKm: distance,
           };
         })
-        .filter((s) => (s as any).distanceKm <= maxKm)
-        .sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
+        .filter((s) => (s as any).distanceKm <= maxKm);
+
+      if (filters?.orderBy !== 'newest') {
+        result.sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
+      }
     }
 
     return { sellers: result, total };
@@ -300,6 +311,7 @@ export class SellerRepository {
     longitude: unknown;
     status: unknown;
     statusUpdatedAt: Date | null;
+    isTrending: boolean;
     pricePerPage: unknown;
     prepTimeMinutes: number | null;
     imagePath: string | null;
@@ -324,6 +336,7 @@ export class SellerRepository {
     return {
       ...seller,
       status: seller.status as SellerStatus,
+      isTrending: seller.isTrending,
       prepTimeMinutes: seller.prepTimeMinutes ?? 0,
       imagePath: seller.imagePath ?? null,
       rating: seller.rating != null ? Number(seller.rating) : null,

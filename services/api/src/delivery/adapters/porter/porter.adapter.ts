@@ -46,16 +46,44 @@ export class PorterAdapter implements DeliveryAdapter {
     // DUMMY: Porter pricing: Base ₹60 + ₹12/km (slightly premium)
     const baseFee = 60;
     const perKmFee = 12;
-    const estimatedFee = baseFee + Math.ceil(distance * perKmFee);
-    const estimatedDurationMinutes = Math.ceil(12 + distance * 1.8);
+    const estimatedDistanceFee = Math.ceil(distance * perKmFee);
+    
+    // Bike: base
+    const bikeFee = baseFee + estimatedDistanceFee;
+    const bikeMinutes = Math.ceil(12 + distance * 1.8);
+    
+    // Mini Truck/Van: Base * 1.5
+    const vanFee = Math.ceil(bikeFee * 1.5);
+    const vanMinutes = Math.ceil(12 + distance * 2.2);
+    
+    // Large Truck: Base * 2.5
+    const truckFee = Math.ceil(bikeFee * 2.5);
+    const truckMinutes = Math.ceil(12 + distance * 2.8);
 
     return {
       provider: this.PROVIDER_NAME,
-      estimatedFee,
-      estimatedDurationMinutes,
+      estimatedFee: bikeFee, // Keep cheapest as default
+      estimatedDurationMinutes: bikeMinutes,
       currency: 'INR',
       quoteId: `porter-${Date.now()}`,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000), // Expires in 5 minutes
+      vehicleOptions: [
+        {
+          vehicleType: 'bike',
+          estimatedFee: bikeFee,
+          estimatedDurationMinutes: bikeMinutes,
+        },
+        {
+          vehicleType: 'van',
+          estimatedFee: vanFee,
+          estimatedDurationMinutes: vanMinutes,
+        },
+        {
+          vehicleType: 'truck',
+          estimatedFee: truckFee,
+          estimatedDurationMinutes: truckMinutes,
+        }
+      ]
     };
   }
 

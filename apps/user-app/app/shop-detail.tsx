@@ -13,6 +13,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -30,7 +31,9 @@ export default function ShopDetailScreen() {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
-  const { shopId } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  const { shopId: rawShopId } = useLocalSearchParams();
+  const shopId = Array.isArray(rawShopId) ? rawShopId[0] : rawShopId;
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
@@ -474,7 +477,7 @@ export default function ShopDetailScreen() {
       ) : (
       <ScrollView showsVerticalScrollIndicator={false} scrollEventThrottle={16}>
         {/* Header */}
-        <View style={styles.headerRow}>
+        <View style={[styles.headerRow, { paddingTop: Math.max(insets.top + 10, 24) }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon}>
             <MaterialIcons name="arrow-back" size={26} color={colors.textPrimary} />
           </TouchableOpacity>

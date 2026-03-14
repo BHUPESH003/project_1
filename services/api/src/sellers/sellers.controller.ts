@@ -86,6 +86,48 @@ export class SellersController {
   }
 
   /**
+   * GET /v1/sellers/new
+   * Find newly added sellers
+   */
+  @Get('new')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Find newly added sellers',
+    description: 'Returns list of recently added sellers (ONLINE), sorted by newest first.',
+  })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'lat', required: false })
+  @ApiQuery({ name: 'lng', required: false })
+  @ApiResponse({ status: 200, description: 'List of sellers' })
+  findNewlyAddedSellers(
+    @Query() query: FindAvailableSellersDto,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.findNewlyAddedSellers(query, req.user?.id);
+  }
+
+  /**
+   * GET /v1/sellers/trending
+   * Find trending/advertised sellers
+   */
+  @Get('trending')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Find trending/advertised sellers',
+    description: 'Returns list of trending/advertised sellers (ONLINE).',
+  })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'lat', required: false })
+  @ApiQuery({ name: 'lng', required: false })
+  @ApiResponse({ status: 200, description: 'List of sellers' })
+  findTrendingSellers(
+    @Query() query: FindAvailableSellersDto,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.findTrendingSellers(query, req.user?.id);
+  }
+
+  /**
    * GET /v1/sellers/:id/products
    * Get all products for a specific seller
    * Public endpoint

@@ -32,7 +32,14 @@ export const productsApi = {
    */
   async getSellerProducts(sellerId: string): Promise<Product[]> {
     const res = await client.get(`/sellers/${sellerId}/products`);
-    return unwrap(res) as Product[];
+    const payload = unwrap<any>(res);
+    if (payload && Array.isArray(payload.items)) {
+      return payload.items as Product[];
+    }
+    if (Array.isArray(payload)) {
+      return payload as Product[];
+    }
+    return [];
   },
 
   /**
