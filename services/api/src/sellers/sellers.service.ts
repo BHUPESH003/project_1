@@ -322,4 +322,17 @@ export class SellersService {
       statusUpdatedAt: updatedSeller.statusUpdatedAt,
     };
   }
+
+  async getSellerProductsDifferential(sellerId: string, sinceDate: Date) {
+    const seller = await this.sellerRepository.findById(sellerId, false);
+    if (!seller) throw new NotFoundException('Seller with ID ' + sellerId + ' not found');
+
+    const rows = await this.prismaService.prisma.product.findMany({
+      where: { sellerId, updatedAt: { gt: sinceDate } },
+      select: { id: true, name: true, description: true, category: true, unit: true, price: true, mrp: true, image: true, inStock: true, isBestSeller: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    return { products: rows, sync_timestamp: new Date().toISOString() };
+  }
 }

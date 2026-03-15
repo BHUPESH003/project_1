@@ -1,3 +1,7 @@
+import { useParallelScreenData } from '../src/hooks/useParallelScreenData';
+import Constants from 'expo-constants';
+ from 'expo-constants';
+const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000';
 /**
  * Shop Detail Screen – Products, services, and cart management
  * 

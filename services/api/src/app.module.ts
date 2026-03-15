@@ -22,10 +22,12 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { SearchModule } from './search/search.module';
 import { CartModule } from './cart/cart.module';
 import { ProductsModule } from './products/products.module';
+import { CacheModule } from './cache/cache.module';
 import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
+    CacheModule,
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
