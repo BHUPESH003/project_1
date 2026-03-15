@@ -27,6 +27,7 @@ import { DeliveryPartnerRepository } from '@/delivery/repositories/delivery-part
 import { PrismaService } from '@/prisma/prisma.service';
 import { QueueService } from '@/queue/queue.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateBatchOrdersDto, CreateBatchOrdersResponseDto, BatchOrderResult } from './dto/create-batch-orders.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
@@ -282,6 +283,83 @@ export class OrdersService {
     return {
       order_id: order.id,
       status: order.status,
+    };
+  }
+
+  /**
+   * Create multiple orders in batch (for multi-cart combined checkout)
+   * Processes each order independently in parallel using Promise.all()
+   * Each order gets its own transaction and state machine
+   * On partial failure: some orders may succeed while others fail
+   * User clears only successful carts from frontend
+   */
+  async createBatch(
+    userId: string,
+    createBatchOrdersDto: CreateBatchOrdersDto,
+  ): Promise<CreateBatchOrdersResponseDto> {
+    const results: BatchOrderResult[] = [];
+
+    // Process all orders in parallel
+    const orderPromises = createBatchOrdersDto.orders.map(async (orderDto) => {
+      try {
+        // Create individual order using existing create() method
+        const result = await this.create(userId, orderDto);
+
+        return {
+          sellerId: orderDto.sellerId || 'unknown',
+          orderId: result.order_id,
+          status: 'success' as const,
+        };
+      } catch (error: any) {
+        const errorMsg =
+          error?.message || 'Unknown error during order creation';
+
+        this.logger.error(
+          `Batch order creation failed for seller ${orderDto.sellerId}:`,
+          error,
+        );
+
+        return {
+          sellerId: orderDto.sellerId || 'unknown',
+          orderId: '',
+          status: 'failed' as const,
+          error: errorMsg,
+        };
+      }
+    });
+
+    // Wait for all to settle (Promise.all fails on first error, so use allSettled)
+    const settledResults = await Promise.allSettled(
+      orderPromises,
+    );
+
+    // Extract results
+    for (const settledResult of settledResults) {
+      if (settledResult.status === 'fulfilled') {
+        results.push(settledResult.value);
+      } else {
+        results.push({
+          sellerId: 'unknown',
+          orderId: '',
+          status: 'failed',
+          error: settledResult.reason?.message || 'Order creation failed',
+        });
+      }
+    }
+
+    // Calculate summary stats
+    const successCount = results.filter((r) => r.status === 'success').length;
+    const failureCount = results.length - successCount;
+
+    this.logger.log(
+      `Batch order creation completed: ${successCount} success, ${failureCount} failed out of ${results.length} total`,
+    );
+
+    return {
+      results,
+      totalProcessed: results.length,
+      successCount,
+      failureCount,
     };
   }
 

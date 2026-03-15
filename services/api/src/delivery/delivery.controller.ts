@@ -56,15 +56,21 @@ export class DeliveryController {
    * - pickupLatitude/pickupLongitude: Seller location OR ride pickup location
    * - dropLatitude/dropLongitude: User location OR ride drop location
    *
+   * MULTI-CART SUPPORT:
+   * - Query param sellerId: Fetch delivery options specific to this seller's location
+   * - Backend returns availability for that seller's pickup location
+   * - Frontend calls this per seller in multi-cart flows
+   *
    * @param quotationsDto - Pickup and drop location details
    * @param orderId - Optional order ID to link quotations to an order
+   * @param sellerId - Optional seller ID to get delivery partners for that seller's location
    */
   @Post('quotations')
   @ApiTags('Delivery (Public)')
   @ApiOperation({
     summary: 'Get available delivery partners',
     description:
-      'Returns delivery partner options with quotations for the given pickup and drop locations. User can select their preferred option based on price, speed, or provider rating. Also supports ad-hoc ride bookings without an order.',
+      'Returns delivery partner options with quotations for the given pickup and drop locations. User can select their preferred option based on price, speed, or provider rating. Also supports ad-hoc ride bookings without an order. In multi-cart flows, pass sellerId to get delivery options specific to that seller.',
   })
   @ApiResponse({
     status: 200,
@@ -77,13 +83,20 @@ export class DeliveryController {
     required: false,
     description: 'Optional order ID to link quotations to an order',
   })
+  @ApiQuery({
+    name: 'sellerId',
+    required: false,
+    description: 'Optional seller ID for multi-cart checkout (fetch delivery partners for this seller)',
+  })
   async getAvailableDeliveryPartners(
     @Body() quotationsDto: GetQuotationsDto,
     @Query('orderId') orderId?: string,
+    @Query('sellerId') sellerId?: string,
   ): Promise<AvailableDeliveryPartnersResponse> {
     return this.quotationService.getAvailableDeliveryPartners(
       quotationsDto,
       orderId,
+      sellerId,
     );
   }
 

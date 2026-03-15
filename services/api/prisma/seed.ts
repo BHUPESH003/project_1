@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Decimal } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import {
@@ -634,6 +634,68 @@ async function main() {
     });
 
     console.log('✅ Delivery partners seeded');
+
+    // ──────────────────────────────────────────────
+    // MULTI-CART SAMPLE DATA (SEED)
+    // ──────────────────────────────────────────────
+    console.log('Seeding multi-cart data...');
+
+    // Get test user and first 2 sellers
+    const testUser = await prisma.user.findUnique({
+      where: { phone: '+911234567890' },
+    });
+
+    if (testUser) {
+      const sellers = await prisma.seller.findMany({
+        take: 2,
+      });
+
+      // Create sample carts for each seller
+      for (let i = 0; i < sellers.length; i++) {
+        // Check if cart already exists
+        const existingCart = await prisma.cart.findUnique({
+          where: {
+            userId_sellerId_status: {
+              userId: testUser.id,
+              sellerId: sellers[i].id,
+              status: 'active',
+            },
+          },
+        });
+
+        if (!existingCart) {
+          const cart = await prisma.cart.create({
+            data: {
+              userId: testUser.id,
+              sellerId: sellers[i].id,
+              status: 'active',
+            },
+          });
+
+          // Add 2-3 sample items to each cart
+          const products = await prisma.product.findMany({
+            where: { sellerId: sellers[i].id },
+            take: 3,
+          });
+
+          for (let j = 0; j < products.length; j++) {
+            await prisma.cartItem.create({
+              data: {
+                cartId: cart.id,
+                productId: products[j].id,
+                sellerId: sellers[i].id,
+                quantity: 1 + j,
+                payload: {},
+                priceAtAdd: new Decimal(products[j].price?.toString() || '0'),
+              },
+            });
+          }
+        }
+      }
+    }
+
+    console.log('✅ Multi-cart data seeded');
+
     console.log('\n🎉 Database seeded successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);
@@ -642,6 +704,8 @@ async function main() {
     await prisma.$disconnect();
     await pool.end();
   }
+
+  // Import Decimal at the top of the file for priceAtAdd field
 }
 
 main().catch((e) => {

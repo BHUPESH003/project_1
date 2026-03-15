@@ -1,7 +1,8 @@
 import { useParallelScreenData } from '../src/hooks/useParallelScreenData';
-import Constants from 'expo-constants';
- from 'expo-constants';
-const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000';
+import { StickyCartBar } from '@/components/StickyCartBar';
+
+// API URL - use localhost for development
+const API_URL = 'http://localhost:3000';
 /**
  * Shop Detail Screen – Products, services, and cart management
  * 
@@ -752,7 +753,15 @@ export default function ShopDetailScreen() {
       </ScrollView>
       )}
 
-      {/* Cart Bar - Floating */}
+      {/* Multiple Seller Sticky Cart Bar - For Multi-Cart */}
+      {itemCount > 0 && (
+        <StickyCartBar 
+          sellerId={shopId || ''}
+          sellerName={shopInfo.name}
+        />
+      )}
+
+      {/* Old single-seller cart bar */}
       {itemCount > 0 && (
         <View style={styles.cartBarContainer}>
           <TouchableOpacity 

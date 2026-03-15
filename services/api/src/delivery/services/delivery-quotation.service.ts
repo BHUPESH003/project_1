@@ -36,13 +36,18 @@ export class DeliveryQuotationService {
   /**
    * Get available delivery partners with quotations
    * Returns multiple quotes so user can choose
+   * 
+   * In multi-cart flows, sellerId can be passed to log seller context
+   * (though the actual pickup location comes from the quotation request)
    */
   async getAvailableDeliveryPartners(
     request: QuotationRequest,
     orderId?: string,
+    sellerId?: string,
   ): Promise<AvailableDeliveryPartnersResponse> {
+    const logContext = sellerId ? ` (seller: ${sellerId})` : '';
     this.logger.log(
-      `Fetching quotations for delivery: ${JSON.stringify(request)}`,
+      `Fetching quotations for delivery${logContext}: ${JSON.stringify(request)}`,
     );
 
     // Check cache for recent quotations
@@ -57,7 +62,7 @@ export class DeliveryQuotationService {
 
       if (cachedQuotations.length > 0) {
         this.logger.log(
-          `Using cached quotations: ${cachedQuotations.length} partners`,
+          `Using cached quotations${logContext}: ${cachedQuotations.length} partners`,
         );
         return this.formatResponse(cachedQuotations);
       }
@@ -89,7 +94,7 @@ export class DeliveryQuotationService {
       .sort((a, b) => a.priority - b.priority); // Sort by priority
 
     this.logger.log(
-      `Received ${successfulQuotations.length} valid quotations from ${partners.length} partners`,
+      `Received ${successfulQuotations.length} valid quotations${logContext} from ${partners.length} partners`,
     );
 
     return this.formatResponse(successfulQuotations);

@@ -22,6 +22,7 @@ import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
 import { UserRole, OrderStatus } from '@repo/types';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/create-order.dto';
+import { CreateBatchOrdersDto, CreateBatchOrdersResponseDto } from './dto/create-batch-orders.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
@@ -91,6 +92,45 @@ export class OrdersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.ordersService.create(req.user.id, createOrderDto);
+  }
+
+  /**
+   * POST /v1/orders/batch
+   * Create multiple orders in batch (for multi-cart combined checkout)
+   *
+   * FLOW:
+   * 1. User selects multiple seller carts for combined checkout
+   * 2. Frontend sends all cart data as array of CreateOrderDto
+   * 3. Backend processes each order independently in parallel
+   * 4. Returns results array showing which succeeded/failed
+   * 5. Frontend clears only successful carts from Zustand store
+   *
+   * Payload: { orders: [ { categoryId, sellerId, orderPayload }, ... ] }
+   * Response: { results: [ { sellerId, orderId, status, error? } ], totalProcessed, successCount, failureCount }
+   *
+   * NOTE: Uses Promise.allSettled() so partial failures don't block other orders
+   */
+  @Post('batch')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER, UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create multiple orders in batch (combined checkout)',
+    description:
+      'Creates multiple independent orders for different sellers in parallel. Each order is processed independently with its own transaction. On partial failure, some orders may succeed while others fail. Frontend should clear only successful carts. Requires USER role.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Batch orders processed',
+    type: CreateBatchOrdersResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  createBatch(
+    @Body() createBatchOrdersDto: CreateBatchOrdersDto,
+    @Request() req: { user: { id: string } },
+  ): Promise<CreateBatchOrdersResponseDto> {
+    return this.ordersService.createBatch(req.user.id, createBatchOrdersDto);
   }
 
   /**
