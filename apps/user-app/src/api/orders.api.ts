@@ -54,15 +54,20 @@ export interface OrderDetail {
 /** Delivery quote option - one provider option */
 export interface DeliveryQuoteOption {
   provider: string; // 'UBER_DIRECT', 'DUNZO', 'PORTER'
-  displayName: string; // 'Uber Direct', 'Dunzo', 'Porter'
-  estimatedFee: number; // Fee in rupees
-  estimatedDurationMinutes: number; // ETA in minutes
-  currency: string; // 'INR'
+  displayName?: string; // 'Uber Direct', 'Dunzo', 'Porter'
+  estimatedFee?: number; // Fee in rupees
+  estimatedDurationMinutes?: number; // ETA in minutes
+  currency?: string; // 'INR'
   features?: string[]; // Provider features
   logo?: string; // Provider logo URL
   rating?: number; // Provider rating
   quoteId?: string; // Provider quote ID
   expiresAt?: string; // Expiration timestamp
+  vehicles?: Array<{
+    type: string;
+    price: number;
+    estimated_time: string;
+  }>;
   vehicleOptions?: Array<{
     vehicleType: string;
     estimatedFee: number;

@@ -83,7 +83,7 @@ export class RazorpayProvider implements PaymentProvider {
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
     this.httpClient = axios.create({
       baseURL: this.config.baseUrl,
-      timeout: 30000, // 30 seconds
+      timeout: 5000, // 30 seconds
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Basic ${auth}`,

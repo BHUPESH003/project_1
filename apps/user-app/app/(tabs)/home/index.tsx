@@ -709,7 +709,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     margin: 16,
-    position: 'zIndex',
+    position: 'absolute',
     zIndex: 10,
   },
   spotlightTagText: {

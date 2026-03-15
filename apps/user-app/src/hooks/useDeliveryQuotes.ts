@@ -15,7 +15,7 @@ export function useDeliveryQuotes(orderId: string | null, location: DeliveryLoca
     queryKey: ['deliveryQuotes', orderId, location?.lat, location?.lng],
     queryFn: () => {
       if (!orderId || !location) throw new Error('Order ID and location required');
-      return ordersApi.getAllDeliveryQuotes(orderId, location);
+      return ordersApi.getDeliveryQuotes(orderId);
     },
     enabled: !!orderId && !!location,
   });

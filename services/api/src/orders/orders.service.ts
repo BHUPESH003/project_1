@@ -153,6 +153,22 @@ export class OrdersService {
       };
     }
 
+    // Ensure category exists in DB (auto-create if dynamically generated)
+    try {
+      await this.prismaService.prisma.category.upsert({
+        where: { id: createOrderDto.categoryId },
+        update: {},
+        create: {
+          id: createOrderDto.categoryId,
+          name: createOrderDto.categoryId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          status: 'ACTIVE',
+          description: `Auto-generated category for ${createOrderDto.categoryId}`,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Could not auto-create category ${createOrderDto.categoryId}: ${err}`);
+    }
+
     // Create order with enriched payload
     const order = await this.orderRepository.create({
       userId,

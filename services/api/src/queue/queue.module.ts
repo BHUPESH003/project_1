@@ -33,6 +33,8 @@ import { NotificationsModule } from '@/notifications/notifications.module';
           return {
             connection: {
               url: redisUrl,
+              enableOfflineQueue: false,
+              commandTimeout: 2000,
             },
           };
         }
@@ -42,6 +44,8 @@ import { NotificationsModule } from '@/notifications/notifications.module';
             host: configService.get<string>('REDIS_HOST', 'localhost'),
             port: configService.get<number>('REDIS_PORT', 6379),
             password: configService.get<string>('REDIS_PASSWORD'),
+            enableOfflineQueue: false,
+            commandTimeout: 2000,
           },
         };
       },

@@ -47,11 +47,9 @@ export default function PaymentMethodScreen() {
       if (method === 'razorpay') {
         // Handle Razorpay payment via web checkout
         try {
-          const paymentData = res.payment_intent?.paymentData || {};
-          const amount = res.amount || order?.pricing?.totalAmount || 0;
-          
-          // For web-based Razorpay, show informational alert and route to processing
-          // In production with native build, use react-native-razorpay
+            const rawRes = res as any;
+            const paymentData = rawRes.payment_intent?.paymentData || rawRes.payment?.payment_intent?.paymentData || {};
+            const amount = rawRes.amount || rawRes.total_amount || order?.pricing?.totalAmount || 0;
           Alert.alert(
             'Razorpay Payment – Expo Mode',
             `Payment Amount: ₹${amount}\n\nIn Expo Go, Razorpay requires a full build with native modules.\n\nFor development testing:\n• Create an EAS build (eas build)\n• Use native Razorpay SDK\n• Or switch to Paytm for testing`,
@@ -88,7 +86,8 @@ export default function PaymentMethodScreen() {
         }
       } else {
         // Handle Paytm payment (legacy)
-        const url = res?.payment?.payment_intent?.paymentData?.upi?.paymentUrl;
+          const rawRes = res as any;
+          const url = rawRes?.payment?.payment_intent?.paymentData?.upi?.paymentUrl || rawRes?.payment_intent?.paymentData?.upi?.paymentUrl;
         if (url) {
           const canOpen = await Linking.canOpenURL(url);
           if (canOpen) {

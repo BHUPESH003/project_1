@@ -90,7 +90,7 @@ export class PaytmProvider implements PaymentProvider {
 
     this.httpClient = axios.create({
       baseURL: this.config.baseUrl,
-      timeout: 30000, // 30 seconds
+      timeout: 5000, // 30 seconds
       headers: {
         'Content-Type': 'application/json',
       },

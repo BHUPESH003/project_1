@@ -115,16 +115,16 @@ export default function CheckoutScreen() {
       setDeliveryFee(vehicleType.fee);
     } else {
       setSelectedVehicleType('standard');
-      setDeliveryFee(provider.estimatedFee);
+      setDeliveryFee(provider.estimatedFee || 0);
     }
   };
 
   // Load delivery partners on checkout page load
   useEffect(() => {
     const loadDeliveryPartners = async () => {
-      try {
-        // Wait for location to be available
+      try {        // Wait for location to be available
         if (!selectedSellerId || !dropLocation) {
+          setPartnerError(!dropLocation ? 'Delivery location required to fetch quotes.' : 'No seller selected.');
           setInitialOrderLoading(false);
           return;
         }
@@ -175,14 +175,18 @@ export default function CheckoutScreen() {
           setCartOrderId(createdOrderId); // Store in cart store for persistence
         } else {
           setLocalOrderId(createdOrderId);
+          try { await ordersApi.updateOrder(createdOrderId, { dropLatitude: dropLocation.lat, dropLongitude: dropLocation.lng, dropAddress: dropLocation.address || '' }); } catch(e) { setCartOrderId(null); return; }
         }
 
         // Fetch delivery quotes
-        const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId);
-        setDeliveryPartners(quotesResponse.providers || []);
-      } catch (err: any) {
+                const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId) as any;
+        console.log('API RAW QUOTES RESP:', JSON.stringify(quotesResponse, null, 2));
+        const partners = quotesResponse?.providers || quotesResponse?.data?.providers || (Array.isArray(quotesResponse) ? quotesResponse : []);
+        setDeliveryPartners(partners);
+        if (partners.length === 0) setPartnerError('API Returned empty providers or structure is ' + JSON.stringify(quotesResponse));
+            } catch (err: any) {
         console.error('Failed to load delivery partners:', err);
-        setPartnerError('Could not load delivery partners. Please try again.');
+        setPartnerError(err?.response?.data?.message || err?.message || 'Could not complete fetching quotes.');
       } finally {
         setIsLoadingPartners(false);
         setInitialOrderLoading(false);
@@ -197,7 +201,7 @@ export default function CheckoutScreen() {
     mutationFn: async () => {
       // If order was already created by useEffect or from cart store, skip creation
       if (orderId || cartOrderId) {
-        return orderId || cartOrderId;
+        return (orderId || cartOrderId) as string;
       }
 
       if (!selectedSellerId) throw new Error('No seller selected');
@@ -244,8 +248,11 @@ export default function CheckoutScreen() {
       
       // Step 2: Fetch delivery quotes for this order (fallback if useEffect didn't load them)
       try {
-        const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId);
-        setDeliveryPartners(quotesResponse.providers || []);
+                const quotesResponse = await ordersApi.getDeliveryQuotes(createdOrderId) as any;
+        console.log('API RAW QUOTES RESP:', JSON.stringify(quotesResponse, null, 2));
+        const partners = quotesResponse?.providers || quotesResponse?.data?.providers || (Array.isArray(quotesResponse) ? quotesResponse : []);
+        setDeliveryPartners(partners);
+        if (partners.length === 0) setPartnerError('API Returned empty providers or structure is ' + JSON.stringify(quotesResponse));
       } catch (err: any) {
         console.warn('Failed to fetch delivery quotes:', err);
         setPartnerError('Could not load delivery partners. Please try again.');
@@ -255,8 +262,8 @@ export default function CheckoutScreen() {
     },
     onSuccess: async (resolvedOrderId) => {
       // Store order ID for payment flow
-      setOrderId(resolvedOrderId);
-      setDeliveryProviderOD(selectedProvider ?? null);
+      setOrderId(resolvedOrderId as string);
+      setDeliveryProviderOD(selectedProvider || null);
       setDeliveryFeeOD(deliveryFee);
       // Temporarily store the vehicle type if we need it for UI on order progress page
       // Optionally could add this to order draft store: setVehicleTypeOD(selectedVehicleType);
@@ -402,37 +409,47 @@ export default function CheckoutScreen() {
               </View>
             ) : (
               deliveryPartners.map((partner) => {
-                const isSelectedPartner = selectedProvider === partner.provider;
-                
-                // If it doesn't have multiple options, show just the single card fee
-                const defaultFee = partner.vehicleOptions && partner.vehicleOptions.length > 0 
-                                      ? partner.vehicleOptions[0].estimatedFee 
-                                      : partner.estimatedFee;
-                                      
+                  const vehicles = partner.vehicleOptions || partner.vehicles?.map(v => ({
+                    vehicleType: v.type.toLowerCase(),
+                    estimatedFee: v.price || 0,
+                    estimatedDurationMinutes: parseInt(String(v.estimated_time || '30').replace(/\D/g, ''), 10) || 30
+                  }));
+
+                  const displayName = partner.displayName || (partner.provider.charAt(0).toUpperCase() + partner.provider.slice(1));
+                  const isSelectedPartner = selectedProvider === partner.provider;
+
+                  // If it doesn't have multiple options, show just the single card fee
+                  const defaultFee = vehicles && vehicles.length > 0
+                                        ? vehicles[0].estimatedFee
+                                        : (partner.estimatedFee || 0);
+
+                  const defaultTime = vehicles && vehicles.length > 0
+                                        ? vehicles[0].estimatedDurationMinutes 
+                                        : (partner.estimatedDurationMinutes || 30);
                 return (
                   <View key={partner.provider} style={{ marginBottom: spacing.md }}>
                     <TouchableOpacity
                       style={[
                         styles.partnerCard,
                         isSelectedPartner && styles.partnerCardSelected,
-                        { marginBottom: isSelectedPartner && partner.vehicleOptions ? 0 : spacing.md, 
-                          borderBottomLeftRadius: isSelectedPartner && partner.vehicleOptions ? 0 : 12,
-                          borderBottomRightRadius: isSelectedPartner && partner.vehicleOptions ? 0 : 12,
-                          borderBottomWidth: isSelectedPartner && partner.vehicleOptions ? 0 : 2
+                        { marginBottom: isSelectedPartner && vehicles ? 0 : spacing.md, 
+                          borderBottomLeftRadius: isSelectedPartner && vehicles ? 0 : 12,
+                          borderBottomRightRadius: isSelectedPartner && vehicles ? 0 : 12,
+                          borderBottomWidth: isSelectedPartner && vehicles ? 0 : 2
                         }
                       ]}
                       onPress={() => handleSelectProvider(partner, 
-                          partner.vehicleOptions ? { type: partner.vehicleOptions[0].vehicleType, fee: partner.vehicleOptions[0].estimatedFee } : undefined)}
+                          vehicles && vehicles.length > 0 ? { type: vehicles[0].vehicleType, fee: vehicles[0].estimatedFee } : undefined)}
                     >
                       <View style={styles.partnerIconWrap}>
                         <MaterialIcons name="local-shipping" size={28} color={colors.primary} />
                       </View>
                       <View style={styles.partnerContent}>
                         <View style={styles.partnerNameRow}>
-                          <Text style={styles.partnerName}>{partner.displayName}</Text>
+                          <Text style={styles.partnerName}>{displayName}</Text>
                         </View>
                         <Text style={styles.partnerTime}>
-                          {partner.estimatedDurationMinutes} mins
+                          {defaultTime} mins
                         </Text>
                       </View>
                       <View style={styles.partnerFeeWrap}>
@@ -451,10 +468,10 @@ export default function CheckoutScreen() {
                     </TouchableOpacity>
                     
                     {/* Render sub-vehicle options if partner is selected */}
-                    {isSelectedPartner && partner.vehicleOptions && partner.vehicleOptions.length > 0 && (
+                    {isSelectedPartner && vehicles && vehicles.length > 0 && (
                       <View style={[styles.vehicleOptionsContainer, { borderColor: colors.primary }]}>
                          <Text style={styles.vehicleOptionsTitle}>Select Vehicle Type:</Text>
-                         {partner.vehicleOptions.map((vehicle) => (
+                         {vehicles.map((vehicle) => (
                            <TouchableOpacity 
                               key={vehicle.vehicleType}
                               style={[
