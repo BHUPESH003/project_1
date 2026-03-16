@@ -46,10 +46,38 @@ export class CreateBatchOrdersDto {
  * Batch Order Result - Result for each order in the batch
  */
 export class BatchOrderResult {
-  sellerId: string;
-  orderId: string;
-  status: 'success' | 'failed';
+  @ApiProperty({
+    description: 'Seller ID',
+    example: 'seller-1',
+  })
+  sellerId!: string;
+
+  @ApiProperty({
+    description: 'Order ID (null if failed)',
+    example: 'order-123',
+    nullable: true,
+  })
+  orderId?: string;
+
+  @ApiProperty({
+    description: 'Order status',
+    enum: ['success', 'failed'],
+    example: 'success',
+  })
+  status!: 'success' | 'failed';
+
+  @ApiProperty({
+    description: 'Error message (if failed)',
+    example: 'Insufficient inventory',
+    nullable: true,
+  })
   error?: string;
+
+  @ApiProperty({
+    description: 'Total item cost',
+    example: 100,
+    nullable: true,
+  })
   itemCost?: number;
 }
 

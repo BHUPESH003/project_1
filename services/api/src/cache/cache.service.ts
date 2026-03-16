@@ -6,29 +6,62 @@ import { latLngToCell } from 'h3-js';
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
   private readonly DEFAULT_TTL = 300;
-  private readonly CACHE_TIMEOUT = 1000; // 1 second timeout for cache operations
+  private readonly CACHE_TIMEOUT = 2000; // 2 second timeout for cache operations
+  private isRedisAvailable = false;
 
-  constructor(@Inject('REDIS_CLIENT') private readonly redisClient: Redis) {}
+  constructor(@Inject('REDIS_CLIENT') private readonly redisClient: Redis) {
+    // Check if Redis is available
+    this.redisClient.on('ready', () => {
+      this.isRedisAvailable = true;
+      this.logger.log('✓ Redis is ready for commands');
+    });
+
+    this.redisClient.on('error', () => {
+      this.isRedisAvailable = false;
+    });
+
+    // Initial check
+    this.checkRedisAvailable();
+  }
+
+  /**
+   * Check if Redis is available
+   */
+  private checkRedisAvailable(): void {
+    try {
+      if (!this.redisClient) {
+        this.isRedisAvailable = false;
+        return;
+      }
+      this.isRedisAvailable = this.redisClient.status === 'ready';
+    } catch (err) {
+      this.isRedisAvailable = false;
+    }
+  }
 
   /**
    * Get value from cache with timeout protection
    */
   async get<T>(key: string): Promise<T | null> {
+    if (!this.isRedisAvailable) {
+      return null; // Return null if Redis not available
+    }
+
     try {
       // Add timeout wrapper to prevent hanging
       const data = await Promise.race([
-        this.redisClient.get(key),
+        this.redisClient.get(key) as Promise<string | null>,
         new Promise<null>((_, reject) =>
           setTimeout(() => reject(new Error('Cache get timeout')), this.CACHE_TIMEOUT)
         ),
       ]);
       return data ? JSON.parse(data as string) : null;
     } catch (err: any) {
-      // Don't log every cache miss, only actual errors
-      if (err.message !== 'Cache get timeout' && !err.message.includes('read')) {
-        this.logger.debug(`Cache get issue (${key}): ${err.message}`);
+      // Silently fail on timeout or connection issues
+      if (err.message?.includes('timeout') || err.message?.includes('Connection')) {
+        this.isRedisAvailable = false;
       }
-      return null; // Graceful fallback
+      return null;
     }
   }
 
@@ -36,19 +69,26 @@ export class CacheService {
    * Set value to cache with timeout protection
    */
   async set(key: string, value: any, ttlSeconds: number = this.DEFAULT_TTL): Promise<void> {
+    if (!this.isRedisAvailable) {
+      return; // Skip if Redis not available
+    }
+
     try {
       const ttl = Math.max(ttlSeconds, 1);
       
       // Add timeout wrapper to prevent hanging
       await Promise.race([
-        this.redisClient.set(key, JSON.stringify(value), 'EX', ttl),
+        this.redisClient.set(key, JSON.stringify(value), 'EX', ttl) as Promise<string>,
         new Promise<void>((_, reject) =>
           setTimeout(() => reject(new Error('Cache set timeout')), this.CACHE_TIMEOUT)
         ),
       ]);
     } catch (err: any) {
-      // Don't block operations if cache fails
-      this.logger.debug(`Cache set issue (${key}): ${err.message}`);
+      // Silently fail on timeout or connection issues
+      if (err.message?.includes('timeout') || err.message?.includes('Connection')) {
+        this.isRedisAvailable = false;
+      }
+      // Don't throw - allow operation to continue without caching
     }
   }
 
@@ -69,6 +109,6 @@ export class CacheService {
    * Check if Redis is connected
    */
   isConnected(): boolean {
-    return this.redisClient?.status === 'ready';
+    return this.isRedisAvailable;
   }
 }

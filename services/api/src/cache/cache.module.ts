@@ -12,33 +12,38 @@ const logger = new Logger('CacheModule');
     {
       provide: 'REDIS_CLIENT',
       useFactory: (configService: ConfigService) => {
-        const url = configService.get('REDIS_URL');
+        const redisUrl = configService.get('REDIS_URL');
+        const redisHost = configService.get('REDIS_HOST', 'localhost');
+        const redisPort = configService.get('REDIS_PORT', 6379);
+        const redisPassword = configService.get('REDIS_PASSWORD');
         
-        const redisConfig = url 
-          ? url 
+        // Build Redis configuration object
+        const redisConfig = redisUrl 
+          ? redisUrl  // If REDIS_URL is set, use it directly as connection string
           : {
-              host: configService.get('REDIS_HOST', 'localhost'),
-              port: configService.get('REDIS_PORT', 6379),
-              password: configService.get('REDIS_PASSWORD'),
-              connectTimeout: 2000,
-              commandTimeout: 2000,
-              maxRetriesPerRequest: 1,
-              enableReadyCheck: true,
+              host: redisHost,
+              port: redisPort,
+              password: redisPassword || undefined,
+              connectTimeout: 10000,
+              commandTimeout: 10000,
+              maxRetriesPerRequest: null,
+              maxRetries: 0,
+              enableReadyCheck: false,
               enableOfflineQueue: false,
-              lazyConnect: true, // Don't connect immediately on instantiation
               retryStrategy: (times: number) => {
-                if (times > 2) {
-                  logger.warn(`⚠️ Redis connection failed after ${times} retries. Cache disabled - operations will continue without caching.`);
+                if (times > 5) {
+                  logger.warn(`⚠️ Redis connection failed after ${times} retries. Cache disabled.`);
                   return null;
                 }
-                const delay = Math.min(times * 100, 1000);
+                const delay = Math.min(times * 500, 5000);
                 return delay;
               }
             };
 
+        // Create Redis instance with proper configuration
         const redis = new Redis(redisConfig);
         
-        // Setup event handlers for non-blocking monitoring
+        // Setup event handlers
         redis.on('error', (err) => {
           logger.warn(`⚠️ Redis Error: ${err.message}`);
         });
@@ -51,11 +56,9 @@ const logger = new Logger('CacheModule');
           logger.warn('⚠️ Redis cache connection closed');
         });
 
-        // Try to connect asynchronously without blocking app startup
-        if (!url && redisConfig !== url) {
-          redis.connect()
-            .then(() => logger.log('✓ Redis cache ready'))
-            .catch((err) => logger.warn(`⚠️ Redis initial connection failed (will retry): ${err.message}`));
+        // Set additional timeouts for command operations
+        if (typeof redisConfig === 'object') {
+          redis.setMaxListeners(10);
         }
 
         return redis;

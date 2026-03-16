@@ -29,12 +29,25 @@ import { NotificationsModule } from '@/notifications/notifications.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const redisUrl = configService.get<string>('REDIS_URL');
+        const baseConfig = {
+          enableOfflineQueue: false,
+          enableReadyCheck: false,
+          maxRetriesPerRequest: null,
+          maxRetries: 0,
+          connectTimeout: 10000,
+          commandTimeout: 10000,
+          retryStrategy: (retries: number) => {
+            // Stop retrying after 5 attempts to allow app to start
+            if (retries > 5) return null;
+            return Math.min(retries * 500, 5000);
+          },
+        };
+
         if (redisUrl) {
           return {
             connection: {
               url: redisUrl,
-              enableOfflineQueue: false,
-              commandTimeout: 2000,
+              ...baseConfig,
             },
           };
         }
@@ -44,8 +57,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
             host: configService.get<string>('REDIS_HOST', 'localhost'),
             port: configService.get<number>('REDIS_PORT', 6379),
             password: configService.get<string>('REDIS_PASSWORD'),
-            enableOfflineQueue: false,
-            commandTimeout: 2000,
+            ...baseConfig,
           },
         };
       },
