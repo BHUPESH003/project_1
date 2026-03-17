@@ -28,30 +28,25 @@ import { NotificationsModule } from '@/notifications/notifications.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const redisUrl = configService.get<string>('REDIS_URL');
+        // Always use host/port/password approach (no REDIS_URL)
         const baseConfig = {
-          enableOfflineQueue: false,
+          enableOfflineQueue: true, // Allow commands to queue while connecting
           enableReadyCheck: false,
           maxRetriesPerRequest: null,
-          maxRetries: 0,
+          maxRetries: 3, // Match cache module for consistency
           connectTimeout: 10000,
           commandTimeout: 10000,
           retryStrategy: (retries: number) => {
-            // Stop retrying after 5 attempts to allow app to start
-            if (retries > 5) return null;
-            return Math.min(retries * 500, 5000);
+            // Use exponential backoff - matches cache module for consistency
+            const delay = Math.min(Math.pow(2, Math.min(retries, 5)) * 100, 5000);
+            if (retries % 5 === 0) {
+              console.warn(`⚠️ Redis queue connection attempt ${retries}, retry in ${delay}ms`);
+            }
+            return delay; // Indefinite retries with backoff
           },
         };
 
-        if (redisUrl) {
-          return {
-            connection: {
-              url: redisUrl,
-              ...baseConfig,
-            },
-          };
-        }
-        // Fallback to local Redis for development
+        // Use host/port/password for connection
         return {
           connection: {
             host: configService.get<string>('REDIS_HOST', 'localhost'),

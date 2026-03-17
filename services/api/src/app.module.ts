@@ -27,12 +27,13 @@ import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
-    CacheModule,
-    // Configuration
+    // Configuration - MUST be first (CacheModule and other modules depend on ConfigService)
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
+    // Cache (depends on ConfigModule)
+    CacheModule,
     // Prisma (Global module)
     PrismaModule,
     // Rate limiting

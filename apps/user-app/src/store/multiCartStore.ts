@@ -442,8 +442,20 @@ export const useMultiCartStore = create<MultiCartState>()(
       partialize: (state) => ({
         carts: state.carts,
         activeCartSellerId: state.activeCartSellerId,
-        // Don't persist checkout state (temporary)
+        // Convert Set to array for serialization
+        selectedForCheckout: Array.from(state.selectedForCheckout),
+        sharedDeliveryAddress: state.sharedDeliveryAddress,
       }),
+      // Convert array back to Set on hydration
+      migrate: (persistedState: any, version: number) => {
+        if (persistedState && Array.isArray(persistedState.selectedForCheckout)) {
+          return {
+            ...persistedState,
+            selectedForCheckout: new Set(persistedState.selectedForCheckout),
+          };
+        }
+        return persistedState;
+      },
     }
   )
 );

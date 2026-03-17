@@ -1,588 +1,459 @@
 /**
- * CombinedCheckoutFlow Component
- *
- * Three-step combined checkout for multiple seller carts:
- * Step 1: Delivery Address - Single shared address selector
- * Step 2: Delivery Partner Selection - Per-seller delivery partner choice
- * Step 3: Order Placement - Silent parallel order creation
+ * Multi-Cart Combined Checkout Flow
+ * 
+ * Orchestrates checkout for items from multiple sellers:
+ * 1. User confirms delivery address
+ * 2. Create orders for all sellers
+ * 3. Show delivery options per seller
+ * 4. User selects providers
+ * 5. Process unified payment
+ * 6. Clear carts
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
-  ScrollView,
+  TouchableOpacity,
   View,
   Text,
-  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useMultiCartStore } from '@/store/multiCartStore';
+import { useRouter } from 'expo-router';
+import { useMutation } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useMultiCartStore } from '@/store/multiCartStore';
+import { MultiCartCheckoutService } from '@/services/multiCartCheckout.service';
+import { showToast } from '@/lib/toast';
 
-type Step = 'address' | 'delivery' | 'placing';
-
-interface DeliveryOption {
-  id: string;
-  provider: string;
-  displayName: string;
-  eta: string;
-  price: number;
-}
-
-interface SelectedDeliveryPartner {
-  sellerId: string;
-  partner: DeliveryOption;
-}
-
-export const CombinedCheckoutFlow: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const { selectedSellers } = route.params;
-
-  const [currentStep, setCurrentStep] = useState<Step>('address');
-  const [deliveryAddress, setDeliveryAddress] = useState<{
-    lat: number;
-    lng: number;
+interface CombinedCheckoutFlowProps {
+  deliveryAddress: {
+    latitude: number;
+    longitude: number;
     address: string;
-  } | null>(null);
-  const [selectedPartners, setSelectedPartners] = useState<
-    SelectedDeliveryPartner[]
-  >([]);
-  const [isPlacing, setIsPlacing] = useState(false);
-
-  const sharedDeliveryAddress = useMultiCartStore(
-    (state) => state.sharedDeliveryAddress
-  );
-  const carts = useMultiCartStore((state) =>
-    state.getAllCartsWithItems()
-  ).filter((cart) => selectedSellers.includes(cart.sellerId));
-
-  // Step 1: Address Selection
-  const handleAddressSelect = async () => {
-    // In real implementation, this would open a location picker
-    // For now, assume user already selected via modal
-    if (sharedDeliveryAddress) {
-      useMultiCartStore.setState({ sharedDeliveryAddress });
-      setCurrentStep('delivery');
-    } else {
-      Alert.alert('Select Address', 'Please select a delivery address');
-    }
   };
+  onSuccess?: () => void;
+  onError?: (error: string) => void;
+}
 
-  // Step 2: Delivery Partner Selection per Seller
-  const handleDeliveryPartnerSelect = (
-    sellerId: string,
-    partner: DeliveryOption
-  ) => {
-    setSelectedPartners((prev) => {
-      const filtered = prev.filter((p) => p.sellerId !== sellerId);
-      return [...filtered, { sellerId, partner }];
-    });
-  };
+export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
+  deliveryAddress,
+  onSuccess,
+  onError,
+}) => {
+  const router = useRouter();
+  const [step, setStep] = useState<
+    'create_orders' | 'delivery_quotes' | 'select_providers' | 'payment' | 'complete'
+  >('create_orders');
+  const [orders, setOrders] = useState<any[]>([]);
+  const [deliveryOptions, setDeliveryOptions] = useState<any>({});
+  const [selectedProviders, setSelectedProviders] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
-  const allPartnersSelected =
-    selectedPartners.length === selectedSellers.length;
+  // Fetch all carts from store
+  const carts = useMultiCartStore((state) => state.carts);
+  const activeCarts = Object.values(carts)
+    .filter((cart) => cart.items.length > 0)
+    .map((cart) => ({
+      sellerId: cart.sellerId,
+      sellerName: cart.sellerName,
+      items: cart.items,
+      subtotal: cart.items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      ),
+    }));
 
-  // Step 3: Place Orders
-  const handlePlaceOrders = async () => {
-    if (!allPartnersSelected) {
-      Alert.alert(
-        'Complete Selection',
-        'Please select a delivery partner for each seller'
-      );
-      return;
-    }
+  // Step 1: Create Orders for all sellers
+  const createOrdersMutation = useMutation({
+    mutationFn: async () => {
+      setLoading(true);
+      try {
+        const createdOrders =
+          await MultiCartCheckoutService.createAllOrders(deliveryAddress);
+        setOrders(createdOrders);
+        showToast({
+          type: 'success',
+          message: `${createdOrders.length} orders created`,
+          duration: 2000,
+        });
+        setStep('delivery_quotes');
+      } catch (error: any) {
+        showToast({
+          type: 'error',
+          message: `Failed to create orders: ${error.message}`,
+          duration: 3000,
+        });
+        if (onError) onError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
 
-    setIsPlacing(true);
-
-    try {
-      // Build batch order payload
-      const orderPayloads = carts.map((cart) => {
-        const partnerSelection = selectedPartners.find(
-          (p) => p.sellerId === cart.sellerId
+  // Step 2: Fetch Delivery Quotes
+  const fetchQuotesMutation = useMutation({
+    mutationFn: async () => {
+      setLoading(true);
+      try {
+        const orderIds = orders.map((o) => o.orderId);
+        const quotes = await MultiCartCheckoutService.getDeliveryQuotes(
+          orderIds,
+          deliveryAddress,
         );
 
-        return {
-          categoryId: 'printing', // TODO: Get from cart metadata
-          sellerId: cart.sellerId,
-          orderPayload: {
-            items: cart.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-            })),
-            dropLatitude: sharedDeliveryAddress?.lat,
-            dropLongitude: sharedDeliveryAddress?.lng,
-            dropAddress: sharedDeliveryAddress?.address,
-          },
-          deliveryPartner: partnerSelection?.partner.provider,
-          deliveryFee: partnerSelection?.partner.price,
-        };
-      });
-
-      // Call API to create batch orders
-      const response = await fetch('/api/v1/orders/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orders: orderPayloads }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to place orders');
-      }
-
-      // Clear successful carts
-      const successfulSellers = result.results
-        .filter((r: any) => r.status === 'success')
-        .map((r: any) => r.sellerId);
-
-      useMultiCartStore.setState((state) => {
-        const newCarts = { ...state.carts };
-        successfulSellers.forEach((sellerId: string) => {
-          delete newCarts[sellerId];
+        const quotesMap: Record<string, any> = {};
+        quotes.forEach((q) => {
+          quotesMap[q.orderId] = q.providers;
+          // Auto-select cheapest provider
+          if (q.cheapest) {
+            setSelectedProviders((prev) => ({
+              ...prev,
+              [q.orderId]: q.cheapest.provider,
+            }));
+          }
         });
-        return {
-          carts: newCarts,
-          selectedForCheckout: new Set(),
-          checkoutSelections: {},
-        };
-      });
+        setDeliveryOptions(quotesMap);
+        showToast({
+          type: 'success',
+          message: 'Delivery options loaded',
+          duration: 2000,
+        });
+        setStep('select_providers');
+      } catch (error: any) {
+        showToast({
+          type: 'error',
+          message: `Failed to fetch delivery quotes: ${error.message}`,
+          duration: 3000,
+        });
+        if (onError) onError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
 
-      // Navigate to confirmation screen
-      navigation.navigate('OrderConfirmation', {
-        results: result.results,
-      });
-    } catch (error: any) {
-      Alert.alert(
-        'Order Failed',
-        error.message || 'Failed to place orders. Please try again.'
-      );
-    } finally {
-      setIsPlacing(false);
+  // Step 3: Confirm Orders with Payment
+  const confirmOrdersMutation = useMutation({
+    mutationFn: async () => {
+      setLoading(true);
+      try {
+        const confirmations = orders.map((order) => {
+          const provider = selectedProviders[order.orderId];
+          const option = deliveryOptions[order.orderId]?.find(
+            (o: any) => o.provider === provider,
+          );
+
+          return {
+            orderId: order.orderId,
+            sellerId: order.sellerId,
+            deliveryPartner: provider,
+            deliveryFee: option?.estimatedFee || 0,
+          };
+        });
+
+        const response = await MultiCartCheckoutService.confirmAllOrders(
+          confirmations,
+          'UPI',
+        );
+
+        showToast({
+          type: 'success',
+          message: `${response.confirmedOrders.length} orders confirmed!`,
+          duration: 2000,
+        });
+
+        // Clear cart after success
+        MultiCartCheckoutService.clearCheckoutCarts();
+        setStep('complete');
+
+        if (onSuccess) onSuccess();
+        setTimeout(() => {
+          router.push('/orders');
+        }, 1000);
+      } catch (error: any) {
+        showToast({
+          type: 'error',
+          message: `Failed to confirm orders: ${error.message}`,
+          duration: 3000,
+        });
+        if (onError) onError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
+
+  useEffect(() => {
+    // Auto-start creation on mount
+    if (step === 'create_orders' && !loading) {
+      createOrdersMutation.mutate();
     }
-  };
+  }, []);
 
-  if (isPlacing) {
+  if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.placingText}>Placing your orders...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#e74c3c" />
+        <Text style={styles.loadingText}>Processing...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Step Indicator */}
       <View style={styles.stepIndicator}>
-        <StepBadge
-          number={1}
-          label="Address"
-          active={currentStep === 'address'}
-          completed={currentStep !== 'address'}
-        />
+        <View style={[styles.stepBadge, step && styles.stepBadgeActive]}>
+          <Text style={styles.stepNumber}>1</Text>
+        </View>
         <View
-          style={[
-            styles.stepLine,
-            currentStep !== 'address' && styles.stepLineActive,
-          ]}
+          style={[styles.stepLine, (step === 'delivery_quotes' || step === 'select_providers' || step === 'payment') && styles.stepLineActive]}
         />
-        <StepBadge
-          number={2}
-          label="Delivery"
-          active={currentStep === 'delivery'}
-          completed={currentStep === 'placing'}
-        />
+        <View style={[styles.stepBadge, (step === 'delivery_quotes' || step === 'select_providers' || step === 'payment') && styles.stepBadgeActive]}>
+          <Text style={styles.stepNumber}>2</Text>
+        </View>
         <View
-          style={[
-            styles.stepLine,
-            currentStep === 'placing' && styles.stepLineActive,
-          ]}
+          style={[styles.stepLine, (step === 'select_providers' || step === 'payment') && styles.stepLineActive]}
         />
-        <StepBadge
-          number={3}
-          label="Confirm"
-          active={currentStep === 'placing'}
-        />
+        <View style={[styles.stepBadge, (step === 'select_providers' || step === 'payment') && styles.stepBadgeActive]}>
+          <Text style={styles.stepNumber}>3</Text>
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Step 1: Address */}
-        {currentStep === 'address' && (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Delivery Address</Text>
-            <Text style={styles.stepSubtitle}>
-              This address will be used for all {selectedSellers.length}{' '}
-              order{selectedSellers.length !== 1 ? 's' : ''}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.addressCard}
-              onPress={() => navigation.navigate('SelectAddress')}
-            >
-              {sharedDeliveryAddress ? (
-                <>
-                  <MaterialIcons
-                    name="location-on"
-                    size={20}
-                    color="#FF6B35"
-                  />
-                  <View style={styles.addressInfo}>
-                    <Text style={styles.addressLabel}>Delivery To</Text>
-                    <Text style={styles.addressValue}>
-                      {sharedDeliveryAddress.address}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="edit" size={18} color="#999" />
-                </>
-              ) : (
-                <>
-                  <MaterialIcons name="add-location" size={24} color="#ccc" />
-                  <Text style={styles.selectAddressText}>
-                    Select delivery address
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.nextButton,
-                !sharedDeliveryAddress && styles.buttonDisabled,
-              ]}
-              onPress={() => setCurrentStep('delivery')}
-              disabled={!sharedDeliveryAddress}
-            >
-              <Text style={styles.nextButtonText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
+      {/* Orders Summary */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Orders Summary</Text>
+        {orders.map((order) => (
+          <View key={order.orderId} style={styles.orderCard}>
+            <View style={styles.orderHeader}>
+              <Text style={styles.orderSeller}>{order.sellerName}</Text>
+              <Text style={styles.orderPrice}>₹{order.subtotal.toFixed(2)}</Text>
+            </View>
+            <Text style={styles.orderItems}>{order.items.length} items</Text>
           </View>
-        )}
+        ))}
+      </View>
 
-        {/* Step 2: Delivery Partners */}
-        {currentStep === 'delivery' && (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Delivery Partners</Text>
-            <Text style={styles.stepSubtitle}>
-              Select a delivery partner for each seller
-            </Text>
+      {/* Delivery Provider Selection */}
+      {step === 'select_providers' && orders.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Select Delivery Partner</Text>
+          <Text style={styles.sectionSubtext}>Each seller can have different delivery partner</Text>
 
-            {carts.map((cart) => (
-              <View key={cart.sellerId} style={styles.sellerDeliverySection}>
-                <Text style={styles.sellerDeliveryName}>
-                  {cart.sellerName}
-                </Text>
-
-                {/* Mock delivery options */}
-                {[
-                  {
-                    id: '1',
-                    provider: 'uber_direct',
-                    displayName: 'Uber Direct',
-                    eta: '25 min',
-                    price: 45,
-                  },
-                  {
-                    id: '2',
-                    provider: 'porter',
-                    displayName: 'Porter',
-                    eta: '18 min',
-                    price: 60,
-                  },
-                  {
-                    id: '3',
-                    provider: 'dunzo',
-                    displayName: 'Dunzo',
-                    eta: '22 min',
-                    price: 50,
-                  },
-                ].map((option) => {
-                  const isSelected = selectedPartners.find(
-                    (p) =>
-                      p.sellerId === cart.sellerId &&
-                      p.partner.id === option.id
-                  );
-
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[
-                        styles.partnerOption,
-                        isSelected && styles.partnerOptionSelected,
-                      ]}
-                      onPress={() =>
-                        handleDeliveryPartnerSelect(cart.sellerId, option)
-                      }
-                    >
-                      <View style={styles.partnerLeft}>
-                        <Text style={styles.partnerName}>
-                          {option.displayName}
-                        </Text>
-                        <Text style={styles.partnerEta}>{option.eta}</Text>
-                      </View>
-                      <View style={styles.partnerRight}>
-                        <Text style={styles.partnerPrice}>
-                          ₹{option.price}
-                        </Text>
-                        {isSelected && (
-                          <MaterialIcons
-                            name="check-circle"
-                            size={24}
-                            color="#FF6B35"
-                          />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+          {orders.map((order) => (
+            <View key={order.orderId} style={styles.providerSection}>
+              <Text style={styles.providerTitle}>{order.sellerName}</Text>
+              <View style={styles.providerOptions}>
+                {(deliveryOptions[order.orderId] || []).map((provider: any) => (
+                  <TouchableOpacity
+                    key={provider.provider}
+                    style={[
+                      styles.providerOption,
+                      selectedProviders[order.orderId] === provider.provider &&
+                        styles.providerOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedProviders((prev) => ({
+                        ...prev,
+                        [order.orderId]: provider.provider,
+                      }));
+                    }}
+                  >
+                    <View style={styles.providerInfo}>
+                      <Text style={styles.providerName}>{provider.displayName}</Text>
+                      <Text style={styles.providerTime}>
+                        ~{provider.estimatedDurationMinutes} min
+                      </Text>
+                    </View>
+                    <Text style={styles.providerFee}>₹{provider.estimatedFee}</Text>
+                    {selectedProviders[order.orderId] === provider.provider && (
+                      <MaterialIcons name="check-circle" size={24} color="#e74c3c" />
+                    )}
+                  </TouchableOpacity>
+                ))}
               </View>
-            ))}
+            </View>
+          ))}
+        </View>
+      )}
 
-            <TouchableOpacity
-              style={[
-                styles.nextButton,
-                !allPartnersSelected && styles.buttonDisabled,
-              ]}
-              onPress={() => setCurrentStep('placing')}
-              disabled={!allPartnersSelected}
-            >
-              <Text style={styles.nextButtonText}>Place Orders</Text>
-              <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
+      {/* Action Buttons */}
+      <View style={styles.actionButtons}>
+        {step === 'select_providers' && (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => confirmOrdersMutation.mutate()}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>Proceed to Payment</Text>
+          </TouchableOpacity>
         )}
-      </ScrollView>
-    </View>
+        {step === 'complete' && (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => router.push('/orders')}
+          >
+            <Text style={styles.buttonText}>View Orders</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </ScrollView>
   );
 };
-
-interface StepBadgeProps {
-  number: number;
-  label: string;
-  active: boolean;
-  completed?: boolean;
-}
-
-const StepBadge: React.FC<StepBadgeProps> = ({
-  number,
-  label,
-  active,
-  completed,
-}) => (
-  <View style={styles.stepBadgeContainer}>
-    <View
-      style={[
-        styles.stepBadge,
-        active && styles.stepBadgeActive,
-        completed && styles.stepBadgeCompleted,
-      ]}
-    >
-      {completed ? (
-        <MaterialIcons name="check" size={18} color="#fff" />
-      ) : (
-        <Text
-          style={[
-            styles.stepBadgeText,
-            active && styles.stepBadgeTextActive,
-          ]}
-        >
-          {number}
-        </Text>
-      )}
-    </View>
-    <Text
-      style={[styles.stepLabel, active && styles.stepLabelActive]}
-    >
-      {label}
-    </Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f5f5f5',
   },
-  centerContainer: {
+  content: {
+    padding: 16,
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-  placingText: {
-    marginTop: 16,
+  loadingText: {
+    marginTop: 12,
     fontSize: 16,
     color: '#666',
   },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 20,
-    backgroundColor: '#fff',
-  },
-  stepBadgeContainer: {
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
   stepBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#e0e0e0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
   },
   stepBadgeActive: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#e74c3c',
   },
-  stepBadgeCompleted: {
-    backgroundColor: '#4CAF50',
-  },
-  stepBadgeText: {
+  stepNumber: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#999',
-    fontSize: 14,
-  },
-  stepBadgeTextActive: {
     color: '#fff',
   },
-  stepLabel: {
-    fontSize: 11,
-    color: '#999',
-    fontWeight: '600',
-  },
-  stepLabelActive: {
-    color: '#FF6B35',
-  },
   stepLine: {
+    flex: 1,
     height: 2,
-    width: 30,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 8,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 4,
   },
   stepLineActive: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#e74c3c',
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 20,
-  },
-  stepContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
-  },
-  stepSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 16,
-  },
-  addressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 16,
+  section: {
     marginBottom: 20,
-    gap: 12,
   },
-  addressInfo: {
-    flex: 1,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#1a1a1a',
   },
-  addressLabel: {
+  sectionSubtext: {
     fontSize: 12,
     color: '#999',
-    marginBottom: 2,
+    marginBottom: 12,
   },
-  addressValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  selectAddressText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#999',
-  },
-  sellerDeliverySection: {
-    marginBottom: 20,
+  orderCard: {
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#e74c3c',
   },
-  sellerDeliveryName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  partnerOption: {
+  orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 6,
+    marginBottom: 4,
   },
-  partnerOptionSelected: {
-    borderColor: '#FF6B35',
-    backgroundColor: '#fff5f1',
-  },
-  partnerLeft: {
-    flex: 1,
-  },
-  partnerName: {
-    fontSize: 13,
+  orderSeller: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
+    color: '#1a1a1a',
   },
-  partnerEta: {
+  orderPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e74c3c',
+  },
+  orderItems: {
     fontSize: 12,
     color: '#999',
   },
-  partnerRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  partnerPrice: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FF6B35',
-  },
-  nextButton: {
-    backgroundColor: '#FF6B35',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
+  providerSection: {
+    backgroundColor: '#fff',
     borderRadius: 8,
-    gap: 8,
-    marginTop: 20,
+    padding: 12,
+    marginBottom: 12,
   },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  nextButtonText: {
-    color: '#fff',
-    fontWeight: '700',
+  providerTitle: {
     fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#1a1a1a',
+  },
+  providerOptions: {
+    gap: 8,
+  },
+  providerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  providerOptionSelected: {
+    backgroundColor: '#fff3f0',
+    borderColor: '#e74c3c',
+  },
+  providerInfo: {
+    flex: 1,
+  },
+  providerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  providerTime: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  providerFee: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e74c3c',
+    marginRight: 12,
+  },
+  actionButtons: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

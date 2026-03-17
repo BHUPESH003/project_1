@@ -13,6 +13,7 @@ import { Pool } from 'pg';
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private readonly pool: Pool;
+  private readonly ownsPool: boolean;
   public readonly prisma: PrismaClient;
 
   constructor(private configService: ConfigService) {
@@ -25,7 +26,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       pool: Pool | undefined;
     };
 
+    // Check if pool already exists in global cache
+    const poolExists = !!globalForPool.pool;
     this.pool = globalForPool.pool ?? new Pool({ connectionString });
+    this.ownsPool = !poolExists; // Only own the pool if we created it
 
     if (process.env['NODE_ENV'] !== 'production') {
       globalForPool.pool = this.pool;
@@ -58,7 +62,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.prisma.$disconnect();
-    await this.pool.end();
+    
+    // Only end the pool if this instance owns it (created it)
+    // In development mode, the pool is shared globally and should only be ended once
+    if (this.ownsPool) {
+      await this.pool.end();
+    }
+    
     this.logger.log('Prisma Client disconnected');
   }
 }

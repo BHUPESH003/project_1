@@ -25,11 +25,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
-import { useCartStore } from '@/store/cart.store';
+import { useMultiCartStore } from '@/store/multiCartStore';
 import { ordersApi, DeliveryQuoteOption } from '@/api/orders.api';
 import { sellersApi } from '@/api/sellers.api';
 import { productsApi, Product } from '@/api/products.api';
 import { Loader } from '@/components/Loader';
+import { showToast } from '@/lib/toast';
 
 
 export default function ShopDetailScreen() {
@@ -45,14 +46,18 @@ export default function ShopDetailScreen() {
   const [fileMetadata, setFileMetadata] = useState<{[key: string]: {pages: number; preview?: string}}>({});
   const [detectingPages, setDetectingPages] = useState<{[key: string]: boolean}>({});
   
-  const cartItems = useCartStore((state) => state.items);
-  const addItem = useCartStore((state) => state.addItem);
-  const removeItem = useCartStore((state) => state.removeItem);
-  const updateQuantity = useCartStore((state) => state.updateQuantity);
-  const setSelectedSeller = useCartStore((state) => state.setSelectedSeller);
-  const cartOrderId = useCartStore((state) => state.orderId); // Get orderId
-  const itemCount = useCartStore((state) => state.getItemCount());
-  const subtotal = useCartStore((state) => state.getSubtotal());
+  // Multi-cart store: one cart per seller
+  const addItemToCart = useMultiCartStore((state) => state.addItem);
+  const removeItemFromCart = useMultiCartStore((state) => state.removeItem);
+  const updateItemQuantity = useMultiCartStore((state) => state.updateQuantity);
+  const setActiveCart = useMultiCartStore((state) => state.setActiveCart);
+  const getCartCount = useMultiCartStore((state) => state.getCartCount);
+  const getCartTotal = useMultiCartStore((state) => state.getCartTotal);
+  const cart = useMultiCartStore((state) => state.carts[shopId as string]);
+  
+  // Item count and subtotal for this seller's cart
+  const itemCount = cart ? cart.items.length : 0;
+  const subtotal = cart ? cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0) : 0;
 
   // Fetch seller details from API
   const { data: sellerData, isLoading: sellerLoading, isError: sellerError } = useQuery({
@@ -97,6 +102,8 @@ export default function ShopDetailScreen() {
       reviews: 120,
       distance: 'N/A',
       image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=100&q=80',
+      latitude: sellerData.latitude,
+      longitude: sellerData.longitude,
     };
   }, [sellerData, sellerError, sellerLoading, shopId]);
 
@@ -135,14 +142,10 @@ export default function ShopDetailScreen() {
   // This ensures seller is always selected, even before API responds
   useEffect(() => {
     if (shopId) {
-      // Set seller with shopId immediately (store as temporary until API responds)
-      // If API has not responded yet, use shopId as fallback name
-      const sellerName = shopInfo.name && shopInfo.name !== 'Unknown Shop' 
-        ? shopInfo.name 
-        : `Shop ${shopId}`;
-      setSelectedSeller(shopId as string, sellerName);
+      // Set this seller's cart as active in multi-cart store
+      setActiveCart(shopId);
     }
-  }, [shopId, shopInfo.name, setSelectedSeller]);
+  }, [shopId, setActiveCart]);
 
   const filteredProducts = useMemo(() => {
     let filtered = products;
@@ -162,100 +165,58 @@ export default function ShopDetailScreen() {
   }, [activeTab, search, products]);
 
   const handleAddProduct = (product: Product, totalPrice?: number) => {
-    const result = addItem({
-      id: product.id,
-      sellerId: shopInfo.id,
-      shopName: shopInfo.name,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      image: product.image,
-      category: product.category,
-      totalPrice: totalPrice, // For print services
+    // Set this seller's cart as active
+    if (shopId) {
+      setActiveCart(shopId);
+    }
+
+    // Add item using multi-cart store
+    addItemToCart(
+      shopId || '',
+      shopInfo.name,
+      {
+        id: product.id,
+        productId: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        image: product.image,
+        category: product.category,
+        quantity: 1,
+        totalPrice: totalPrice, // For print services
+      },
+      shopInfo.image
+    );
+
+    showToast({
+      type: 'success',
+      message: `${product.name} added to cart`,
+      duration: 1500,
     });
-
-    // If adding failed due to different shop, show alert
-    if (!result.success && result.message) {
-      Alert.alert('Cannot Add Item', result.message, [
-        { text: 'Cancel', onPress: () => {} },
-        {
-          text: 'Clear Cart & Add',
-          onPress: () => {
-            // Clear cart and add the item from new shop
-            useCartStore.setState({
-              items: [{ ...product, id: product.id, sellerId: shopInfo.id, shopName: shopInfo.name, quantity: 1, totalPrice }],
-              selectedSellerId: shopInfo.id,
-              selectedShopName: shopInfo.name,
-              selectedDeliveryProvider: null,
-              deliveryFee: null,
-              paymentMethod: 'prepay',
-              deliveryAddress: null,
-              pickupLocation: null,
-              dropLocation: null,
-              orderId: null, // Reset order when clearing cart
-            });
-          },
-        },
-      ]);
-    } else if (result.success) {
-      // Update order if it exists
-      syncOrderWithCart();
-    }
-  };
-
-  /**
-   * Sync cart items to the order (if order exists)
-   * Called whenever cart items change
-   */
-  const syncOrderWithCart = async () => {
-    if (!cartOrderId) {
-      return; // No order yet, will be created at checkout
-    }
-
-    try {
-      // Build items array from current cart
-      const items = cartItems.map(item => ({
-        productId: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-      }));
-
-      if (items.length === 0) {
-        // If cart is empty, we could delete the order or just skip update
-        return;
-      }
-
-      // Update order with current items
-      await ordersApi.updateOrder(cartOrderId, { items });
-      console.log(`Order ${cartOrderId} synced with current cart`);
-    } catch (error: any) {
-      console.warn('Failed to sync order with cart:', error);
-      // Don't fail the add operation, warn user in next screen
-    }
   };
 
   const getProductQuantity = (productId: string) => {
-    const item = cartItems.find(item => item.id === productId);
+    if (!cart) return 0;
+    const item = cart.items.find(item => item.id === productId);
     return item?.quantity || 0;
   };
 
   const handleIncreaseQuantity = (productId: string) => {
     const quantity = getProductQuantity(productId);
-    updateQuantity(productId, quantity + 1);
-    // Sync order when quantity changes
-    setTimeout(() => syncOrderWithCart(), 100);
+    if (shopId) {
+      updateItemQuantity(shopId, productId, quantity + 1);
+    }
   };
 
   const handleDecreaseQuantity = (productId: string) => {
     const quantity = getProductQuantity(productId);
+    if (!shopId) return;
+    
     if (quantity > 1) {
-      updateQuantity(productId, quantity - 1);
+      updateItemQuantity(shopId, productId, quantity - 1);
     } else {
-      removeItem(productId);
+      removeItemFromCart(shopId, productId);
     }
-    // Sync order when quantity changes or item removed
-    setTimeout(() => syncOrderWithCart(), 100);
   };
 
   const getPageCount = async (file: any): Promise<number> => {
@@ -758,6 +719,8 @@ export default function ShopDetailScreen() {
         <StickyCartBar 
           sellerId={shopId || ''}
           sellerName={shopInfo.name}
+          sellerLat={shopInfo.latitude}
+          sellerLng={shopInfo.longitude}
         />
       )}
 

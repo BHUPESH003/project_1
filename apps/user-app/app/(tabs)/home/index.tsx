@@ -22,6 +22,7 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
 import { Skeleton } from '@/components/Skeleton';
 import { FloatingCartButton } from '@/components/FloatingCartButton';
+import { StickyMultiCartBar } from '@/components/StickyMultiCartBar';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { radius } from '@/constants/radius';
 import { spacing } from '@/constants/spacing';
@@ -479,8 +480,8 @@ export default function HomeScreen() {
         ) : null}
       </ScrollView>
       
-      {/* Floating Cart Button for Multi-Cart View */}
-      <FloatingCartButton tabBarHeight={60} />
+      {/* Sticky Multi-Cart Bar at bottom */}
+      <StickyMultiCartBar tabBarHeight={60} />
     </ScreenWrapper>
   );
 }

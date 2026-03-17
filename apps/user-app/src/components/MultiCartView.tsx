@@ -9,7 +9,7 @@
  * - Empty state messaging
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -33,15 +33,10 @@ export const MultiCartView: React.FC = () => {
   );
 
   // Get all carts
-  const carts = useMultiCartStore((state) =>
-    state.getAllCartsWithItems()
-  );
-  const selectedForCheckout = useMultiCartStore(
-    (state) => state.selectedForCheckout
-  );
-  const toggleSelection = useMultiCartStore(
-    (state) => state.toggleCheckoutSelection
-  );
+  const rawCarts = useMultiCartStore((state) => state.carts);
+  const carts = useMemo(() => {
+    return Object.values(rawCarts).filter((cart) => cart.items.length > 0);
+  }, [rawCarts]);
 
   // Empty state
   if (carts.length === 0) {
@@ -69,17 +64,7 @@ export const MultiCartView: React.FC = () => {
     setExpandedSellers(newExpanded);
   };
 
-  const handleCombinedCheckout = () => {
-    if (selectedForCheckout.size < 2) {
-      alert('Please select at least 2 carts for combined checkout');
-      return;
-    }
-    navigation.navigate('CombinedCheckout', {
-      selectedSellers: Array.from(selectedForCheckout),
-    });
-  };
-
-  const handleSingleCheckout = (sellerId: string) => {
+  const handleCheckout = (sellerId: string) => {
     navigation.navigate('SingleCheckout', { sellerId });
   };
 
@@ -91,15 +76,13 @@ export const MultiCartView: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {carts.map((cart) => {
-          const isSelected = selectedForCheckout.has(cart.sellerId);
           const isExpanded = expandedSellers.has(cart.sellerId);
           const itemCount = cart.items.reduce(
             (sum, item) => sum + item.quantity,
             0
           );
-          const total = useMultiCartStore((state) =>
-            state.getCartTotal(cart.sellerId)
-          );
+          // Use getState() for synchronous access (avoid hook call inside map)
+          const total = useMultiCartStore.getState().getCartTotal(cart.sellerId);
 
           return (
             <View key={cart.sellerId} style={styles.cartCard}>
@@ -108,18 +91,6 @@ export const MultiCartView: React.FC = () => {
                 style={styles.cartHeader}
                 onPress={() => toggleExpand(cart.sellerId)}
               >
-                {/* Checkbox */}
-              <TouchableOpacity
-                style={styles.checkbox}
-                onPress={() => toggleSelection(cart.sellerId)}
-              >
-                <MaterialIcons
-                  name={isSelected ? 'check-box' : 'check-box-outline-blank'}
-                  size={24}
-                  color={isSelected ? '#2563eb' : '#d1d5db'}
-                />
-              </TouchableOpacity>
-
                 {/* Header Info */}
                 <View style={styles.headerInfo}>
                   <Text style={styles.sellerName}>{cart.sellerName}</Text>
@@ -167,49 +138,21 @@ export const MultiCartView: React.FC = () => {
                     </Text>
                   </View>
 
-                  {/* Action Buttons */}
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={styles.viewButton}
-                      onPress={() =>
-                        navigation.navigate('Cart', {
-                          sellerId: cart.sellerId,
-                        })
-                      }
-                    >
-                      <Text style={styles.viewButtonText}>View Details</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.checkoutButton}
-                      onPress={() => handleSingleCheckout(cart.sellerId)}
-                    >
-                      <Text style={styles.checkoutButtonText}>
-                        Checkout
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                  {/* Checkout Button */}
+                  <TouchableOpacity
+                    style={styles.checkoutButton}
+                    onPress={() => handleCheckout(cart.sellerId)}
+                  >
+                    <Text style={styles.checkoutButtonText}>
+                      Checkout
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
           );
         })}
       </ScrollView>
-
-      {/* Combined Checkout CTA - Visible When 2+ Selected */}
-      {selectedForCheckout.size >= 2 && (
-        <View style={styles.bottomAction}>
-          <TouchableOpacity
-            style={styles.combinedCheckoutButton}
-            onPress={handleCombinedCheckout}
-          >
-            <Text style={styles.combinedCheckoutText}>
-              Checkout Selected ({selectedForCheckout.size} cart
-              {selectedForCheckout.size !== 1 ? 's' : ''})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 };

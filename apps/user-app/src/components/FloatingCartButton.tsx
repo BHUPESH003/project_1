@@ -9,7 +9,7 @@
  * - Position: bottom-right above tab bar
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   TouchableOpacity,
@@ -32,25 +32,33 @@ export const FloatingCartButton: React.FC<FloatingCartButtonProps> = ({
   const navigation = useNavigation<any>();
   const scaleAnim = new Animated.Value(0);
 
-  // Get all carts with items
-  const allCarts = useMultiCartStore((state) =>
-    state.getAllCartsWithItems()
-  );
-  const activeCrts = useMultiCartStore((state) => state.getActiveCarts());
+  // Get raw carts and memoize derived values
+  const rawCarts = useMultiCartStore((state) => state.carts);
+  
+  const activeCrts = useMemo(() => {
+    return Object.keys(rawCarts).filter(
+      (sellerId) => rawCarts[sellerId].items.length > 0
+    );
+  }, [rawCarts]);
+
+  // Get cart count for first cart if single cart view
+  const singleCartCount = useMemo(() => {
+    if (activeCrts.length === 1) {
+      const cart = rawCarts[activeCrts[0]];
+      return cart ? cart.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
+    }
+    return 0;
+  }, [activeCrts, rawCarts]);
 
   // Calculate badge value
-  const getBadgeValue = (): number => {
+  const badgeValue = useMemo(() => {
     if (activeCrts.length === 1) {
       // If only 1 cart, show item count
-      return useMultiCartStore((state) =>
-        state.getCartCount(activeCrts[0])
-      );
+      return singleCartCount;
     }
     // If multiple carts, show cart count
     return activeCrts.length;
-  };
-
-  const badgeValue = getBadgeValue();
+  }, [activeCrts.length, singleCartCount]);
 
   // Animate FAB in/out
   useEffect(() => {
