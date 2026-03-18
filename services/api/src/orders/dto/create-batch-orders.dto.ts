@@ -36,7 +36,10 @@ export class CreateBatchOrdersDto {
     ],
   })
   @IsArray({ message: 'orders must be an array' })
-  @ValidateNested({ each: true, message: 'each order must be a valid CreateOrderDto' })
+  @ValidateNested({
+    each: true,
+    message: 'each order must be a valid CreateOrderDto',
+  })
   @Type(() => CreateOrderDto)
   @IsNotEmpty({ message: 'orders array cannot be empty' })
   orders!: CreateOrderDto[];

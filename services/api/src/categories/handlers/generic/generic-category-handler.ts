@@ -51,27 +51,35 @@ export class GenericCategoryHandler implements CategoryHandler {
         }
       }
 
-      return {
-        valid: true,
-        normalizedPayload: {
-          items: payload.items,
-          notes: payload.notes || '',
-        },
+      const normalized: Record<string, unknown> = {
+        items: payload.items,
+        notes: payload.notes || '',
       };
+      if (payload.dropLatitude != null)
+        normalized.dropLatitude = payload.dropLatitude;
+      if (payload.dropLongitude != null)
+        normalized.dropLongitude = payload.dropLongitude;
+      if (payload.dropAddress != null)
+        normalized.dropAddress = payload.dropAddress;
+      return { valid: true, normalizedPayload: normalized };
     }
 
     // For printing orders (file-based)
     if (payload.fileUrl) {
-      return {
-        valid: true,
-        normalizedPayload: {
-          fileUrl: payload.fileUrl,
-          pages: payload.pages || 1,
-          copies: payload.copies || 1,
-          color: payload.color || false,
-          notes: payload.notes || '',
-        },
+      const normalized: Record<string, unknown> = {
+        fileUrl: payload.fileUrl,
+        pages: payload.pages || 1,
+        copies: payload.copies || 1,
+        color: payload.color || false,
+        notes: payload.notes || '',
       };
+      if (payload.dropLatitude != null)
+        normalized.dropLatitude = payload.dropLatitude;
+      if (payload.dropLongitude != null)
+        normalized.dropLongitude = payload.dropLongitude;
+      if (payload.dropAddress != null)
+        normalized.dropAddress = payload.dropAddress;
+      return { valid: true, normalizedPayload: normalized };
     }
 
     // If neither products nor file, it's invalid

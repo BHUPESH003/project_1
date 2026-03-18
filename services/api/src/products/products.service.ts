@@ -36,13 +36,24 @@ export class ProductsService {
       .map((p) => {
         const mrpNum = Number(p.mrp);
         const priceNum = Number(p.price);
-        const discountPercent = mrpNum > priceNum ? ((mrpNum - priceNum) / mrpNum) * 100 : 0;
-        
+        const discountPercent =
+          mrpNum > priceNum ? ((mrpNum - priceNum) / mrpNum) * 100 : 0;
+
         let distanceKm = null;
         let estimatedDeliveryMins = p.seller.prepTimeMinutes || 0;
-        if (lat != null && lng != null && p.seller.latitude && p.seller.longitude) {
-            distanceKm = this.calculateDistance(lat, lng, Number(p.seller.latitude), Number(p.seller.longitude));
-            estimatedDeliveryMins += Math.ceil(distanceKm * 5);
+        if (
+          lat != null &&
+          lng != null &&
+          p.seller.latitude &&
+          p.seller.longitude
+        ) {
+          distanceKm = this.calculateDistance(
+            lat,
+            lng,
+            Number(p.seller.latitude),
+            Number(p.seller.longitude),
+          );
+          estimatedDeliveryMins += Math.ceil(distanceKm * 5);
         }
 
         return {
@@ -62,7 +73,7 @@ export class ProductsService {
             rating: p.seller.rating != null ? Number(p.seller.rating) : null,
             distanceKm,
             estimatedDeliveryMins,
-          }
+          },
         };
       })
       .filter((p) => p.discountPercent > 0)
@@ -72,14 +83,21 @@ export class ProductsService {
     return deals;
   }
 
-  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371; 
+  private calculateDistance(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const R = 6371;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLng = (lng2 - lng1) * (Math.PI / 180);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c * 100) / 100;
   }

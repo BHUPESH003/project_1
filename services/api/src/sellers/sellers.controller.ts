@@ -1,4 +1,5 @@
-import { Headers, 
+import {
+  Headers,
   Controller,
   Get,
   Post,
@@ -93,7 +94,8 @@ export class SellersController {
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Find newly added sellers',
-    description: 'Returns list of recently added sellers (ONLINE), sorted by newest first.',
+    description:
+      'Returns list of recently added sellers (ONLINE), sorted by newest first.',
   })
   @ApiQuery({ name: 'category', required: false })
   @ApiQuery({ name: 'lat', required: false })
@@ -132,7 +134,7 @@ export class SellersController {
    * Get all products for a specific seller
    * Public endpoint
    */
-  
+
   @Get(':id/products/diff')
   @ApiOperation({ summary: 'Get partial catalog updates based on timestamp' })
   async getProductsDiff(
@@ -144,15 +146,18 @@ export class SellersController {
     if (isNaN(sinceDate.getTime())) {
       throw new Error('Invalid since timestamp');
     }
-    
+
     // Pass differential info down to fetch products updated/created after Date
-    const diffResults = await this.sellersService.getSellerProductsDifferential(id, sinceDate);
-    
+    const diffResults = await this.sellersService.getSellerProductsDifferential(
+      id,
+      sinceDate,
+    );
+
     return {
       success: true,
       message: 'Differential loaded successfully',
       data: diffResults,
-      differential_sync: true
+      differential_sync: true,
     };
   }
 

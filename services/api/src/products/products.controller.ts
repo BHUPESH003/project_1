@@ -16,7 +16,12 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
-import { JwtAuthGuard, RolesGuard, Roles, OptionalJwtAuthGuard } from '@/common/guards';
+import {
+  JwtAuthGuard,
+  RolesGuard,
+  Roles,
+  OptionalJwtAuthGuard,
+} from '@/common/guards';
 import { UserRole } from '@repo/types';
 
 @ApiTags('Products')
@@ -39,7 +44,7 @@ export class ProductsController {
     return this.productsService.getDeals(
       lat ? Number(lat) : undefined,
       lng ? Number(lng) : undefined,
-      limit ? Number(limit) : undefined
+      limit ? Number(limit) : undefined,
     );
   }
 

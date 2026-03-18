@@ -298,45 +298,14 @@ export class SellerRepository {
   }
 
   /**
-   * Map Prisma seller to SellerEntity
-   * Converts Prisma enum to our custom enum type
+   * Map Prisma seller to SellerEntity.
+   * Keep the input type loose to avoid tight coupling to Prisma's generated types.
    */
-  private mapToEntity(seller: {
-    id: string;
-    userId: string;
-    shopName: string;
-    address: string;
-    description?: string | null;
-    latitude: unknown;
-    longitude: unknown;
-    status: unknown;
-    statusUpdatedAt: Date | null;
-    isTrending: boolean;
-    pricePerPage: unknown;
-    prepTimeMinutes: number | null;
-    imagePath: string | null;
-    rating: unknown;
-    discountThreshold?: number | null;
-    discountPercent?: unknown;
-    createdAt: Date;
-    updatedAt: Date;
-    user?: {
-      id: string;
-      phone: string;
-      name: string | null;
-    };
-    categories?: Array<{
-      category: {
-        id: string;
-        name: string;
-        status: unknown;
-      };
-    }>;
-  }): SellerEntity {
+  private mapToEntity(seller: any): SellerEntity {
     return {
       ...seller,
       status: seller.status as SellerStatus,
-      isTrending: seller.isTrending,
+      isTrending: seller.isTrending ?? false,
       prepTimeMinutes: seller.prepTimeMinutes ?? 0,
       imagePath: seller.imagePath ?? null,
       rating: seller.rating != null ? Number(seller.rating) : null,

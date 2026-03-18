@@ -33,7 +33,7 @@ export class SellersService {
   async findAvailableSellers(
     query: FindAvailableSellersDto,
     userId?: string,
-    options?: { isTrending?: boolean; orderBy?: 'distance' | 'newest' }
+    options?: { isTrending?: boolean; orderBy?: 'distance' | 'newest' },
   ) {
     const hasLocation = query.lat != null && query.lng != null;
     const limit = query.limit ?? 20;
@@ -60,10 +60,11 @@ export class SellersService {
     const baseUrl = this.configService.get<string>('S3_PUBLIC_BASE_URL');
 
     const list = sellers.map((seller) => {
-      const result: any = {
+      const result: Record<string, unknown> = {
         seller_id: seller.id,
         shop_name: seller.shopName,
         address: seller.address,
+        description: seller.description ?? null,
         price_breakdown: {
           per_page: seller.pricePerPage ? Number(seller.pricePerPage) : 0,
         },
@@ -84,7 +85,8 @@ export class SellersService {
       if ('distanceKm' in seller) {
         const dist = (seller as any).distanceKm;
         result.distance_km = Math.round(dist * 100) / 100;
-        result.estimated_delivery_time_mins = seller.prepTimeMinutes + Math.ceil(dist * 5);
+        result.estimated_delivery_time_mins =
+          seller.prepTimeMinutes + Math.ceil(dist * 5);
       } else {
         result.estimated_delivery_time_mins = seller.prepTimeMinutes;
       }
@@ -325,11 +327,25 @@ export class SellersService {
 
   async getSellerProductsDifferential(sellerId: string, sinceDate: Date) {
     const seller = await this.sellerRepository.findById(sellerId, false);
-    if (!seller) throw new NotFoundException('Seller with ID ' + sellerId + ' not found');
+    if (!seller)
+      throw new NotFoundException('Seller with ID ' + sellerId + ' not found');
 
     const rows = await this.prismaService.prisma.product.findMany({
       where: { sellerId, updatedAt: { gt: sinceDate } },
-      select: { id: true, name: true, description: true, category: true, unit: true, price: true, mrp: true, image: true, inStock: true, isBestSeller: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        category: true,
+        unit: true,
+        price: true,
+        mrp: true,
+        image: true,
+        inStock: true,
+        isBestSeller: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { updatedAt: 'asc' },
     });
 

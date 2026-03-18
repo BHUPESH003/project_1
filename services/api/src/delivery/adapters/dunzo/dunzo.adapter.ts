@@ -47,15 +47,15 @@ export class DunzoAdapter implements DeliveryAdapter {
     const baseFee = 50;
     const perKmFee = 10;
     const estimatedDistanceFee = Math.ceil(distance * perKmFee);
-    
+
     // Bike: base
     const bikeFee = baseFee + estimatedDistanceFee;
     const bikeMinutes = Math.ceil(15 + distance * 2);
-    
+
     // Mini Truck/Van: Base * 1.5
     const vanFee = Math.ceil(bikeFee * 1.5);
     const vanMinutes = Math.ceil(15 + distance * 2.5);
-    
+
     // Large Truck: Base * 2.5
     const truckFee = Math.ceil(bikeFee * 2.5);
     const truckMinutes = Math.ceil(15 + distance * 3.0);
@@ -82,8 +82,8 @@ export class DunzoAdapter implements DeliveryAdapter {
           vehicleType: 'truck',
           estimatedFee: truckFee,
           estimatedDurationMinutes: truckMinutes,
-        }
-      ]
+        },
+      ],
     };
   }
 

@@ -62,13 +62,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.prisma.$disconnect();
-    
+
     // Only end the pool if this instance owns it (created it)
     // In development mode, the pool is shared globally and should only be ended once
     if (this.ownsPool) {
       await this.pool.end();
     }
-    
+
     this.logger.log('Prisma Client disconnected');
   }
 }

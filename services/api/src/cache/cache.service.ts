@@ -13,7 +13,7 @@ export class CacheService {
 
   constructor(@Inject('REDIS_CLIENT') private readonly redisClient: Redis) {
     this.logger.log('🚀 CacheService initialized');
-    
+
     // Create a promise that resolves when Redis is ready
     this.readyPromise = new Promise<void>((resolve) => {
       this.readyResolve = resolve;
@@ -26,7 +26,9 @@ export class CacheService {
       // Resolve the ready promise
       if (this.readyResolve) {
         this.readyResolve();
-        this.logger.log('✅ CacheService: readyPromise resolved - cache operations can proceed');
+        this.logger.log(
+          '✅ CacheService: readyPromise resolved - cache operations can proceed',
+        );
       }
     });
 
@@ -58,10 +60,13 @@ export class CacheService {
         return;
       }
       // Check multiple status conditions since status changes during connection
-      this.isRedisAvailable = 
-        this.redisClient.status === 'ready' || 
-        (this.redisClient.status !== 'close' && this.redisClient.status !== 'end');
-      this.logger.log(`📊 Redis status check: ${this.redisClient.status} | Available: ${this.isRedisAvailable ? '✅' : '❌'}`);
+      this.isRedisAvailable =
+        this.redisClient.status === 'ready' ||
+        (this.redisClient.status !== 'close' &&
+          this.redisClient.status !== 'end');
+      this.logger.log(
+        `📊 Redis status check: ${this.redisClient.status} | Available: ${this.isRedisAvailable ? '✅' : '❌'}`,
+      );
     } catch (err) {
       this.isRedisAvailable = false;
       this.logger.warn(`⚠️ Error checking Redis availability: ${err}`);
@@ -77,7 +82,10 @@ export class CacheService {
       await Promise.race([
         this.readyPromise,
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('Redis readiness timeout')), timeoutMs)
+          setTimeout(
+            () => reject(new Error('Redis readiness timeout')),
+            timeoutMs,
+          ),
         ),
       ]);
     } catch (err: any) {
@@ -97,15 +105,21 @@ export class CacheService {
     try {
       // Add timeout wrapper to prevent hanging
       const data = await Promise.race([
-        this.redisClient.get(key) as Promise<string | null>,
+        this.redisClient.get(key),
         new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache get timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache get timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
-      return data ? JSON.parse(data as string) : null;
+      return data ? JSON.parse(data) : null;
     } catch (err: any) {
       // Silently fail on timeout or connection issues
-      if (err.message?.includes('timeout') || err.message?.includes('Connection')) {
+      if (
+        err.message?.includes('timeout') ||
+        err.message?.includes('Connection')
+      ) {
         this.isRedisAvailable = false;
       }
       return null;
@@ -115,24 +129,39 @@ export class CacheService {
   /**
    * Set value to cache with timeout protection
    */
-  async set(key: string, value: any, ttlSeconds: number = this.DEFAULT_TTL): Promise<void> {
+  async set(
+    key: string,
+    value: any,
+    ttlSeconds: number = this.DEFAULT_TTL,
+  ): Promise<void> {
     if (!this.isRedisAvailable) {
       return; // Skip if Redis not available
     }
 
     try {
       const ttl = Math.max(ttlSeconds, 1);
-      
+
       // Add timeout wrapper to prevent hanging
       await Promise.race([
-        this.redisClient.set(key, JSON.stringify(value), 'EX', ttl) as Promise<string>,
+        this.redisClient.set(
+          key,
+          JSON.stringify(value),
+          'EX',
+          ttl,
+        ) as Promise<string>,
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache set timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache set timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
     } catch (err: any) {
       // Silently fail on timeout or connection issues
-      if (err.message?.includes('timeout') || err.message?.includes('Connection')) {
+      if (
+        err.message?.includes('timeout') ||
+        err.message?.includes('Connection')
+      ) {
         this.isRedisAvailable = false;
       }
       // Don't throw - allow operation to continue without caching
@@ -164,9 +193,12 @@ export class CacheService {
 
     try {
       const result = await Promise.race([
-        this.redisClient.del(key) as Promise<number>,
+        this.redisClient.del(key),
         new Promise<number>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache delete timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache delete timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
       return result > 0; // Returns 1 if key existed and was deleted
@@ -191,9 +223,12 @@ export class CacheService {
 
     try {
       const result = await Promise.race([
-        this.redisClient.del(...keys) as Promise<number>,
+        this.redisClient.del(...keys),
         new Promise<number>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache deleteMany timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache deleteMany timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
       return result;
@@ -219,9 +254,12 @@ export class CacheService {
 
     try {
       const keys = await Promise.race([
-        this.redisClient.keys(pattern) as Promise<string[]>,
+        this.redisClient.keys(pattern),
         new Promise<string[]>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache deletePattern timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache deletePattern timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
 
@@ -234,7 +272,9 @@ export class CacheService {
       if (err.message?.includes('timeout') || err.code) {
         this.isRedisAvailable = false;
       }
-      this.logger.warn(`Failed to delete cache pattern "${pattern}": ${err.message}`);
+      this.logger.warn(
+        `Failed to delete cache pattern "${pattern}": ${err.message}`,
+      );
       return 0;
     }
   }
@@ -251,7 +291,10 @@ export class CacheService {
       await Promise.race([
         this.redisClient.flushdb() as Promise<string>,
         new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error('Cache clear timeout')), this.CACHE_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Cache clear timeout')),
+            this.CACHE_TIMEOUT,
+          ),
         ),
       ]);
       this.logger.warn('Cache cleared (FLUSHDB executed)');

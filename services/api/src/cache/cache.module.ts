@@ -16,21 +16,23 @@ const logger = new Logger('CacheModule');
         const redisHost = configService.get('REDIS_HOST', 'localhost');
         const redisPort = configService.get('REDIS_PORT', 6379);
         const redisPassword = configService.get('REDIS_PASSWORD');
-        
+
         // Log environment variables being loaded
         logger.log('📋 Redis Configuration Loading:');
         logger.log(`   REDIS_HOST: ${redisHost}`);
         logger.log(`   REDIS_PORT: ${redisPort}`);
-        logger.log(`   REDIS_PASSWORD: ${redisPassword ? '✓ Set' : '✗ Not set'}`);
-        logger.log(`   🔗 Using host/port/password approach (no REDIS_URL)`)
-        
+        logger.log(
+          `   REDIS_PASSWORD: ${redisPassword ? '✓ Set' : '✗ Not set'}`,
+        );
+        logger.log(`   🔗 Using host/port/password approach (no REDIS_URL)`);
+
         // Build Redis configuration object - using proven simple approach
         // Mirrors the working test code structure
         const redisConfig: any = {
-          connectTimeout: 10000,
-          commandTimeout: 10000,
+          connectTimeout: 15000,
+          commandTimeout: 30000,
           maxRetriesPerRequest: null,
-          maxRetries: 3,  // Allow retries for transient failures
+          maxRetries: 3, // Allow retries for transient failures
           enableReadyCheck: false,
           enableOfflineQueue: true, // Allow commands to queue while connecting
           retryStrategy: (times: number) => {
@@ -39,13 +41,17 @@ const logger = new Logger('CacheModule');
             // Prevents connection storms and allows Redis to recover
             const delay = Math.min(Math.pow(2, Math.min(times, 5)) * 100, 5000);
             const endpoint = `${redisHost}:${redisPort}`;
-            
+
             if (times === 1) {
-              logger.log(`🔄 Connection attempt failed. Retrying ${endpoint}...`);
+              logger.log(
+                `🔄 Connection attempt failed. Retrying ${endpoint}...`,
+              );
             } else if (times % 5 === 0) {
-              logger.warn(`⚠️ Redis reconnection attempt ${times} (${endpoint}), next retry in ${delay}ms`);
+              logger.warn(
+                `⚠️ Redis reconnection attempt ${times} (${endpoint}), next retry in ${delay}ms`,
+              );
             }
-            
+
             return delay; // Returns delay, never returns null (allows indefinite retries)
           },
           lazyConnect: false,
@@ -71,15 +77,21 @@ const logger = new Logger('CacheModule');
         // Create Redis instance with proper configuration
         logger.log('');
         logger.log('🔌 Creating Redis client...');
-        logger.log(`   Configuration: lazyConnect=${redisConfig.lazyConnect}, enableOfflineQueue=${redisConfig.enableOfflineQueue}`);
-        logger.log(`   Timeouts: connect=${redisConfig.connectTimeout}ms, command=${redisConfig.commandTimeout}ms`);
-        logger.log('   Starting connection attempt with credentials from .env...');
+        logger.log(
+          `   Configuration: lazyConnect=${redisConfig.lazyConnect}, enableOfflineQueue=${redisConfig.enableOfflineQueue}`,
+        );
+        logger.log(
+          `   Timeouts: connect=${redisConfig.connectTimeout}ms, command=${redisConfig.commandTimeout}ms`,
+        );
+        logger.log(
+          '   Starting connection attempt with credentials from .env...',
+        );
         const redis = new Redis(redisConfig);
-        
+
         // Track connection state
         let hasEverConnected = false;
         const startTime = Date.now();
-        
+
         // Setup comprehensive event handlers BEFORE any operation
         redis.on('connecting', () => {
           const elapsed = Date.now() - startTime;
@@ -89,8 +101,10 @@ const logger = new Logger('CacheModule');
         redis.on('ready', () => {
           hasEverConnected = true;
           const elapsed = Date.now() - startTime;
-          logger.log(`✅ Redis cache is ready for commands (${elapsed}ms elapsed)`);
-          
+          logger.log(
+            `✅ Redis cache is ready for commands (${elapsed}ms elapsed)`,
+          );
+
           // Only ping AFTER ready event to avoid timeout
           redis.ping().catch((err: any) => {
             logger.warn(`⚠️ Redis ping failed after ready: ${err.message}`);
@@ -100,7 +114,7 @@ const logger = new Logger('CacheModule');
         redis.on('error', (err: any) => {
           logger.warn(`❌ Redis Error [${err.code}]: ${err.message}`);
         });
-        
+
         redis.on('connect', () => {
           const elapsed = Date.now() - startTime;
           logger.log(`✅ Redis cache connected successfully (${elapsed}ms)`);

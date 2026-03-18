@@ -227,6 +227,16 @@ export class UpdateOrderDto {
   @IsOptional()
   @IsString()
   dropAddress?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Delivery fee (set after user selects delivery provider from quotes)',
+    example: 50,
+    type: Number,
+  })
+  @IsOptional()
+  @IsNumber()
+  deliveryFee?: number;
 }
 
 /**

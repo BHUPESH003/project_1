@@ -86,7 +86,8 @@ export class DeliveryController {
   @ApiQuery({
     name: 'sellerId',
     required: false,
-    description: 'Optional seller ID for multi-cart checkout (fetch delivery partners for this seller)',
+    description:
+      'Optional seller ID for multi-cart checkout (fetch delivery partners for this seller)',
   })
   async getAvailableDeliveryPartners(
     @Body() quotationsDto: GetQuotationsDto,

@@ -47,15 +47,15 @@ export class PorterAdapter implements DeliveryAdapter {
     const baseFee = 60;
     const perKmFee = 12;
     const estimatedDistanceFee = Math.ceil(distance * perKmFee);
-    
+
     // Bike: base
     const bikeFee = baseFee + estimatedDistanceFee;
     const bikeMinutes = Math.ceil(12 + distance * 1.8);
-    
+
     // Mini Truck/Van: Base * 1.5
     const vanFee = Math.ceil(bikeFee * 1.5);
     const vanMinutes = Math.ceil(12 + distance * 2.2);
-    
+
     // Large Truck: Base * 2.5
     const truckFee = Math.ceil(bikeFee * 2.5);
     const truckMinutes = Math.ceil(12 + distance * 2.8);
@@ -82,8 +82,8 @@ export class PorterAdapter implements DeliveryAdapter {
           vehicleType: 'truck',
           estimatedFee: truckFee,
           estimatedDurationMinutes: truckMinutes,
-        }
-      ]
+        },
+      ],
     };
   }
 

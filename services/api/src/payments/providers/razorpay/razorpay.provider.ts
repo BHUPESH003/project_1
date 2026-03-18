@@ -130,7 +130,6 @@ export class RazorpayProvider implements PaymentProvider {
         amount: amountInPaise,
         currency: 'INR',
         receipt: request.orderId,
-        customer_notify: 1, // Send payment link to customer
         description: `Order #${request.orderId}`,
         customer_details: {
           name: request.customerName || 'Customer',
@@ -142,7 +141,6 @@ export class RazorpayProvider implements PaymentProvider {
           orderId: request.orderId,
           paymentMethod: request.method,
         },
-        timeout: 900, // 15 minutes timeout
       });
 
       if (!orderResponse.data || !orderResponse.data.id) {

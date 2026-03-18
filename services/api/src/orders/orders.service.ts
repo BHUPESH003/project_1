@@ -27,7 +27,11 @@ import { DeliveryPartnerRepository } from '@/delivery/repositories/delivery-part
 import { PrismaService } from '@/prisma/prisma.service';
 import { QueueService } from '@/queue/queue.service';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { CreateBatchOrdersDto, CreateBatchOrdersResponseDto, BatchOrderResult } from './dto/create-batch-orders.dto';
+import {
+  CreateBatchOrdersDto,
+  CreateBatchOrdersResponseDto,
+  BatchOrderResult,
+} from './dto/create-batch-orders.dto';
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
@@ -161,13 +165,18 @@ export class OrdersService {
         update: {},
         create: {
           id: createOrderDto.categoryId,
-          name: createOrderDto.categoryId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          name: createOrderDto.categoryId
+            .split('-')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' '),
           status: 'ACTIVE',
           description: `Auto-generated category for ${createOrderDto.categoryId}`,
         },
       });
     } catch (err) {
-      this.logger.warn(`Could not auto-create category ${createOrderDto.categoryId}: ${err}`);
+      this.logger.warn(
+        `Could not auto-create category ${createOrderDto.categoryId}: ${err}`,
+      );
     }
 
     // Create order with enriched payload
@@ -251,14 +260,19 @@ export class OrdersService {
       try {
         await this.selectSeller(order.id, userId, { sellerId });
         // Retrieve updated order so we return the latest status
-        const updatedOrder = await this.orderRepository.findById(order.id, false);
+        const updatedOrder = await this.orderRepository.findById(
+          order.id,
+          false,
+        );
         if (updatedOrder) {
           order.status = updatedOrder.status;
           order.itemCost = updatedOrder.itemCost;
           order.sellerId = updatedOrder.sellerId;
         }
       } catch (err: any) {
-        this.logger.error(`Auto-select seller failed for order ${order.id}: ${err.message}`);
+        this.logger.error(
+          `Auto-select seller failed for order ${order.id}: ${err.message}`,
+        );
         throw err;
       }
     }
@@ -329,9 +343,7 @@ export class OrdersService {
     });
 
     // Wait for all to settle (Promise.all fails on first error, so use allSettled)
-    const settledResults = await Promise.allSettled(
-      orderPromises,
-    );
+    const settledResults = await Promise.allSettled(orderPromises);
 
     // Extract results
     for (const settledResult of settledResults) {
@@ -475,6 +487,10 @@ export class OrdersService {
 
     if (updateOrderDto.dropAddress !== undefined) {
       updateData.dropAddress = updateOrderDto.dropAddress;
+    }
+
+    if (updateOrderDto.deliveryFee !== undefined) {
+      updateData.deliveryFee = updateOrderDto.deliveryFee;
     }
 
     // Update order

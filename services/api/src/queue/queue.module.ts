@@ -34,13 +34,18 @@ import { NotificationsModule } from '@/notifications/notifications.module';
           enableReadyCheck: false,
           maxRetriesPerRequest: null,
           maxRetries: 3, // Match cache module for consistency
-          connectTimeout: 10000,
-          commandTimeout: 10000,
+          connectTimeout: 15000,
+          commandTimeout: 30000,
           retryStrategy: (retries: number) => {
             // Use exponential backoff - matches cache module for consistency
-            const delay = Math.min(Math.pow(2, Math.min(retries, 5)) * 100, 5000);
+            const delay = Math.min(
+              Math.pow(2, Math.min(retries, 5)) * 100,
+              5000,
+            );
             if (retries % 5 === 0) {
-              console.warn(`⚠️ Redis queue connection attempt ${retries}, retry in ${delay}ms`);
+              console.warn(
+                `⚠️ Redis queue connection attempt ${retries}, retry in ${delay}ms`,
+              );
             }
             return delay; // Indefinite retries with backoff
           },
