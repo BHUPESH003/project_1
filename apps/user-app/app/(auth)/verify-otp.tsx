@@ -19,6 +19,8 @@ import { OTPInput } from '@/components/OTPInput';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/store/auth.store';
 import { useResolvedThemeMode, useThemeColors, useThemedStyles } from '@/theme';
+import { colors } from '@/constants/colors';
+import { typography } from '@/constants/typography';
 
 const RESEND_SECONDS = 30;
 
@@ -29,11 +31,19 @@ function getPhoneLocalPart(phone: string): string {
   return digits.slice(-10);
 }
 
+function getCountryCode(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('1')) return '+1';
+  if (digits.startsWith('91')) return '+91';
+  return '+1';
+}
+
 function maskPhoneNumber(phone: string): string {
   const local = getPhoneLocalPart(phone);
   if (local.length < 4) return phone;
-  // +1 234 *** **90 format for US numbers
-  return `+1 ${local.slice(0, 3)} *** **${local.slice(-2)}`;
+  const countryCode = getCountryCode(phone);
+  // Format: +91 *** *** 90 or +1 234 *** **90
+  return `${countryCode} ${local.slice(0, 3)} *** **${local.slice(-2)}`;
 }
 
 function formatTimer(seconds: number): string {
@@ -213,12 +223,12 @@ export default function VerifyOtpScreen() {
   );
 }
 
-const createStyles = (colors: any) =>
+const createStyles = () =>
   StyleSheet.create({
     flex: { flex: 1 },
     screen: {
       flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.black,
     },
     scrollContent: {
       flexGrow: 1,
@@ -233,9 +243,10 @@ const createStyles = (colors: any) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.background,
+      backgroundColor: colors.white,
       alignItems: 'center',
       justifyContent: 'center',
+      color: colors.primary,
     },
     illustrationContainer: {
       alignItems: 'center',
@@ -265,20 +276,24 @@ const createStyles = (colors: any) =>
       marginBottom: 32,
     },
     title: {
+      ...typography.screenTitle,
       fontSize: 32,
-      fontWeight: 'bold',
-      color: colors.textPrimary,
+      fontWeight: "700",
+      color: colors.white,
       marginBottom: 8,
     },
     subtitle: {
+      ...typography.bodyMedium,
       fontSize: 14,
-      color: colors.textSecondary,
+      fontWeight: "600",
+      color: colors.white,
       marginBottom: 4,
     },
     phoneText: {
+      ...typography.bodyMedium,
       fontSize: 16,
-      fontWeight: 'bold',
-      color: colors.primaryDark,
+      fontWeight: "600",
+      color: colors.white,
       letterSpacing: 0.5,
     },
     otpContainer: {

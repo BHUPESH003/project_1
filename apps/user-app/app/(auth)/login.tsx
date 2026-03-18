@@ -60,8 +60,8 @@ export default function LoginScreen() {
 
     clearError();
     try {
-      await requestOtp(toE164(digitsOnly));
-      router.push({ pathname: '/(auth)/verify-otp', params: { phone: toE164(digitsOnly) } });
+      await requestOtp(toE164(digitsOnly, '91'));
+      router.push({ pathname: '/(auth)/verify-otp', params: { phone: toE164(digitsOnly, '91') } });
     } catch (err) {
       const message =
         err instanceof Error && err.message
@@ -116,7 +116,11 @@ export default function LoginScreen() {
         >
           {/* Header Bar */}
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.closeButton}>
+            <Pressable
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/auth-unified'))}
+              hitSlop={10}
+              style={styles.closeButton}
+            >
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </Pressable>
             <Text style={styles.headerTitle}>Local Shop</Text>
@@ -153,8 +157,8 @@ export default function LoginScreen() {
             <View style={styles.inputRow}>
               {/* Country Code Dropdown */}
               <View style={styles.countryDropdown}>
-                <Image source={{ uri: 'https://flagcdn.com/w40/us.png' }} style={styles.flagIcon} />
-                <Text style={styles.countryCode}>+1</Text>
+                <Image source={{ uri: 'https://flagcdn.com/w40/in.png' }} style={styles.flagIcon} />
+                <Text style={styles.countryCode}>+91</Text>
                 <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
               </View>
 
@@ -196,33 +200,6 @@ export default function LoginScreen() {
             </Text>
           </Pressable>
 
-          {/* Separator */}
-          <View style={styles.separatorContainer}>
-            <View style={styles.separatorLine} />
-            <Text style={styles.separatorText}>OTHER WAYS TO LOG IN</Text>
-            <View style={styles.separatorLine} />
-          </View>
-
-          {/* Social Icons */}
-          <View style={styles.socialRow}>
-            <Pressable style={styles.socialIconBtn}>
-              <Image 
-                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
-                style={styles.socialImage} 
-              />
-            </Pressable>
-            <Pressable style={styles.socialIconBtn}>
-              <Ionicons name="logo-apple" size={24} color={mode === 'dark' ? 'white' : 'black'} />
-            </Pressable>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>New here? </Text>
-            <Pressable onPress={() => router.push('/(auth)/signup')} hitSlop={8}>
-              <Text style={styles.footerLink}>Join the community</Text>
-            </Pressable>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

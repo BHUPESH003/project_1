@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Appearance } from 'react-native';
 import { getTheme } from './theme';
 import { useThemeStore } from './theme.store';
 import type { AppTheme, ResolvedThemeMode, ThemeColors } from './types';
@@ -13,8 +13,9 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const colorScheme = useColorScheme();
   const mode = useThemeStore((s) => s.themeMode);
+  const deviceScheme = colorScheme ?? Appearance.getColorScheme() ?? 'light';
   const resolvedMode: ResolvedThemeMode =
-    mode === 'system' ? (colorScheme === 'dark' ? 'dark' : 'light') : mode;
+    mode === 'system' ? (deviceScheme === 'dark' ? 'dark' : 'light') : mode;
 
   const theme = useMemo(() => getTheme(resolvedMode, mode), [resolvedMode, mode]);
 

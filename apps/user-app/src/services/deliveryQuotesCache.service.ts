@@ -60,109 +60,47 @@ class DeliveryQuotesCacheService {
     // Check if valid cached data exists
     const cached = this.getValidCached(cacheKey, userLat, userLng);
     if (cached) {
-      console.log(`✓ Using cached delivery quotes for ${sellerId}`);
       return cached.quotes;
     }
 
     // If fetch already in progress for this key, wait for it
     if (this.activeFetches.has(cacheKey)) {
-      console.log(`⏳ Waiting for in-progress fetch for ${sellerId}`);
       const result = await this.activeFetches.get(cacheKey)!;
       return result.quotes;
     }
 
-    // Start silent fetch (no loading indicator)
-    this.fetchQuotesSilently(
-      cacheKey,
-      sellerId,
-      sellerLat,
-      sellerLng,
-      userLat,
-      userLng,
-      userAddress,
-    );
-
-    // Return mock data immediately while fetch happens in background
-    return this.getMockDeliveryQuotes();
-  }
-
-  /**
-   * Silently fetch delivery quotes in background
-   * Does NOT block UI or show loading indicators
-   */
-  private async fetchQuotesSilently(
-    cacheKey: string,
-    sellerId: string,
-    sellerLat: number,
-    sellerLng: number,
-    userLat: number,
-    userLng: number,
-    userAddress: string,
-  ): Promise<void> {
+    // Fetch from API (no mock fallback)
     try {
-      // Create fetch promise
-      const fetchPromise = (async () => {
-        try {
-          // Fetch from API
-          const response = await multiCartApi.getSellerDeliveryQuotes(
-            sellerId,
-            userLat, // delivery location (user's location)
-            userLng,
-            userAddress,
-          );
+      const response = await multiCartApi.getSellerDeliveryQuotes(
+        sellerId,
+        userLat,
+        userLng,
+        userAddress,
+      );
 
-          // Parse response into our format
-          const quotes: DeliveryQuote[] = response.providers.map((provider, index) => ({
-            id: provider.quoteId || `${provider.provider}-${index}`,
-            provider: provider.provider || 'UNKNOWN',
-            displayName: provider.displayName || provider.provider || 'Unknown',
-            eta: provider.estimatedDurationMinutes 
-              ? `${provider.estimatedDurationMinutes} min`
-              : 'N/A',
-            price: provider.estimatedFee || 0,
-          }));
+      const quotes: DeliveryQuote[] = response.providers.map((provider, index) => ({
+        id: provider.quoteId || `${provider.provider}-${index}`,
+        provider: provider.provider || 'UNKNOWN',
+        displayName: provider.displayName || provider.provider || 'Unknown',
+        eta: provider.estimatedDurationMinutes
+          ? `${provider.estimatedDurationMinutes} min`
+          : 'N/A',
+        price: provider.estimatedFee || 0,
+      }));
 
-          // Cache the results
-          const cached: CachedQuotes = {
-            sellerId,
-            quotes,
-            timestamp: Date.now(),
-            expiresAt: Date.now() + this.CACHE_TTL,
-            userLat,
-            userLng,
-          };
-
-          this.cache.set(cacheKey, cached);
-          console.log(`✓ Cached delivery quotes for ${sellerId} (${quotes.length} providers)`);
-
-          return cached;
-        } catch (error) {
-          console.warn(`⚠️ Failed to fetch delivery quotes for ${sellerId}:`, error);
-          // Return mock data on error - don't throw
-          return {
-            sellerId,
-            quotes: this.getMockDeliveryQuotes(),
-            timestamp: Date.now(),
-            expiresAt: Date.now() + this.CACHE_TTL,
-            userLat,
-            userLng,
-          };
-        }
-      })();
-
-      // Store the fetch promise to prevent duplicate requests
-      this.activeFetches.set(cacheKey, fetchPromise);
-
-      // Wait and update cache
-      await fetchPromise;
-
-      // Clean up the fetch promise reference after 5 seconds
-      setTimeout(() => {
-        this.activeFetches.delete(cacheKey);
-      }, 5000);
+      const cached: CachedQuotes = {
+        sellerId,
+        quotes,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + this.CACHE_TTL,
+        userLat,
+        userLng,
+      };
+      this.cache.set(cacheKey, cached);
+      return quotes;
     } catch (error) {
-      console.error(`Error in silent fetch for ${sellerId}:`, error);
-      this.activeFetches.delete(cacheKey);
+      console.warn(`Failed to fetch delivery quotes for ${sellerId}:`, error);
+      return [];
     }
   }
 
@@ -238,35 +176,6 @@ class DeliveryQuotesCacheService {
     const latRounded = Math.round(userLat * 100) / 100;
     const lngRounded = Math.round(userLng * 100) / 100;
     return `${sellerId}:${latRounded}:${lngRounded}`;
-  }
-
-  /**
-   * Get mock delivery quotes (shown while real quotes are being fetched)
-   */
-  private getMockDeliveryQuotes(): DeliveryQuote[] {
-    return [
-      {
-        id: 'uber-1',
-        provider: 'Uber Direct',
-        displayName: 'Uber Direct',
-        eta: '10-15 min',
-        price: 50,
-      },
-      {
-        id: 'porter-1',
-        provider: 'Porter',
-        displayName: 'Porter',
-        eta: '15-20 min',
-        price: 40,
-      },
-      {
-        id: 'dunzo-1',
-        provider: 'Dunzo',
-        displayName: 'Dunzo',
-        eta: '20-25 min',
-        price: 30,
-      },
-    ];
   }
 
   /**

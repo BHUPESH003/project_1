@@ -38,6 +38,13 @@ export interface MultiCartOrder {
   createdAt: string;
 }
 
+/** Delivery address for an order */
+export interface DeliveryAddress {
+  latitude: number;
+  longitude: number;
+  address: string;
+}
+
 /** Request payload for creating multiple orders at once */
 export interface CreateMultiOrdersPayload {
   orders: Array<{
@@ -51,11 +58,10 @@ export interface CreateMultiOrdersPayload {
     }>;
     notes?: string;
   }>;
-  deliveryAddress: {
-    latitude: number;
-    longitude: number;
-    address: string;
-  };
+  /** Single address for all orders, or per-seller addresses */
+  deliveryAddress: DeliveryAddress;
+  /** Optional: per-seller addresses (overrides deliveryAddress when provided for a seller) */
+  deliveryAddresses?: Record<string, DeliveryAddress>;
   paymentMethod?: 'UPI' | 'CASH' | 'CARD';
 }
 
@@ -72,9 +78,15 @@ export interface CreateMultiOrdersResponse {
   message: string;
 }
 
+/** Order reference for delivery quotes */
+export interface OrderRef {
+  orderId: string;
+  sellerId: string;
+}
+
 /** Request for getting delivery quotes for multiple orders */
 export interface GetMultiDeliveryQuotesPayload {
-  orderIds: string[];
+  orders: OrderRef[];
   deliveryAddress: {
     latitude: number;
     longitude: number;
@@ -159,35 +171,177 @@ export interface ConfirmMultiOrdersResponse {
 export const multiCartOrdersApi = {
   /**
    * Create multiple orders (one per seller) in a single request
-   * This ensures consistency and allows batch processing
+   * Maps to backend POST /orders/batch
    */
   async createMultipleOrders(
     payload: CreateMultiOrdersPayload,
   ): Promise<CreateMultiOrdersResponse> {
-    const res = await client.post('/orders/batch/create', payload);
-    return unwrap(res) as CreateMultiOrdersResponse;
+    const backendPayload = {
+      orders: payload.orders.map((o) => {
+        const addr = payload.deliveryAddresses?.[o.sellerId] ?? payload.deliveryAddress;
+        return {
+          categoryId: 'printing',
+          sellerId: o.sellerId,
+          orderPayload: {
+            items: o.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+            dropLatitude: addr.latitude,
+            dropLongitude: addr.longitude,
+            dropAddress: addr.address,
+          },
+        };
+      }),
+    };
+    const res = await client.post('/orders/batch', backendPayload);
+    const data = unwrap(res) as {
+      results: Array<{ sellerId: string; orderId?: string; status: string; error?: string }>;
+      totalProcessed: number;
+      successCount: number;
+      failureCount: number;
+    };
+    const successfulOrders = data.results
+      .filter((r) => r.status === 'success' && r.orderId)
+      .map((r) => {
+        const order = payload.orders.find((o) => o.sellerId === r.sellerId);
+        const items = (order?.items ?? []).map((item, idx) => ({
+          id: `${r.orderId}-${idx}`,
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          totalPrice: item.price * item.quantity,
+        }));
+        const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+        return {
+          orderId: r.orderId!,
+          sellerId: r.sellerId,
+          sellerName: order?.sellerName ?? r.sellerId,
+          items,
+          subtotal,
+          status: 'CREATED',
+          createdAt: new Date().toISOString(),
+        };
+      });
+    const failedOrders = data.results
+      .filter((r) => r.status === 'failed')
+      .map((r) => ({ sellerId: r.sellerId, error: r.error ?? 'Unknown error' }));
+    const totalAmount = successfulOrders.reduce((s, o) => s + o.subtotal, 0);
+    return {
+      success: failedOrders.length === 0,
+      totalOrders: payload.orders.length,
+      successfulOrders,
+      failedOrders,
+      totalAmount,
+      message: failedOrders.length > 0
+        ? `${successfulOrders.length} of ${payload.orders.length} orders created`
+        : 'All orders created',
+    };
   },
 
   /**
-   * Get delivery quotes for multiple orders at once
-   * Returns quotes from all delivery providers for each seller
+   * Get delivery quotes for multiple orders
+   * Calls GET /orders/:id/delivery-quotes for each order in parallel
    */
   async getMultipleDeliveryQuotes(
     payload: GetMultiDeliveryQuotesPayload,
   ): Promise<GetMultiDeliveryQuotesResponse> {
-    const res = await client.post('/orders/batch/delivery-quotes', payload);
-    return unwrap(res) as GetMultiDeliveryQuotesResponse;
+    const { ordersApi } = await import('./orders.api');
+    const results = await Promise.allSettled(
+      payload.orders.map((o) => ordersApi.getDeliveryQuotes(o.orderId)),
+    );
+    const orders: DeliveryQuoteForSeller[] = results.map((result, i) => {
+      const orderRef = payload.orders[i];
+      if (result.status === 'fulfilled' && orderRef) {
+        const res = result.value;
+        return {
+          orderId: res.order_id,
+          sellerId: orderRef.sellerId,
+          providers: (res.providers ?? []).map((p) => ({
+            provider: p.provider,
+            displayName: p.displayName ?? p.provider,
+            estimatedFee: p.estimatedFee ?? 0,
+            estimatedDurationMinutes: p.estimatedDurationMinutes ?? 30,
+            rating: p.rating,
+            logo: p.logo,
+            quoteId: p.quoteId,
+          })),
+          cheapest: res.cheapest
+            ? {
+                provider: res.cheapest.provider,
+                estimatedFee: res.cheapest.estimatedFee ?? 0,
+              }
+            : undefined,
+          fastest: res.providers?.[0]
+            ? {
+                provider: res.providers[0].provider,
+                estimatedDurationMinutes: res.providers[0].estimatedDurationMinutes ?? 30,
+              }
+            : undefined,
+        };
+      }
+      return {
+        orderId: orderRef?.orderId ?? '',
+        sellerId: orderRef?.sellerId ?? '',
+        providers: [],
+      };
+    });
+    const totalDeliveryFees = orders.reduce(
+      (sum, o) => sum + (o.cheapest?.estimatedFee ?? 0),
+      0,
+    );
+    return {
+      orders,
+      totalDeliveryFees,
+      estimatedDeliveryTimes: { earliest: 15, latest: 60 },
+    };
   },
 
   /**
    * Confirm multiple orders with their corresponding delivery partners
-   * This finalizes all orders and processes payment
+   * For each order: updates deliveryFee via PATCH, then calls POST /orders/:id/confirm
    */
   async confirmMultipleOrders(
     payload: ConfirmMultiOrdersPayload,
   ): Promise<ConfirmMultiOrdersResponse> {
-    const res = await client.post('/orders/batch/confirm', payload);
-    return unwrap(res) as ConfirmMultiOrdersResponse;
+    const { ordersApi } = await import('./orders.api');
+    const confirmedOrders: Array<{ orderId: string; sellerId: string; status: string; totalAmount: number }> = [];
+    const failedOrders: Array<{ orderId: string; sellerId: string; error: string }> = [];
+    let grandTotal = 0;
+
+    for (const conf of payload.deliveryConfirmations) {
+      try {
+        await ordersApi.updateOrder(conf.orderId, { deliveryFee: conf.deliveryFee });
+        const res = await ordersApi.confirmOrder(conf.orderId, payload.paymentMethod);
+        grandTotal += res.total_amount;
+        confirmedOrders.push({
+          orderId: conf.orderId,
+          sellerId: conf.sellerId,
+          status: 'success',
+          totalAmount: res.total_amount,
+        });
+      } catch (err) {
+        failedOrders.push({
+          orderId: conf.orderId,
+          sellerId: conf.sellerId,
+          error: err instanceof Error ? err.message : 'Failed to confirm',
+        });
+      }
+    }
+
+    return {
+      success: failedOrders.length === 0,
+      totalOrders: payload.deliveryConfirmations.length,
+      confirmedOrders,
+      failedOrders,
+      grandTotal,
+      paymentIntents: confirmedOrders.map((o) => ({
+        orderId: o.orderId,
+        paymentIntentId: '',
+        paymentUrl: undefined,
+      })),
+    };
   },
 
   /**

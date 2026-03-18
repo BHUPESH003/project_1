@@ -182,7 +182,6 @@ export default function ShopDetailScreen() {
         price: product.price,
         image: product.image,
         category: product.category,
-        quantity: 1,
         totalPrice: totalPrice, // For print services
       },
       shopInfo.image
@@ -392,7 +391,7 @@ export default function ShopDetailScreen() {
 
   const handleCheckout = () => {
     if (itemCount > 0) {
-      router.push('/checkout');
+      router.push('/cart');
     }
   };
 
@@ -729,7 +728,7 @@ export default function ShopDetailScreen() {
         <View style={styles.cartBarContainer}>
           <TouchableOpacity 
             style={styles.cartBar}
-            onPress={() => router.push('/checkout')}
+            onPress={() => router.push('/cart')}
             activeOpacity={0.8}
           >
             <View style={styles.cartBadge}>

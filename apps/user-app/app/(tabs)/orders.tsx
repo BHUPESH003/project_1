@@ -13,52 +13,6 @@ import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { ordersApi, type OrderListItem } from '@/api/orders.api';
-import { useOrderDraftStore } from '@/store/order-draft.store';
-import { useCartStore } from '@/store/cart.store';
-
-// Demo active order
-const DEMO_ACTIVE_ORDER = {
-  id: '7721',
-  shopName: 'Sunnyside Bakery & Cafe',
-  shopImage: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e9f1a?auto=format&fit=crop&w=100&q=80',
-  distance: '2.4 km',
-  amountToPay: 45.00,
-  status: 'on_way',
-  timeline: {
-    confirmed: { done: true, label: 'Order Confirmed' },
-    ready: { done: true, label: 'Ready for Pickup' },
-    on_way: { done: true, label: 'Agent on Way' },
-    picked_up: { done: true, label: 'Picked Up' },
-    delivered: { done: false, label: 'Delivered' },
-  },
-  driver: {
-    name: 'Marcus P.',
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
-  },
-};
-
-// Demo past orders
-const DEMO_PAST_ORDERS = [
-  {
-    id: '0001',
-    shopName: 'FreshMart Groceries',
-    shopImage: 'https://images.unsplash.com/photo-1488574432154-8398519cb859?auto=format&fit=crop&w=100&q=80',
-    date: '24 Oct',
-    itemCount: 12,
-    total: 82.10,
-    status: 'completed',
-  },
-  {
-    id: '0002',
-    shopName: 'The Print Station',
-    shopImage: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=100&q=80',
-    date: '18 Oct',
-    category: 'Document Printing',
-    total: 12.00,
-    status: 'completed',
-  },
-];
 
 function formatDate(iso?: string): string {
   if (!iso) return '—';
@@ -75,43 +29,30 @@ export default function OrdersScreen() {
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const orderId = useOrderDraftStore((s) => s.orderId);
-  const selectedShopName = useCartStore((state) => state.selectedShopName);
-  const cartItems = useCartStore((state) => state.items);
-
-  // Fetch all orders
+  // Fetch all orders from API
   const { data: ordersData, isLoading, isError, error } = useQuery({
     queryKey: ['orders'],
     queryFn: () => ordersApi.getMyOrders(),
   });
 
-  // Fetch active order if orderId exists
-  const { data: activeOrderData, isLoading: activeOrderLoading } = useQuery({
-    queryKey: ['order', orderId],
-    queryFn: () => (orderId ? ordersApi.getOrder(orderId) : null),
-    enabled: !!orderId,
-  });
+  const TERMINAL_STATUSES = ['DELIVERED', 'SELLER_REJECTED', 'ORDER_EXPIRED', 'DELIVERY_FAILED', 'USER_CANCELLED'];
 
-  // Determine active order - use API data if available, fallback to demo
-  const activeOrder = useMemo(() => {
-    if (activeOrderData) {
-      return activeOrderData;
-    }
-    // Fallback: show demo if no active order from API
-    return DEMO_ACTIVE_ORDER;
-  }, [activeOrderData]);
+  // Split into active (in progress) and past (delivered/cancelled) orders
+  const { activeOrders, pastOrders } = useMemo(() => {
+    const orders = Array.isArray(ordersData) ? ordersData : [];
+    const active = orders.filter((o) => !TERMINAL_STATUSES.includes(o.status));
+    const past = orders.filter((o) => TERMINAL_STATUSES.includes(o.status));
+    return {
+      activeOrders: active,
+      pastOrders: past,
+    };
+  }, [ordersData]);
 
-  // Get past orders - use API data if available, fallback to demo
-  const pastOrders = useMemo(() => {
-    if (Array.isArray(ordersData) && ordersData.length > 0) {
-      // Filter out active order and show past orders
-      return ordersData.filter((o: any) => o.id !== orderId);
-    }
-    return DEMO_PAST_ORDERS;
-  }, [ordersData, orderId]);
+  // First active order for display (or null)
+  const activeOrder = activeOrders[0] ?? null;
 
   // Show loading if fetching orders
-  if (isLoading || activeOrderLoading) {
+  if (isLoading) {
     return (
       <ScreenWrapper>
         <View style={styles.header}>
@@ -153,121 +94,80 @@ export default function OrdersScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Active Order Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>ACTIVE ORDER</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>On its way</Text>
-            </View>
-          </View>
-
-          {/* Delivery Map Placeholder - Only show if ready & agent on way */}
-          {(activeOrder as any)?.timeline?.ready?.done && (activeOrder as any)?.timeline?.on_way?.done ? (
-            <View style={styles.mapPlaceholder}>
-              <View style={styles.mapGrid}>
-                {[...Array(12)].map((_, i) => (
-                  <View key={i} style={styles.mapCell} />
-                ))}
-              </View>
-              <View style={styles.mapRoute}>
-                <View style={styles.routeDot} />
-                <View style={styles.routeLine} />
-                <View style={styles.routeDotCenter} />
+        {activeOrder && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>ACTIVE ORDER</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>{activeOrder.status.replace(/_/g, ' ')}</Text>
               </View>
             </View>
-          ) : (
             <View style={styles.statusPlaceholder}>
-              <MaterialIcons 
-                name={(activeOrder as any)?.timeline?.ready?.done ? "local-shipping" : "schedule"} 
-                size={48} 
-                color={colors.primary} 
-                style={styles.statusIcon}
-              />
-              <Text style={styles.statusTitle}>
-                {(activeOrder as any)?.timeline?.ready?.done ? 'Agent on the Way' : 'Item is Preparing'}
-              </Text>
-              <Text style={styles.statusSubtitle}>
-                {(activeOrder as any)?.timeline?.ready?.done 
-                  ? 'Your order is ready and agent is arriving soon' 
-                  : 'Your order is being prepared at the store'}
-              </Text>
+              <MaterialIcons name="local-shipping" size={48} color={colors.primary} style={styles.statusIcon} />
+              <Text style={styles.statusTitle}>Order in Progress</Text>
+              <Text style={styles.statusSubtitle}>Your order is being processed</Text>
             </View>
-          )}
-
-          {/* Order Details */}
-          <View style={styles.orderCard}>
-            <View style={styles.shopHeader}>
-              <Image source={{ uri: (activeOrder as any)?.shopImage || DEMO_ACTIVE_ORDER.shopImage }} style={styles.shopImage} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shopName}>{(activeOrder as any)?.shopName || selectedShopName || DEMO_ACTIVE_ORDER.shopName}</Text>
-                <Text style={styles.orderMeta}>
-                  Order #{(activeOrder as any)?.id || DEMO_ACTIVE_ORDER.id} • {(activeOrder as any)?.distance || DEMO_ACTIVE_ORDER.distance} away
-                </Text>
-              </View>
-              <View style={styles.amountBox}>
-                <Text style={styles.amountLabel}>AMOUNT TO PAY</Text>
-                <Text style={styles.amountValue}>₹{((activeOrder as any)?.amountToPay || DEMO_ACTIVE_ORDER.amountToPay).toFixed(2)}</Text>
-              </View>
-            </View>
-
-            {/* Timeline */}
-            <View style={styles.timeline}>
-              {(activeOrder as any)?.timeline && Object.entries((activeOrder as any).timeline).map(([key, step]: [string, any]) => {
-                const isLast = key === 'delivered';
-                return (
-                  <React.Fragment key={key}>
-                    <View style={[styles.timelineStep, step?.done && styles.timelineStepActive]}>
-                      <View style={styles.timelineCircle} />
-                      <Text style={styles.timelineLabel}>{step?.label}</Text>
-                    </View>
-                    {!isLast && <View style={[styles.timelineConnector, step?.done && styles.timelineConnectorActive]} />}
-                  </React.Fragment>
-                );
-              })}
-            </View>
-            <View style={styles.driverSection}>
-              <View style={styles.driverCard}>
-                <Text style={styles.driverLabel}>YOUR DRIVER</Text>
-                <View style={styles.driverRow}>
-                  <Image source={{ uri: (activeOrder as any)?.driver?.image || DEMO_ACTIVE_ORDER.driver.image }} style={styles.driverImage} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.driverName}>{(activeOrder as any)?.driver?.name || DEMO_ACTIVE_ORDER.driver.name}</Text>
-                    <View style={styles.ratingRow}>
-                      <MaterialIcons name="star" size={14} color="colors.ratingStar" />
-                      <Text style={styles.driverRating}>{(activeOrder as any)?.driver?.rating || DEMO_ACTIVE_ORDER.driver.rating}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.contactBtn}>
-                    <MaterialIcons name="chat" size={18} color={colors.textPrimary} />
-                    <Text style={styles.contactBtnText}>Contact</Text>
-                  </TouchableOpacity>
+            <View style={styles.orderCard}>
+              <View style={styles.shopHeader}>
+                <View style={[styles.shopImage, { backgroundColor: colors.background }]}>
+                  <MaterialIcons name="store" size={28} color={colors.textMuted} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shopName}>{activeOrder.seller?.shopName ?? 'Shop'}</Text>
+                  <Text style={styles.orderMeta}>Order #{activeOrder.order_id}</Text>
+                </View>
+                <View style={styles.amountBox}>
+                  <Text style={styles.amountLabel}>AMOUNT</Text>
+                  <Text style={styles.amountValue}>
+                    ₹{(activeOrder.pricing?.totalAmount ?? activeOrder.pricing?.itemCost ?? 0).toFixed(2)}
+                  </Text>
                 </View>
               </View>
+              <TouchableOpacity
+                style={styles.contactBtn}
+                onPress={() => router.push(`/order/${activeOrder.order_id}`)}
+              >
+                <Text style={styles.contactBtnText}>Track Order</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
+        )}
+
+        {!activeOrder && (activeOrders.length === 0 && pastOrders.length === 0) && (
+          <View style={styles.section}>
+            <View style={styles.emptyWrap}>
+              <MaterialIcons name="receipt-long" size={64} color={colors.textMuted} />
+              <Text style={styles.emptyText}>No orders yet</Text>
+              <Text style={styles.emptySubtext}>Your orders will appear here</Text>
+            </View>
+          </View>
+        )}
 
         {/* Past Orders Section */}
-        {pastOrders && pastOrders.length > 0 && (
+        {pastOrders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>PAST ORDERS</Text>
-              <TouchableOpacity>
-                <Text style={styles.viewAllText}>View All</Text>
-              </TouchableOpacity>
             </View>
-
-            {pastOrders.map((order: any) => (
-              <TouchableOpacity key={order.id} style={styles.pastOrderCard}>
-                <Image source={{ uri: order.shopImage }} style={styles.pastOrderImage} />
+            {pastOrders.map((order: OrderListItem) => (
+              <TouchableOpacity
+                key={order.order_id}
+                style={styles.pastOrderCard}
+                onPress={() => router.push(`/order/${order.order_id}`)}
+              >
+                <View style={[styles.pastOrderImage, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+                  <MaterialIcons name="store" size={24} color={colors.textMuted} />
+                </View>
                 <View style={styles.pastOrderContent}>
-                  <Text style={styles.pastOrderShop}>{order.shopName}</Text>
+                  <Text style={styles.pastOrderShop}>{order.seller?.shopName ?? 'Shop'}</Text>
                   <Text style={styles.pastOrderMeta}>
-                    {order.date || formatDate(order.createdAt)} • {order.itemCount ? `${order.itemCount} Items` : order.category}
+                    {formatDate(order.createdAt)} • {order.category?.name ?? ''}
                   </Text>
                 </View>
                 <View>
-                  <Text style={styles.pastOrderTotal}>₹{(order.total || order.amountToPay).toFixed(2)}</Text>
+                  <Text style={styles.pastOrderTotal}>
+                    ₹{(order.pricing?.totalAmount ?? order.pricing?.itemCost ?? 0).toFixed(2)}
+                  </Text>
                   <TouchableOpacity style={styles.reorderBtn}>
                     <Text style={styles.reorderText}>Reorder</Text>
                   </TouchableOpacity>
@@ -281,7 +181,7 @@ export default function OrdersScreen() {
   );
 }
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: import('@/theme/types').ThemeColors) => StyleSheet.create({
   header: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
@@ -298,6 +198,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   loaderWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
+  emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: spacing.xl * 2 },
+  emptyText: { ...typography.primary, color: colors.textPrimary, fontWeight: '600', marginTop: spacing.md },
+  emptySubtext: { ...typography.secondary, color: colors.textMuted, marginTop: spacing.xs },
   errorText: { ...typography.secondary, color: colors.error, textAlign: 'center' },
   errorSubtext: { ...typography.meta, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm },
   scroll: { flex: 1 },

@@ -9,13 +9,15 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { MultiCartView } from '@/components/MultiCartView';
-// import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
-import { Loader } from '@/components/Loader';
+import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
+import { usersApi } from '@/api/users.api';
+import { useLocationStore } from '@/store/location.store';
 
 export default function CartScreen() {
   const colors = useThemeColors();
@@ -28,6 +30,25 @@ export default function CartScreen() {
   const selectedForCheckout = useMultiCartStore((s) => s.selectedForCheckout);
   
   const [viewMode, setViewMode] = useState<'carts' | 'checkout'>('carts');
+  const [addressMode, setAddressMode] = useState<'same' | 'different'>('same');
+  const [proceededToCheckout, setProceededToCheckout] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null>(null);
+  const [perSellerAddresses, setPerSellerAddresses] = useState<Record<string, {
+    latitude: number;
+    longitude: number;
+    address: string;
+  }>>({});
+
+  const { data: addresses = [] } = useQuery({
+    queryKey: ['user-addresses'],
+    queryFn: () => usersApi.getMyAddresses(),
+    enabled: viewMode === 'checkout',
+  });
+  const locationCoords = useLocationStore((s) => s.coords);
 
   // Get cart count
   const cartCount = useMemo(() => Object.keys(carts).length, [carts]);
@@ -35,7 +56,7 @@ export default function CartScreen() {
   if (cartCount === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, { paddingTop: insets.top / 2 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -97,7 +118,12 @@ export default function CartScreen() {
     <SafeAreaView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
-          onPress={() => setViewMode('carts')}
+          onPress={() => {
+            setViewMode('carts');
+            setProceededToCheckout(false);
+            setDeliveryAddress(null);
+            setPerSellerAddresses({});
+          }}
           style={styles.backBtn}
         >
           <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -107,22 +133,166 @@ export default function CartScreen() {
       </View>
 
       <ScrollView style={styles.scrollview}>
-        {/* TODO: CombinedCheckoutFlow disabled - multi-cart checkout not in use */}
-        {/* <CombinedCheckoutFlow /> */}
-        <View style={styles.disabledContainer}>
-          <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
-            Multi-seller checkout disabled
-          </Text>
-          <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
-            Currently using single-seller checkout only
-          </Text>
-          <TouchableOpacity
-            style={styles.continueshoppingBtn}
-            onPress={() => setViewMode('carts')}
-          >
-            <Text style={styles.continueshoppingBtnText}>Back to Cart</Text>
-          </TouchableOpacity>
-        </View>
+        {!proceededToCheckout && !deliveryAddress && addressMode === 'same' ? (
+          <View style={styles.addressSection}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              Delivery Address
+            </Text>
+            {selectedForCheckout.size > 1 && (
+              <View style={[styles.addressModeRow, { marginBottom: spacing.md }]}>
+                <TouchableOpacity
+                  style={[styles.addressModeBtn, addressMode === 'same' && styles.addressModeBtnActive]}
+                  onPress={() => setAddressMode('same')}
+                >
+                  <Text style={[styles.addressModeText, addressMode === 'same' && styles.addressModeTextActive]}>
+                    Same address for all
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addressModeBtn, addressMode !== 'same' && styles.addressModeBtnActive]}
+                  onPress={() => setAddressMode('different')}
+                >
+                  <Text style={[styles.addressModeText, addressMode !== 'same' && styles.addressModeTextActive]}>
+                    Different address per seller
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {addresses.length > 0 ? (
+              addresses.map((addr) => (
+                <TouchableOpacity
+                  key={addr.id}
+                  style={[styles.addressOption, { borderColor: colors.border }]}
+                  onPress={() => {
+                    if (addr.latitude != null && addr.longitude != null) {
+                      setDeliveryAddress({
+                        latitude: addr.latitude,
+                        longitude: addr.longitude,
+                        address: addr.addressLine,
+                      });
+                      setProceededToCheckout(true);
+                    }
+                  }}
+                >
+                  <Text style={[styles.addressLabel, { color: colors.textPrimary }]}>
+                    {addr.label}
+                  </Text>
+                  <Text style={[styles.addressText, { color: colors.textSecondary }]}>
+                    {addr.addressLine}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            ) : null}
+            <TouchableOpacity
+              style={[styles.continueshoppingBtn, { marginTop: spacing.md }]}
+              onPress={() => {
+                const lat = locationCoords?.latitude ?? 28.7041;
+                const lng = locationCoords?.longitude ?? 77.1025;
+                setDeliveryAddress({
+                  latitude: lat,
+                  longitude: lng,
+                  address: locationCoords?.label ?? 'Current location',
+                });
+                setProceededToCheckout(true);
+              }}
+            >
+              <Text style={styles.continueshoppingBtnText}>
+                {addresses.length > 0 ? 'Use current location' : 'Select Address'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : !proceededToCheckout && addressMode === 'different' && selectedForCheckout.size > 1 ? (
+          <View style={styles.addressSection}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              Address per seller
+            </Text>
+            <View style={[styles.addressModeRow, { marginBottom: spacing.md }]}>
+              <TouchableOpacity
+                style={[styles.addressModeBtn, addressMode === 'same' && styles.addressModeBtnActive]}
+                onPress={() => { setAddressMode('same'); setDeliveryAddress(null); setPerSellerAddresses({}); setProceededToCheckout(false); }}
+              >
+                <Text style={[styles.addressModeText, addressMode === 'same' && styles.addressModeTextActive]}>
+                  Same for all
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addressModeBtn, addressMode !== 'same' && styles.addressModeBtnActive]}
+                onPress={() => setAddressMode('different')}
+              >
+                <Text style={[styles.addressModeText, addressMode !== 'same' && styles.addressModeTextActive]}>
+                  Different per seller
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {Array.from(selectedForCheckout).map((sellerId) => {
+              const cart = carts[sellerId];
+              const addr = perSellerAddresses[sellerId];
+              return (
+                <View key={sellerId} style={[styles.perSellerBlock, { borderColor: colors.border }]}>
+                  <Text style={[styles.perSellerLabel, { color: colors.textPrimary }]}>
+                    {cart?.sellerName ?? sellerId}
+                  </Text>
+                  {addresses.map((a) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[styles.addressOption, { borderColor: colors.border }]}
+                      onPress={() => {
+                        if (a.latitude != null && a.longitude != null) {
+                          const addr = { latitude: a.latitude, longitude: a.longitude, address: a.addressLine };
+                          setPerSellerAddresses((prev) => ({ ...prev, [sellerId]: addr }));
+                        }
+                      }}
+                    >
+                      <Text style={[styles.addressLabel, { color: colors.textPrimary }]}>{a.label}</Text>
+                      <Text style={[styles.addressText, { color: colors.textSecondary }]}>{a.addressLine}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={[styles.continueshoppingBtn, { marginTop: spacing.sm }]}
+                    onPress={() => {
+                      const lat = locationCoords?.latitude ?? 28.7041;
+                      const lng = locationCoords?.longitude ?? 77.1025;
+                      const addr: { latitude: number; longitude: number; address: string } = {
+                        latitude: lat,
+                        longitude: lng,
+                        address: locationCoords?.label ?? 'Current location',
+                      };
+                      setPerSellerAddresses((prev) => ({ ...prev, [sellerId]: addr }));
+                    }}
+                  >
+                    <Text style={styles.continueshoppingBtnText}>Use current location</Text>
+                  </TouchableOpacity>
+                  {addr && <Text style={[styles.selectedAddrHint, { color: colors.textMuted }]}>✓ Selected</Text>}
+                </View>
+              );
+            })}
+            {Object.keys(perSellerAddresses).length === selectedForCheckout.size && (
+              <TouchableOpacity
+                style={[styles.continueshoppingBtn, { marginTop: spacing.lg }]}
+                onPress={() => {
+                  const first = Object.values(perSellerAddresses)[0];
+                  if (first) {
+                    setDeliveryAddress(first);
+                    setProceededToCheckout(true);
+                  }
+                }}
+              >
+                <Text style={styles.continueshoppingBtnText}>Proceed to Checkout</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <CombinedCheckoutFlow
+            deliveryAddress={deliveryAddress!}
+            deliveryAddresses={Object.keys(perSellerAddresses).length > 0 ? perSellerAddresses : undefined}
+            onSuccess={() => {
+              setViewMode('carts');
+              setDeliveryAddress(null);
+              setPerSellerAddresses({});
+              setProceededToCheckout(false);
+            }}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -215,5 +385,65 @@ const createStyles = (colors: any) =>
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: spacing.lg,
+    },
+    addressSection: {
+      padding: spacing.lg,
+    },
+    sectionTitle: {
+      ...typography.sectionHeader,
+      marginBottom: spacing.md,
+    },
+    addressOption: {
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    addressModeRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    addressModeBtn: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    addressModeBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    addressModeText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    addressModeTextActive: {
+      color: colors.textLight,
+    },
+    perSellerBlock: {
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    perSellerLabel: {
+      fontSize: 14,
+      fontWeight: '700',
+      marginBottom: spacing.sm,
+    },
+    selectedAddrHint: {
+      fontSize: 12,
+      marginTop: spacing.xs,
+    },
+    addressLabel: {
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    addressText: {
+      fontSize: 14,
     },
   });

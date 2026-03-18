@@ -109,7 +109,7 @@ export default function PaymentMethodScreen() {
   });
 
   useEffect(() => {
-    if (!orderId) router.replace('/checkout');
+    if (!orderId) router.replace('/cart');
   }, [orderId, router]);
 
   const total = order?.pricing?.totalAmount ?? 0;

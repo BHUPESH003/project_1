@@ -33,12 +33,15 @@ interface CombinedCheckoutFlowProps {
     longitude: number;
     address: string;
   };
+  /** Per-seller addresses (when user chooses different address per seller) */
+  deliveryAddresses?: Record<string, { latitude: number; longitude: number; address: string }>;
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }
 
 export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
   deliveryAddress,
+  deliveryAddresses,
   onSuccess,
   onError,
 }) => {
@@ -50,6 +53,7 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
   const [deliveryOptions, setDeliveryOptions] = useState<any>({});
   const [selectedProviders, setSelectedProviders] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   // Fetch all carts from store
   const carts = useMultiCartStore((state) => state.carts);
@@ -71,7 +75,7 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
       setLoading(true);
       try {
         const createdOrders =
-          await MultiCartCheckoutService.createAllOrders(deliveryAddress);
+          await MultiCartCheckoutService.createAllOrders(deliveryAddress, deliveryAddresses);
         setOrders(createdOrders);
         showToast({
           type: 'success',
@@ -97,9 +101,9 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
     mutationFn: async () => {
       setLoading(true);
       try {
-        const orderIds = orders.map((o) => o.orderId);
+        const orderRefs = orders.map((o) => ({ orderId: o.orderId, sellerId: o.sellerId }));
         const quotes = await MultiCartCheckoutService.getDeliveryQuotes(
-          orderIds,
+          orderRefs,
           deliveryAddress,
         );
 
@@ -107,10 +111,11 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
         quotes.forEach((q) => {
           quotesMap[q.orderId] = q.providers;
           // Auto-select cheapest provider
-          if (q.cheapest) {
+          const cheapest = q.cheapest;
+          if (cheapest) {
             setSelectedProviders((prev) => ({
               ...prev,
-              [q.orderId]: q.cheapest.provider,
+              [q.orderId]: cheapest.provider,
             }));
           }
         });
@@ -170,7 +175,7 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
 
         if (onSuccess) onSuccess();
         setTimeout(() => {
-          router.push('/orders');
+          router.replace('/(tabs)/orders');
         }, 1000);
       } catch (error: any) {
         showToast({
@@ -191,6 +196,13 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
       createOrdersMutation.mutate();
     }
   }, []);
+
+  useEffect(() => {
+    // Auto-fetch delivery quotes when orders are created
+    if (step === 'delivery_quotes' && orders.length > 0 && !loading) {
+      fetchQuotesMutation.mutate();
+    }
+  }, [step, orders.length]);
 
   if (loading) {
     return (
@@ -225,15 +237,59 @@ export const CombinedCheckoutFlow: React.FC<CombinedCheckoutFlowProps> = ({
       {/* Orders Summary */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Orders Summary</Text>
-        {orders.map((order) => (
-          <View key={order.orderId} style={styles.orderCard}>
-            <View style={styles.orderHeader}>
-              <Text style={styles.orderSeller}>{order.sellerName}</Text>
-              <Text style={styles.orderPrice}>₹{order.subtotal.toFixed(2)}</Text>
-            </View>
-            <Text style={styles.orderItems}>{order.items.length} items</Text>
-          </View>
-        ))}
+        {orders.map((order) => {
+          const isExpanded = expandedOrders.has(order.orderId);
+          return (
+            <TouchableOpacity
+              key={order.orderId}
+              style={styles.orderCard}
+              onPress={() => {
+                const newExpanded = new Set(expandedOrders);
+                if (newExpanded.has(order.orderId)) {
+                  newExpanded.delete(order.orderId);
+                } else {
+                  newExpanded.add(order.orderId);
+                }
+                setExpandedOrders(newExpanded);
+              }}
+            >
+              <View style={styles.orderHeader}>
+                <View style={styles.orderHeaderInfo}>
+                  <Text style={styles.orderSeller}>{order.sellerName}</Text>
+                  <Text style={styles.orderItems}>{order.items.length} items</Text>
+                </View>
+                <View style={styles.orderHeaderRight}>
+                  <Text style={styles.orderPrice}>₹{order.subtotal.toFixed(2)}</Text>
+                  <MaterialIcons
+                    name={isExpanded ? 'expand-less' : 'expand-more'}
+                    size={20}
+                    color="#666"
+                  />
+                </View>
+              </View>
+
+              {/* Expanded Items */}
+              {isExpanded && (
+                <View style={styles.itemsExpandedSection}>
+                  {order.items.map((item: any) => (
+                    <View key={item.id} style={styles.expandedItemRow}>
+                      <View style={styles.expandedItemDetails}>
+                        <Text style={styles.expandedItemName}>{item.name}</Text>
+                        <Text style={styles.expandedItemUnit}>₹{item.price.toFixed(2)} each</Text>
+                      </View>
+                      <View style={styles.expandedItemQty}>
+                        <Text style={styles.expandedQtyText}>x{item.quantity}</Text>
+                      </View>
+                      <Text style={styles.expandedItemPrice}>
+                        ₹{(item.price * item.quantity).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Delivery Provider Selection */}
@@ -370,7 +426,7 @@ const styles = StyleSheet.create({
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 12,
+    overflow: 'hidden',
     marginBottom: 8,
     borderLeftWidth: 4,
     borderLeftColor: '#e74c3c',
@@ -378,12 +434,24 @@ const styles = StyleSheet.create({
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  orderHeaderInfo: {
+    flex: 1,
+  },
+  orderHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   orderSeller: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1a1a1a',
+    marginBottom: 2,
   },
   orderPrice: {
     fontSize: 14,
@@ -393,6 +461,50 @@ const styles = StyleSheet.create({
   orderItems: {
     fontSize: 12,
     color: '#999',
+  },
+  itemsExpandedSection: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fafafa',
+    gap: 8,
+  },
+  expandedItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 6,
+  },
+  expandedItemDetails: {
+    flex: 1,
+  },
+  expandedItemName: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  expandedItemUnit: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  expandedItemQty: {
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  expandedQtyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  expandedItemPrice: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    minWidth: 55,
+    textAlign: 'right',
   },
   providerSection: {
     backgroundColor: '#fff',

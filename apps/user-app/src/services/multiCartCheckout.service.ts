@@ -16,15 +16,18 @@ import { useMultiCartStore } from '@/store/multiCartStore';
 export class MultiCartCheckoutService {
   /**
    * Prepare multi-order payload from cart store
+   * Supports single address for all or per-seller addresses
    */
   static prepareMultiOrdersPayload(
     deliveryAddress: { latitude: number; longitude: number; address: string },
+    deliveryAddresses?: Record<string, { latitude: number; longitude: number; address: string }>,
   ): CreateMultiOrdersPayload {
     const state = useMultiCartStore.getState();
     const { carts } = state;
 
+    const selected = state.selectedForCheckout;
     const orders = Object.entries(carts)
-      .filter(([_, cart]) => cart.items.length > 0)
+      .filter(([sellerId, cart]) => cart.items.length > 0 && selected.has(sellerId))
       .map(([sellerId, cart]) => ({
         sellerId,
         sellerName: cart.sellerName,
@@ -40,6 +43,7 @@ export class MultiCartCheckoutService {
     return {
       orders,
       deliveryAddress,
+      deliveryAddresses,
       paymentMethod: 'UPI',
     };
   }
@@ -47,11 +51,13 @@ export class MultiCartCheckoutService {
   /**
    * Create all orders at once
    * Returns array of created orders with IDs
+   * Supports single address for all or per-seller addresses via deliveryAddresses
    */
   static async createAllOrders(
     deliveryAddress: { latitude: number; longitude: number; address: string },
+    deliveryAddresses?: Record<string, { latitude: number; longitude: number; address: string }>,
   ) {
-    const payload = this.prepareMultiOrdersPayload(deliveryAddress);
+    const payload = this.prepareMultiOrdersPayload(deliveryAddress, deliveryAddresses);
 
     console.log('Creating multiple orders...', payload);
 
@@ -72,11 +78,11 @@ export class MultiCartCheckoutService {
    * Fetch delivery quotes for all created orders
    */
   static async getDeliveryQuotes(
-    orderIds: string[],
+    orders: Array<{ orderId: string; sellerId: string }>,
     deliveryAddress: { latitude: number; longitude: number; address: string },
   ) {
     const response = await multiCartOrdersApi.getMultipleDeliveryQuotes({
-      orderIds,
+      orders,
       deliveryAddress,
     });
 

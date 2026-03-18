@@ -56,44 +56,36 @@ export const StickyMultiCartBar: React.FC<StickyMultiCartBarProps> = ({
   if (totalItems === 0) return null;
 
   const handleCheckout = () => {
-    // TODO: Multi-cart checkout disabled for now - using single cart only
-    // Intelligent routing: decide which checkout flow to use
-    // if (activeSellers === 1) {
-    //   // Single seller - use regular checkout flow
-    //   router.push('/checkout');
-    // } else if (activeSellers > 1) {
-    //   // Multiple sellers - use combined/multi-cart checkout
-    //   router.push('/checkout-multi');
-    // }
-
-    // For now: Always use single checkout (single seller only)
-    router.push('/checkout');
+    // MVP: Route to multi-cart view which handles both single and multi-seller checkout
+    router.push('/cart');
   };
 
   return (
-    <View style={[styles.container, { bottom: tabBarHeight }]}>
-      <View style={styles.content}>
-        <View style={styles.infoSection}>
-          <Text style={styles.label}>
-            {activeSellers > 1
-              ? `${activeSellers} Sellers`
-              : activeSellers === 1
-              ? '1 Seller'
-              : 'Cart'}
-          </Text>
-          <Text style={styles.details}>
-            {totalItems} item{totalItems !== 1 ? 's' : ''} • ₹{totalPrice.toFixed(2)}
-          </Text>
-        </View>
+    <View style={[styles.container, { bottom: tabBarHeight + 6 }]}>
+      <View style={styles.wrapper}>
+        <View style={styles.content}>
+          <View style={styles.infoSection}>
+            <Text style={styles.label}>
+              {activeSellers > 1
+                ? `${activeSellers} Sellers`
+                : activeSellers === 1
+                ? '1 Seller'
+                : 'Cart'}
+            </Text>
+            <Text style={styles.details}>
+              {totalItems} item{totalItems !== 1 ? 's' : ''} • ₹{totalPrice.toFixed(2)}
+            </Text>
+          </View>
 
-        <TouchableOpacity
-          style={styles.checkoutButton}
-          onPress={handleCheckout}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.checkoutButtonText}>Checkout</Text>
-          <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.checkoutButton}
+            onPress={handleCheckout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.checkoutButtonText}>Checkout</Text>
+            <MaterialIcons name="arrow-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -101,14 +93,23 @@ export const StickyMultiCartBar: React.FC<StickyMultiCartBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     position: 'absolute',
     left: 0,
     right: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+  },
+  wrapper: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   content: {
     flexDirection: 'row',
@@ -130,13 +131,18 @@ const styles = StyleSheet.create({
   },
   checkoutButton: {
     backgroundColor: '#e74c3c',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    shadowColor: '#e74c3c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   checkoutButtonText: {
     color: '#fff',

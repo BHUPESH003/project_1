@@ -6,6 +6,7 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing } from '@/constants/spacing';
 import { useThemedStyles } from '@/theme';
+import { colors } from '@/constants/colors';
 
 /** Horizontal padding from screen edge (in addition to safe area). */
 const SCREEN_HORIZONTAL_PADDING = spacing.lg;
@@ -38,11 +39,11 @@ export function ScreenWrapper({ children, style, noPadding }: ScreenWrapperProps
   );
 }
 
-const createStyles = (colors: { background: string }) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.black,
     },
   });
 

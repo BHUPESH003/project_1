@@ -20,14 +20,14 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { MaterialIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
 export const MultiCartView: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const router = useRouter();
   const [expandedSellers, setExpandedSellers] = useState<Set<string>>(
     new Set()
   );
@@ -46,7 +46,7 @@ export const MultiCartView: React.FC = () => {
         <Text style={styles.emptyText}>Your cart is empty</Text>
         <TouchableOpacity
           style={styles.emptyButton}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => router.push('/(tabs)/home')}
         >
           <Text style={styles.emptyButtonText}>Continue Shopping</Text>
         </TouchableOpacity>
@@ -65,7 +65,7 @@ export const MultiCartView: React.FC = () => {
   };
 
   const handleCheckout = (sellerId: string) => {
-    navigation.navigate('SingleCheckout', { sellerId });
+    router.push({ pathname: '/single-checkout', params: { sellerId } });
   };
 
   return (
@@ -117,13 +117,51 @@ export const MultiCartView: React.FC = () => {
                         <Text style={styles.itemName} numberOfLines={2}>
                           {item.name}
                         </Text>
-                        <Text style={styles.itemQty}>
-                          Qty: {item.quantity}
+                        <Text style={styles.itemPrice}>
+                          ₹{item.price.toFixed(2)} each
                         </Text>
                       </View>
-                      <Text style={styles.itemPrice}>
-                        ₹{(item.price * item.quantity).toFixed(2)}
-                      </Text>
+                      
+                      {/* Quantity Controls */}
+                      <View style={styles.quantityControl}>
+                        <TouchableOpacity
+                          style={styles.qtyButton}
+                          onPress={() => {
+                            if (item.quantity > 1) {
+                              useMultiCartStore.getState().updateQuantity(cart.sellerId, item.id, item.quantity - 1);
+                            } else {
+                              useMultiCartStore.getState().removeItem(cart.sellerId, item.id);
+                            }
+                          }}
+                        >
+                          <MaterialIcons name="remove" size={16} color="#FF6B35" />
+                        </TouchableOpacity>
+                        
+                        <Text style={styles.qtyText}>{item.quantity}</Text>
+                        
+                        <TouchableOpacity
+                          style={styles.qtyButton}
+                          onPress={() => {
+                            useMultiCartStore.getState().updateQuantity(cart.sellerId, item.id, item.quantity + 1);
+                          }}
+                        >
+                          <MaterialIcons name="add" size={16} color="#FF6B35" />
+                        </TouchableOpacity>
+
+                        <Text style={styles.itemTotal}>
+                          ₹{(item.price * item.quantity).toFixed(2)}
+                        </Text>
+                      </View>
+
+                      {/* Delete Button */}
+                      <TouchableOpacity
+                        style={styles.deleteBtn}
+                        onPress={() => {
+                          useMultiCartStore.getState().removeItem(cart.sellerId, item.id);
+                        }}
+                      >
+                        <MaterialIcons name="delete" size={18} color="#e74c3c" />
+                      </TouchableOpacity>
                     </View>
                   ))}
 
@@ -232,24 +270,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+    gap: 8,
   },
   itemDetails: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
   },
   itemName: {
     fontSize: 13,
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 4,
+    fontWeight: '500',
   },
-  itemQty: {
+  itemPrice: {
     fontSize: 11,
     color: '#999',
   },
-  itemPrice: {
-    fontSize: 13,
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
+  },
+  qtyButton: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  itemTotal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FF6B35',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  deleteBtn: {
+    padding: 6,
   },
   divider: {
     height: 1,

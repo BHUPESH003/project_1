@@ -63,7 +63,7 @@ export default function PaymentProcessingScreen() {
     
     const run = async () => {
       if (!orderId) {
-        router.replace('/checkout');
+        router.replace('/cart');
         return;
       }
 

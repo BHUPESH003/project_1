@@ -3,12 +3,12 @@
  *
  * Single seller cart checkout flow:
  * - Shows products from only this seller
- * - Select delivery address
- * - Select delivery partner
- * - Place order
+ * - Select delivery address (from saved addresses or location)
+ * - Select delivery partner (from real API)
+ * - Place order via orders API
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -17,12 +17,18 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
   FlatList,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { useMultiCartStore } from '@/store/multiCartStore';
+import { useOrderDraftStore } from '@/store/order-draft.store';
 import { MaterialIcons } from '@expo/vector-icons';
+import { usersApi } from '@/api/users.api';
+import { ordersApi } from '@/api/orders.api';
+import { sellersApi } from '@/api/sellers.api';
+import { useLocationStore } from '@/store/location.store';
 
 type Step = 'address' | 'delivery' | 'placing';
 
@@ -34,10 +40,14 @@ interface DeliveryOption {
   price: number;
 }
 
-export const SingleCheckoutFlow: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const { sellerId } = route.params;
+interface SingleCheckoutFlowProps {
+  sellerId?: string;
+}
+
+export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => {
+  const router = useRouter();
+  const navigation = useNavigation<{ reset: (opts: { index: number; routes: Array<{ name: string }> }) => void; goBack: () => void }>();
+  const sellerId = props.sellerId ?? '';
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
   const [deliveryAddress, setDeliveryAddress] = useState<{
@@ -45,24 +55,56 @@ export const SingleCheckoutFlow: React.FC = () => {
     lng: number;
     address: string;
   } | null>(null);
-  const [selectedPartner, setSelectedPartner] = useState<DeliveryOption | null>(
-    null
-  );
+  const [selectedPartner, setSelectedPartner] = useState<DeliveryOption | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [deliveryPartners, setDeliveryPartners] = useState<DeliveryOption[]>([]);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
 
-  // Get this seller's cart
   const cart = useMultiCartStore((state) => state.carts[sellerId]);
   const clearCart = useMultiCartStore((state) => state.clearCart);
+  const locationCoords = useLocationStore((s) => s.coords);
+  const setOrderDraftId = useOrderDraftStore((s) => s.setOrderId);
+
+  const { data: addresses = [] } = useQuery({
+    queryKey: ['user-addresses'],
+    queryFn: () => usersApi.getMyAddresses(),
+  });
+
+  const { data: sellerData } = useQuery({
+    queryKey: ['seller', sellerId],
+    queryFn: () => sellersApi.getSeller(sellerId),
+    enabled: Boolean(sellerId),
+  });
+
+  useEffect(() => {
+    if (deliveryAddress && orderId && deliveryPartners.length === 0 && !deliveryLoading) {
+      setDeliveryLoading(true);
+      ordersApi
+        .getDeliveryQuotes(orderId)
+        .then((res) => {
+          const providers = res.providers ?? [];
+          setDeliveryPartners(
+            providers.map((p, i) => ({
+              id: p.quoteId ?? p.provider ?? `p-${i}`,
+              provider: p.provider ?? 'UNKNOWN',
+              displayName: p.displayName ?? p.provider ?? 'Unknown',
+              eta: p.estimatedDurationMinutes ? `${p.estimatedDurationMinutes} min` : 'N/A',
+              price: p.estimatedFee ?? 0,
+            })),
+          );
+        })
+        .catch(() => setDeliveryPartners([]))
+        .finally(() => setDeliveryLoading(false));
+    }
+  }, [deliveryAddress, orderId, deliveryPartners.length, deliveryLoading]);
 
   if (!cart || cart.items.length === 0) {
     return (
       <View style={styles.emptyContainer}>
         <MaterialIcons name="shopping-cart" size={64} color="#ccc" />
         <Text style={styles.emptyText}>Cart is empty</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -70,52 +112,55 @@ export const SingleCheckoutFlow: React.FC = () => {
   }
 
   const cartTotal = cart.items.reduce((sum, item) => {
-    const itemTotal = item.totalPrice
-      ? item.totalPrice * item.quantity
-      : item.price * item.quantity;
+    const itemTotal = item.totalPrice ? item.totalPrice * item.quantity : item.price * item.quantity;
     return sum + itemTotal;
   }, 0);
 
-  const deliveryFee = selectedPartner?.price || 0;
+  const deliveryFee = selectedPartner?.price ?? 0;
   const totalAmount = cartTotal + deliveryFee;
 
-  // Mock delivery partners
-  const deliveryPartners: DeliveryOption[] = [
-    {
-      id: 'uber',
-      provider: 'Uber Direct',
-      displayName: 'Uber Direct',
-      eta: '10-15 min',
-      price: 50,
-    },
-    {
-      id: 'porter',
-      provider: 'Porter',
-      displayName: 'Porter',
-      eta: '15-20 min',
-      price: 40,
-    },
-    {
-      id: 'dunzo',
-      provider: 'Dunzo',
-      displayName: 'Dunzo',
-      eta: '20-25 min',
-      price: 30,
-    },
-  ];
+  const handleAddressSelect = (addr?: { lat: number; lng: number; address: string }) => {
+    if (addr) {
+      setDeliveryAddress(addr);
+      setCurrentStep('delivery');
+      createOrderAndFetchQuotes(addr);
+    } else {
+      const fallback = {
+        lat: locationCoords?.latitude ?? 28.7041,
+        lng: locationCoords?.longitude ?? 77.1025,
+        address: locationCoords?.label ?? 'Current location',
+      };
+      setDeliveryAddress(fallback);
+      setCurrentStep('delivery');
+      createOrderAndFetchQuotes(fallback);
+    }
+  };
 
-  const handleAddressSelect = () => {
-    // In real implementation, open location picker
-    setDeliveryAddress({
-      lat: 28.7041,
-      lng: 77.1025,
-      address: '123 Main St, New Delhi',
-    });
-    setCurrentStep('delivery');
+  const createOrderAndFetchQuotes = async (addr: { lat: number; lng: number; address: string }) => {
+    try {
+      const { order_id } = await ordersApi.createOrder({
+        categoryId: cart.items[0]?.category ?? 'printing',
+        sellerId,
+        orderPayload: {
+          items: cart.items.map((item) => ({
+            productId: item.productId,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          dropLatitude: addr.lat,
+          dropLongitude: addr.lng,
+          dropAddress: addr.address,
+        },
+      });
+      setOrderId(order_id);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create order');
+    }
   };
 
   const handlePlaceOrder = async () => {
-    if (!deliveryAddress || !selectedPartner) {
+    if (!deliveryAddress || !selectedPartner || !orderId) {
       Alert.alert('Missing Info', 'Please select address and delivery partner');
       return;
     }
@@ -123,29 +168,32 @@ export const SingleCheckoutFlow: React.FC = () => {
     setIsPlacing(true);
 
     try {
-      // In Phase 2: Use local mock API for order placement
-      // In future: Replace with actual API endpoint
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+      await ordersApi.updateOrder(orderId, { deliveryFee: selectedPartner.price });
+      const confirmResponse = await ordersApi.confirmOrder(orderId, 'UPI');
       
-      // Mock success response
-      const result = { status: 'success', orderId: `ORD-${Date.now()}` };
-
-      // Clear this seller's cart after successful order
-      clearCart(sellerId);
+      // Check if payment_intent is returned
+      const paymentIntent = (confirmResponse as any)?.payment?.payment_intent;
+      const paymentId = (confirmResponse as any)?.payment?.payment_id;
       
-      Alert.alert('Success', `Order placed! Order ID: ${result.orderId}`, [
-        {
-          text: 'OK',
-          onPress: () => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            });
+      if (paymentIntent) {
+        // Razorpay payment intent received - set orderId in store and navigate to payment screen
+        clearCart(sellerId);
+        setOrderDraftId(orderId);
+        router.push('/order/payment-method');
+      } else {
+        // No payment required (shouldn't happen, but handle gracefully)
+        clearCart(sellerId);
+        Alert.alert('Success', 'Order placed successfully!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace('/(tabs)/orders');
+            },
           },
-        },
-      ]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to place order. Please try again.');
+        ]);
+      }
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to place order. Please try again.');
     } finally {
       setIsPlacing(false);
     }
@@ -170,13 +218,55 @@ export const SingleCheckoutFlow: React.FC = () => {
         <View style={styles.itemsContainer}>
           {cart.items.map((item) => (
             <View key={item.id} style={styles.itemRow}>
-              <Text style={styles.itemName} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <Text style={styles.itemQty}>x{item.quantity}</Text>
+              <View style={styles.itemDetails}>
+                <Text style={styles.itemName} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={styles.itemUnit}>
+                  ₹{item.price.toFixed(2)} each
+                </Text>
+              </View>
+
+              {/* Quantity Controls */}
+              <View style={styles.quantityControl}>
+                <TouchableOpacity
+                  style={styles.qtyButton}
+                  onPress={() => {
+                    if (item.quantity > 1) {
+                      useMultiCartStore.getState().updateQuantity(sellerId, item.id, item.quantity - 1);
+                    } else {
+                      useMultiCartStore.getState().removeItem(sellerId, item.id);
+                    }
+                  }}
+                >
+                  <MaterialIcons name="remove" size={16} color="#FF6B35" />
+                </TouchableOpacity>
+
+                <Text style={styles.qtyText}>{item.quantity}</Text>
+
+                <TouchableOpacity
+                  style={styles.qtyButton}
+                  onPress={() => {
+                    useMultiCartStore.getState().updateQuantity(sellerId, item.id, item.quantity + 1);
+                  }}
+                >
+                  <MaterialIcons name="add" size={16} color="#FF6B35" />
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.itemPrice}>
                 ₹{(item.price * item.quantity).toFixed(2)}
               </Text>
+
+              {/* Delete Button */}
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => {
+                  useMultiCartStore.getState().removeItem(sellerId, item.id);
+                }}
+              >
+                <MaterialIcons name="delete" size={16} color="#e74c3c" />
+              </TouchableOpacity>
             </View>
           ))}
         </View>
@@ -196,17 +286,39 @@ export const SingleCheckoutFlow: React.FC = () => {
             {deliveryAddress ? (
               <View style={styles.addressBox}>
                 <Text style={styles.addressText}>{deliveryAddress.address}</Text>
-                <TouchableOpacity onPress={handleAddressSelect}>
+                <TouchableOpacity onPress={() => setDeliveryAddress(null)}>
                   <Text style={styles.changeLink}>Change</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={styles.button}
-                onPress={handleAddressSelect}
-              >
-                <Text style={styles.buttonText}>Select Address</Text>
-              </TouchableOpacity>
+              <>
+                {addresses.length > 0 ? (
+                  addresses.map((addr) => (
+                    <TouchableOpacity
+                      key={addr.id}
+                      style={styles.addressOption}
+                      onPress={() =>
+                        handleAddressSelect(
+                          addr.latitude != null && addr.longitude != null
+                            ? { lat: addr.latitude, lng: addr.longitude, address: addr.addressLine }
+                            : undefined,
+                        )
+                      }
+                    >
+                      <Text style={styles.addressLabel}>{addr.label}</Text>
+                      <Text style={styles.addressText}>{addr.addressLine}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : null}
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={() => handleAddressSelect()}
+                >
+                  <Text style={styles.buttonText}>
+                    {addresses.length > 0 ? 'Use current location' : 'Select Address'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
 
@@ -214,6 +326,11 @@ export const SingleCheckoutFlow: React.FC = () => {
           {deliveryAddress && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Delivery Partner</Text>
+              {deliveryLoading ? (
+                <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 16 }} />
+              ) : deliveryPartners.length === 0 ? (
+                <Text style={styles.emptyPartners}>No delivery options available. Try a different address.</Text>
+              ) : (
               <FlatList
                 scrollEnabled={false}
                 data={deliveryPartners}
@@ -234,6 +351,7 @@ export const SingleCheckoutFlow: React.FC = () => {
                   </TouchableOpacity>
                 )}
               />
+              )}
             </View>
           )}
 
@@ -320,20 +438,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+    gap: 6,
+  },
+  itemDetails: {
+    flex: 1,
   },
   itemName: {
-    flex: 1,
     fontSize: 13,
     color: '#374151',
-    marginRight: 8,
+    fontWeight: '500',
+    marginBottom: 4,
   },
-  itemQty: {
+  itemUnit: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  qtyButton: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qtyText: {
     fontSize: 12,
-    color: '#6b7280',
-    marginRight: 8,
+    fontWeight: '600',
+    color: '#374151',
+    minWidth: 18,
+    textAlign: 'center',
   },
   itemPrice: {
     fontSize: 13,
@@ -341,6 +486,9 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     minWidth: 60,
     textAlign: 'right',
+  },
+  deleteBtn: {
+    padding: 4,
   },
   divider: {
     height: 1,
@@ -367,6 +515,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     borderRadius: 8,
     padding: 12,
+  },
+  addressOption: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  addressLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  emptyPartners: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginVertical: 16,
   },
   addressText: {
     fontSize: 13,

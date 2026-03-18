@@ -29,11 +29,15 @@ export default function MultiCheckoutScreen() {
   // Get saved delivery address or use device location
   const sharedDeliveryAddress = useMultiCartStore((state) => state.sharedDeliveryAddress);
   
-  const deliveryAddress = React.useMemo(() => {
+  const deliveryAddress = React.useMemo((): { latitude: number; longitude: number; address: string } | null => {
     if (sharedDeliveryAddress) {
-      return sharedDeliveryAddress;
+      return {
+        latitude: sharedDeliveryAddress.lat,
+        longitude: sharedDeliveryAddress.lng,
+        address: sharedDeliveryAddress.address,
+      };
     }
-    
+
     if (deviceLocation) {
       return {
         latitude: deviceLocation.latitude,
@@ -60,7 +64,7 @@ export default function MultiCheckoutScreen() {
     if (activeCarts.length === 1) {
       // Redirect to single checkout if only 1 seller remains
       Alert.alert('Note', 'Single seller detected. Redirecting to checkout...');
-      router.push('/checkout');
+      router.push('/cart');
       return;
     }
 

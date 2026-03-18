@@ -118,6 +118,7 @@ export interface ConfirmOrderResponse {
 
 export interface CreateOrderPayload {
   categoryId: string;
+  sellerId?: string;
   orderPayload: {
     items?: Array<{ productId: string; name: string; quantity: number; price: number }>;
     fileUrl?: string;
@@ -138,6 +139,7 @@ export interface UpdateOrderPayload {
   dropLatitude?: number;
   dropLongitude?: number;
   dropAddress?: string;
+  deliveryFee?: number;
 }
 
 export const ordersApi = {

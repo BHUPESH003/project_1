@@ -7,13 +7,12 @@ const lightColors: ThemeColors = {
   primaryLight: tokens.primaryLight,
   primaryGlow: tokens.primaryGlow,
 
-  background: tokens.backgroundLight,
+  background: tokens.backgroundDark,
   backgroundLight: tokens.backgroundLight,
-  // Legacy dark-suffixed keys map to active surface in light mode.
-  backgroundDark: tokens.backgroundLight,
+  backgroundDark: tokens.backgroundDark,
   surface: tokens.surfaceLight,
   surfaceLight: tokens.surfaceLight,
-  surfaceDark: tokens.surfaceLight,
+  surfaceDark: tokens.surfaceDark,
 
   textPrimary: tokens.textPrimary,
   textSecondary: tokens.textSecondary,
@@ -21,19 +20,19 @@ const lightColors: ThemeColors = {
   textLight: tokens.textLight,
   textDark: tokens.textDark,
 
-  border: tokens.borderLight,
-  borderLight: tokens.borderLight,
-  borderDark: tokens.borderLight,
+  border: tokens.borderDark,
+  borderLight: tokens.borderDark,
+  borderDark: tokens.borderDark,
 
   success: tokens.success,
   error: tokens.error,
   warning: tokens.warning,
   info: tokens.info,
 
-  divider: 'rgba(17, 24, 39, 0.08)',
-  cardDisabled: '#edf2f2',
-  surfaceMuted: '#eef4f4',
-  radioBorder: '#64748b',
+  divider: 'rgba(255, 255, 255, 0.1)',
+  cardDisabled: '#1a1a1a',
+  surfaceMuted: '#1a1a1a',
+  radioBorder: '#333333',
 
   primaryTint: tokens.primaryLight,
   primaryShadow: tokens.primaryGlow,
@@ -44,14 +43,14 @@ const lightColors: ThemeColors = {
   successBadgeBg: 'rgba(16, 185, 129, 0.2)',
   warningBg: 'rgba(245, 158, 11, 0.2)',
   infoBg: 'rgba(59, 130, 246, 0.2)',
-  soonBadgeBg: 'rgba(229, 231, 235, 0.9)',
+  soonBadgeBg: 'rgba(245, 245, 245, 0.9)',
   ratingStar: '#eab308',
   orange: '#f97316',
 
   white: '#ffffff',
-  gray: '#6b7280',
-  textDisabled: '#9ca3af',
-  textTertiary: '#4b5563',
+  gray: '#666666',
+  textDisabled: '#666666',
+  textTertiary: '#999999',
 };
 
 const darkColors: ThemeColors = {
@@ -63,19 +62,18 @@ const darkColors: ThemeColors = {
   background: tokens.backgroundDark,
   backgroundLight: tokens.backgroundLight,
   backgroundDark: tokens.backgroundDark,
-  surface: tokens.surfaceDark,
+  surface: tokens.surfaceLight,
   surfaceLight: tokens.surfaceLight,
   surfaceDark: tokens.surfaceDark,
 
-  // Semantic swap: textPrimary becomes light text in dark mode.
-  textPrimary: tokens.textLight,
-  textSecondary: tokens.textMuted,
-  textMuted: '#94a3b8',
+  textPrimary: tokens.textPrimary,
+  textSecondary: tokens.textSecondary,
+  textMuted: tokens.textMuted,
   textLight: tokens.textLight,
   textDark: tokens.textDark,
 
   border: tokens.borderDark,
-  borderLight: tokens.borderLight,
+  borderLight: tokens.borderDark,
   borderDark: tokens.borderDark,
 
   success: tokens.success,
@@ -83,10 +81,10 @@ const darkColors: ThemeColors = {
   warning: tokens.warning,
   info: tokens.info,
 
-  divider: 'rgba(255, 255, 255, 0.08)',
-  cardDisabled: '#0f1f1f',
-  surfaceMuted: '#1f2937',
-  radioBorder: '#64748b',
+  divider: 'rgba(255, 255, 255, 0.1)',
+  cardDisabled: '#1a1a1a',
+  surfaceMuted: '#1a1a1a',
+  radioBorder: '#333333',
 
   primaryTint: tokens.primaryLight,
   primaryShadow: tokens.primaryGlow,
@@ -97,14 +95,14 @@ const darkColors: ThemeColors = {
   successBadgeBg: 'rgba(16, 185, 129, 0.2)',
   warningBg: 'rgba(245, 158, 11, 0.2)',
   infoBg: 'rgba(59, 130, 246, 0.2)',
-  soonBadgeBg: 'rgba(31, 41, 55, 0.9)',
+  soonBadgeBg: 'rgba(245, 245, 245, 0.9)',
   ratingStar: '#eab308',
   orange: '#f97316',
 
   white: '#ffffff',
-  gray: '#6b7280',
-  textDisabled: '#6b7280',
-  textTertiary: '#d1d5db',
+  gray: '#666666',
+  textDisabled: '#666666',
+  textTertiary: '#999999',
 };
 
 export const lightTheme: AppTheme = {

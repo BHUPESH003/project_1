@@ -25,11 +25,13 @@ export interface NearbySeller {
   id: string;
   shopName: string;
   address: string;
+  description?: string | null;
   distance: number;
   rating: number;
   imageUrl?: string | null;
   isOpen: boolean;
   isFavorited: boolean;
+  prepTimeMinutes?: number;
   categories: SellerCategoryTag[];
 }
 
@@ -96,26 +98,36 @@ export const sellersApi = {
       params: {
         lat: params.lat,
         lng: params.lng,
-        categoryId: params.categoryId,
+        category: params.categoryId,
         limit: params.limit ?? 20,
         offset: params.offset ?? 0,
       },
     });
-    const payload = unwrap<any>(res);
+    const payload = unwrap<{ sellers?: unknown[]; total?: number; pagination?: { total?: number } }>(res);
     const sellersRaw = Array.isArray(payload) ? payload : payload?.sellers ?? [];
-    const total = typeof payload?.total === 'number' ? payload.total : sellersRaw.length;
+    const total =
+      typeof payload?.total === 'number'
+        ? payload.total
+        : typeof payload?.pagination?.total === 'number'
+          ? payload.pagination.total
+          : sellersRaw.length;
 
-    const sellers = sellersRaw.map((seller: any) => ({
+    const sellers = (sellersRaw as Array<Record<string, unknown>>).map((seller) => ({
       id: String(seller.id ?? seller.seller_id ?? ''),
       shopName: String(seller.shopName ?? seller.shop_name ?? 'Unknown Shop'),
       address: String(seller.address ?? ''),
+      description: typeof seller.description === 'string' ? seller.description : null,
       distance: Number(seller.distance ?? seller.distance_km ?? 0),
       rating: Number(seller.rating ?? 0),
-      imageUrl: seller.imageUrl ?? seller.image_url ?? null,
+      imageUrl: (() => {
+        const img = seller.imageUrl ?? seller.image_url;
+        return img !== null && img !== undefined && typeof img === 'string' ? img : null;
+      })(),
       isOpen: Boolean(seller.isOpen ?? (seller.status ? String(seller.status).toUpperCase() === 'ONLINE' : true)),
       isFavorited: Boolean(seller.isFavorited ?? false),
+      prepTimeMinutes: Number(seller.prepTimeMinutes ?? seller.prep_time_min ?? 15),
       categories: Array.isArray(seller.categories)
-        ? seller.categories.map((c: any) => ({ id: String(c.id ?? ''), name: String(c.name ?? '') }))
+        ? (seller.categories as Array<{ id?: string; name?: string }>).map((c) => ({ id: String(c.id ?? ''), name: String(c.name ?? '') }))
         : [],
     }));
 
