@@ -1,12 +1,15 @@
 /**
  * Multi-Seller Combined Checkout Screen
  * 
+ * ⚠️ CURRENTLY DISABLED - Not in use
+ * Using single-cart checkout only for now
+ * 
  * Handles checkout for items from multiple sellers:
  * - Displays all shops with their items and delivery partners
  * - Each shop has separate delivery and payment calculation
  * - Combined payment at the end for all shops
  * 
- * Routes here when cart has items from 2+ sellers
+ * Routes here when cart has items from 2+ sellers (DISABLED)
  */
 
 import React, { useState } from 'react';

@@ -56,14 +56,18 @@ export const StickyMultiCartBar: React.FC<StickyMultiCartBarProps> = ({
   if (totalItems === 0) return null;
 
   const handleCheckout = () => {
+    // TODO: Multi-cart checkout disabled for now - using single cart only
     // Intelligent routing: decide which checkout flow to use
-    if (activeSellers === 1) {
-      // Single seller - use regular checkout flow
-      router.push('/checkout');
-    } else if (activeSellers > 1) {
-      // Multiple sellers - use combined/multi-cart checkout
-      router.push('/checkout-multi');
-    }
+    // if (activeSellers === 1) {
+    //   // Single seller - use regular checkout flow
+    //   router.push('/checkout');
+    // } else if (activeSellers > 1) {
+    //   // Multiple sellers - use combined/multi-cart checkout
+    //   router.push('/checkout-multi');
+    // }
+
+    // For now: Always use single checkout (single seller only)
+    router.push('/checkout');
   };
 
   return (

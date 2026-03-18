@@ -14,7 +14,7 @@ import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { MultiCartView } from '@/components/MultiCartView';
-import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
+// import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
 import { Loader } from '@/components/Loader';
 
 export default function CartScreen() {
@@ -107,7 +107,22 @@ export default function CartScreen() {
       </View>
 
       <ScrollView style={styles.scrollview}>
-        <CombinedCheckoutFlow />
+        {/* TODO: CombinedCheckoutFlow disabled - multi-cart checkout not in use */}
+        {/* <CombinedCheckoutFlow /> */}
+        <View style={styles.disabledContainer}>
+          <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
+            Multi-seller checkout disabled
+          </Text>
+          <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
+            Currently using single-seller checkout only
+          </Text>
+          <TouchableOpacity
+            style={styles.continueshoppingBtn}
+            onPress={() => setViewMode('carts')}
+          >
+            <Text style={styles.continueshoppingBtnText}>Back to Cart</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -194,5 +209,11 @@ const createStyles = (colors: any) =>
       color: colors.textOnPrimary,
       fontWeight: '600',
       fontSize: 16,
+    },
+    disabledContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
     },
   });
