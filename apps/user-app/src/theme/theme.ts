@@ -48,6 +48,7 @@ const lightColors: ThemeColors = {
   orange: '#f97316',
 
   white: '#ffffff',
+  black: tokens.black,
   gray: '#666666',
   textDisabled: '#666666',
   textTertiary: '#999999',
@@ -100,6 +101,7 @@ const darkColors: ThemeColors = {
   orange: '#f97316',
 
   white: '#ffffff',
+  black: tokens.black,
   gray: '#666666',
   textDisabled: '#666666',
   textTertiary: '#999999',

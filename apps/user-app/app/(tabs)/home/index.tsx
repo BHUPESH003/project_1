@@ -36,7 +36,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
 import { Skeleton } from '@/components/Skeleton';
-import { StickyMultiCartBar } from '@/components/StickyMultiCartBar';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { radius } from '@/constants/radius';
@@ -97,8 +96,8 @@ export default function RefinedHomeScreen() {
     initialPageParam: 0,
     queryFn: ({ pageParam = 0 }) =>
       sellersApi.getNearbySellers({
-        lat: locationCoords?.latitude || 28.7041,
-        lng: locationCoords?.longitude || 77.1025,
+        lat: locationCoords?.latitude ?? 0,
+        lng: locationCoords?.longitude ?? 0,
         categoryId: selectedCategoryId !== CATEGORY_ALL ? selectedCategoryId : undefined,
         offset: pageParam * SELLERS_PER_PAGE,
         limit: SELLERS_PER_PAGE,
@@ -240,10 +239,10 @@ export default function RefinedHomeScreen() {
   const greeting = `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${user?.name?.split(' ')[0] || 'there'}`;
 
   return (
-    <ScreenWrapper>
+    <ScreenWrapper noPadding>
       <View style={[styles.container]}>
         {/* HEADER */}
-        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <View style={[styles.header, { paddingTop: spacing.sm }]}>
           {/* Greeting + Location + Avatar */}
           <View style={styles.topRow}>
             <View style={styles.greetingSection}>
@@ -315,7 +314,7 @@ export default function RefinedHomeScreen() {
               activeOpacity={0.8}
             >
               <ImageBackground
-                source={{ uri: (bannersData[0] as any)?.imageUrl || '' }}
+                source={{ uri: (bannersData[0] as any)?.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80' }}
                 style={styles.heroBannerImage}
                 imageStyle={{ borderRadius: radius.xl }}
               >
@@ -536,7 +535,7 @@ export default function RefinedHomeScreen() {
             >
               <ImageBackground
                 source={{
-                  uri: spotlightShop.imageUrl || '',
+                  uri: spotlightShop.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
                 }}
                 style={styles.spotlightImage}
                 imageStyle={{ borderRadius: radius.xl }}
@@ -659,8 +658,6 @@ export default function RefinedHomeScreen() {
           </View>
         </ScrollView>
 
-        {/* FLOATING ELEMENTS */}
-        <StickyMultiCartBar />
       </View>
     </ScreenWrapper>
   );

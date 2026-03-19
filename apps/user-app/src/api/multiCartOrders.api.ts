@@ -55,6 +55,7 @@ export interface CreateMultiOrdersPayload {
       name: string;
       quantity: number;
       price: number;
+      category?: string;
     }>;
     notes?: string;
   }>;
@@ -179,13 +180,16 @@ export const multiCartOrdersApi = {
     const backendPayload = {
       orders: payload.orders.map((o) => {
         const addr = payload.deliveryAddresses?.[o.sellerId] ?? payload.deliveryAddress;
+        const categoryId = o.items[0]?.category ?? 'generic';
         return {
-          categoryId: 'printing',
+          categoryId,
           sellerId: o.sellerId,
           orderPayload: {
             items: o.items.map((item) => ({
               productId: item.productId,
+              name: item.name,
               quantity: item.quantity,
+              price: item.price,
             })),
             dropLatitude: addr.latitude,
             dropLongitude: addr.longitude,

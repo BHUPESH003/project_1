@@ -48,24 +48,24 @@ function ToastItem({
   const style = getToastTypeStyle(type, colors);
 
   return (
-    <Pressable onPress={onPress} style={[styles.container, shadow.md, { backgroundColor: mode === 'dark' ? 'rgba(21, 42, 42, 0.96)' : 'rgba(255,255,255,0.96)' }]}>
+    <Pressable onPress={onPress} style={[styles.container, shadow.md, { backgroundColor: '#1A1A1A' }]}>
       <View style={[styles.accent, { backgroundColor: style.accent }]} />
       <View style={styles.iconWrap}>
         <MaterialIcons name={style.icon} size={20} color={style.accent} />
       </View>
       <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
+        <Text style={[styles.title, { color: '#FFFFFF' }]} numberOfLines={2}>
           {text1}
         </Text>
         {text2 ? (
-          <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
+          <Text style={[styles.description, { color: '#E0E0E0' }]} numberOfLines={2}>
             {text2}
           </Text>
         ) : null}
       </View>
       {props?.actionLabel ? (
         <Pressable style={styles.action} onPress={props.onAction} hitSlop={8}>
-          <Text style={[styles.actionLabel, { color: colors.primary }]}>{props.actionLabel}</Text>
+          <Text style={[styles.actionLabel, { color: style.accent }]}>{props.actionLabel}</Text>
         </Pressable>
       ) : null}
     </Pressable>

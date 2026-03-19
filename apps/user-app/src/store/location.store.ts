@@ -17,6 +17,7 @@ interface LocationState {
   loading: boolean;
   error: string | null;
   fetchLocation: () => Promise<LocationCoords | null>;
+  setCoords: (coords: LocationCoords) => void;
   setLabel: (label: string) => void;
 }
 
@@ -33,9 +34,12 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         set({ loading: false, error: 'Location permission denied', coords: null });
         return null;
       }
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      let location = await Location.getLastKnownPositionAsync();
+      if (!location) {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
       const coords: LocationCoords = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -43,14 +47,20 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       set({ coords, loading: false, error: null });
       return coords;
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to get location';
-      set({ loading: false, error: message, coords: null });
+      // Fail silently to prevent intrusive error toasts. Fallback UI will handle missing location.
+      set({ loading: false, error: null, coords: null });
       return null;
     }
   },
 
+  setCoords: (coords: LocationCoords) => {
+    set({ coords, loading: false, error: null });
+  },
+
   setLabel: (label: string) => {
     const { coords } = get();
-    if (coords) set({ coords: { ...coords, label } });
+    if (coords) {
+      set({ coords: { ...coords, label } });
+    }
   },
 }));

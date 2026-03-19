@@ -448,13 +448,13 @@ export const useMultiCartStore = create<MultiCartState>()(
       }),
       // Convert array back to Set on hydration
       migrate: (persistedState: any, version: number) => {
-        if (persistedState && Array.isArray(persistedState.selectedForCheckout)) {
-          return {
-            ...persistedState,
-            selectedForCheckout: new Set(persistedState.selectedForCheckout),
-          };
-        }
-        return persistedState;
+        const state = persistedState || {};
+        return {
+          ...state,
+          selectedForCheckout: Array.isArray(state.selectedForCheckout)
+            ? new Set(state.selectedForCheckout)
+            : new Set(),
+        };
       },
     }
   )

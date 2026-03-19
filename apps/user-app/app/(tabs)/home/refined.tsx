@@ -36,7 +36,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
 import { Skeleton } from '@/components/Skeleton';
-import { StickyMultiCartBar } from '@/components/StickyMultiCartBar';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { radius } from '@/constants/radius';
@@ -315,7 +314,7 @@ export default function RefinedHomeScreen() {
               activeOpacity={0.8}
             >
               <ImageBackground
-                source={{ uri: (bannersData[0] as any)?.imageUrl || '' }}
+                source={{ uri: (bannersData[0] as any)?.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80' }}
                 style={styles.heroBannerImage}
                 imageStyle={{ borderRadius: radius.xl }}
               >
@@ -536,7 +535,7 @@ export default function RefinedHomeScreen() {
             >
               <ImageBackground
                 source={{
-                  uri: spotlightShop.imageUrl || '',
+                  uri: spotlightShop.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
                 }}
                 style={styles.spotlightImage}
                 imageStyle={{ borderRadius: radius.xl }}
@@ -659,8 +658,6 @@ export default function RefinedHomeScreen() {
           </View>
         </ScrollView>
 
-        {/* FLOATING ELEMENTS */}
-        <StickyMultiCartBar />
       </View>
     </ScreenWrapper>
   );

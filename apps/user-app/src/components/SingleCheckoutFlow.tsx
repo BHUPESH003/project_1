@@ -125,10 +125,14 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
       setCurrentStep('delivery');
       createOrderAndFetchQuotes(addr);
     } else {
+      if (!locationCoords) {
+        alert('Location not available. Please allow location permissions.');
+        return;
+      }
       const fallback = {
-        lat: locationCoords?.latitude ?? 28.7041,
-        lng: locationCoords?.longitude ?? 77.1025,
-        address: locationCoords?.label ?? 'Current location',
+        lat: locationCoords.latitude,
+        lng: locationCoords.longitude,
+        address: locationCoords.label ?? 'Current location',
       };
       setDeliveryAddress(fallback);
       setCurrentStep('delivery');
@@ -139,7 +143,7 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   const createOrderAndFetchQuotes = async (addr: { lat: number; lng: number; address: string }) => {
     try {
       const { order_id } = await ordersApi.createOrder({
-        categoryId: cart.items[0]?.category ?? 'printing',
+        categoryId: cart.items[0]?.category ?? 'generic',
         sellerId,
         orderPayload: {
           items: cart.items.map((item) => ({
@@ -286,7 +290,13 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
             {deliveryAddress ? (
               <View style={styles.addressBox}>
                 <Text style={styles.addressText}>{deliveryAddress.address}</Text>
-                <TouchableOpacity onPress={() => setDeliveryAddress(null)}>
+                <TouchableOpacity onPress={() => {
+                  setDeliveryAddress(null);
+                  setOrderId(null);
+                  setDeliveryPartners([]);
+                  setSelectedPartner(null);
+                  setCurrentStep('address');
+                }}>
                   <Text style={styles.changeLink}>Change</Text>
                 </TouchableOpacity>
               </View>
@@ -315,7 +325,7 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
                   onPress={() => handleAddressSelect()}
                 >
                   <Text style={styles.buttonText}>
-                    {addresses.length > 0 ? 'Use current location' : 'Select Address'}
+                    Use current location
                   </Text>
                 </TouchableOpacity>
               </>

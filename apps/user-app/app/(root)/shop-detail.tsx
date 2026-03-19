@@ -1,4 +1,4 @@
-import { useParallelScreenData } from '../src/hooks/useParallelScreenData';
+import { useParallelScreenData } from '@/hooks/useParallelScreenData';
 import { StickyCartBar } from '@/components/StickyCartBar';
 
 // API URL - use localhost for development
@@ -446,7 +446,7 @@ export default function ShopDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon}>
             <MaterialIcons name="arrow-back" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Image source={{ uri: shopInfo.image }} style={styles.shopAvatar} />
+          <Image source={{ uri: shopInfo.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80' }} style={styles.shopAvatar} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.shopTitle} numberOfLines={2}>{shopInfo.name}</Text>
             <View style={styles.shopMetaRow}>
@@ -668,7 +668,7 @@ export default function ShopDetailScreen() {
                   const quantity = getProductQuantity(product.id);
                   return (
                     <View key={product.id} style={styles.productCard}>
-                      <Image source={{ uri: product.image }} style={styles.productImg} />
+                      <Image source={{ uri: product.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80' }} style={styles.productImg} />
                       <TouchableOpacity style={styles.productFav}>
                         <MaterialIcons name="favorite-border" size={16} color={colors.textPrimary} />
                       </TouchableOpacity>
@@ -723,25 +723,7 @@ export default function ShopDetailScreen() {
         />
       )}
 
-      {/* Old single-seller cart bar */}
-      {itemCount > 0 && (
-        <View style={styles.cartBarContainer}>
-          <TouchableOpacity 
-            style={styles.cartBar}
-            onPress={() => router.push('/cart')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{itemCount}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cartBarLabel}>{itemCount} item{itemCount > 1 ? 's' : ''} added</Text>
-              <Text style={styles.cartBarAction}>View Cart</Text>
-            </View>
-            <Text style={styles.cartBarTotal}>₹{subtotal.toFixed(2)}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
     </View>
   );
 }

@@ -34,6 +34,9 @@ export const MultiCartView: React.FC = () => {
 
   // Get all carts
   const rawCarts = useMultiCartStore((state) => state.carts);
+  const rawSelected = useMultiCartStore((state) => state.selectedForCheckout);
+  const selectedForCheckout = rawSelected instanceof Set ? rawSelected : new Set<string>();
+  const toggleCheckoutSelection = useMultiCartStore((state) => state.toggleCheckoutSelection);
   const carts = useMemo(() => {
     return Object.values(rawCarts).filter((cart) => cart.items.length > 0);
   }, [rawCarts]);
@@ -91,6 +94,20 @@ export const MultiCartView: React.FC = () => {
                 style={styles.cartHeader}
                 onPress={() => toggleExpand(cart.sellerId)}
               >
+                <TouchableOpacity
+                  style={styles.checkbox}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    toggleCheckoutSelection(cart.sellerId);
+                  }}
+                >
+                  <MaterialIcons
+                    name={selectedForCheckout.has(cart.sellerId) ? 'check-box' : 'check-box-outline-blank'}
+                    size={24}
+                    color={selectedForCheckout.has(cart.sellerId) ? '#FF6B35' : '#ccc'}
+                  />
+                </TouchableOpacity>
+
                 {/* Header Info */}
                 <View style={styles.headerInfo}>
                   <Text style={styles.sellerName}>{cart.sellerName}</Text>

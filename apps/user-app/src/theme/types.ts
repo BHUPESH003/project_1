@@ -49,6 +49,7 @@ export interface ThemeColors {
   orange: string;
 
   white: string;
+  black: string;
   gray: string;
   textDisabled: string;
   textTertiary: string;

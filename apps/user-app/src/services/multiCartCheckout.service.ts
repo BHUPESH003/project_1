@@ -36,6 +36,7 @@ export class MultiCartCheckoutService {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
+          category: item.category,
         })),
         notes: '',
       }));
@@ -63,8 +64,12 @@ export class MultiCartCheckoutService {
 
     const response = await multiCartOrdersApi.createMultipleOrders(payload);
 
+    if (response.successfulOrders.length > 0) {
+      this.clearCheckoutCarts(response.successfulOrders.map(o => o.sellerId));
+    }
+
     if (!response.success) {
-      throw new Error(response.message || 'Failed to create orders');
+      throw new Error(response.message || 'Some orders failed to create');
     }
 
     if (response.failedOrders.length > 0) {
@@ -134,19 +139,11 @@ export class MultiCartCheckoutService {
   /**
    * Clear cart after successful checkout
    */
-  static clearCheckoutCarts() {
-    const state = useMultiCartStore.getState();
-    const selectedSellers = state.selectedForCheckout;
-
-    selectedSellers.forEach((sellerId) => {
+  static clearCheckoutCarts(successfulSellerIds?: string[]) {
+    const sellersToClear = successfulSellerIds || Array.from(useMultiCartStore.getState().selectedForCheckout);
+    
+    sellersToClear.forEach((sellerId) => {
       useMultiCartStore.getState().clearCart(sellerId);
-    });
-
-    // Clear selections
-    useMultiCartStore.setState({
-      selectedForCheckout: new Set(),
-      sharedDeliveryAddress: null,
-      checkoutSelections: {},
     });
   }
 }
