@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -206,9 +207,6 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onClose }) => {
     </View>
   );
 };
-
-// Internal ScrollView to handle large result sets
-import { ScrollView } from 'react-native-gesture-handler';
 
 const styles = StyleSheet.create({
   container: {
