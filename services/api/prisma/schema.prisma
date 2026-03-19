@@ -146,13 +146,15 @@ model User {
 // Saved delivery addresses for the user app
 
 model UserAddress {
-  id          String   @id @default(cuid())
-  userId      String
-  label       String   // e.g. "Home", "Office"
-  addressLine String
-  latitude    Decimal? @db.Decimal(10, 8)
-  longitude   Decimal? @db.Decimal(11, 8)
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  label         String   // e.g. "Home", "Office"
+  addressLine   String
+  receiverName  String?  // Name for this specific address
+  receiverPhone String?  // Phone for this specific address
+  latitude      Decimal? @db.Decimal(10, 8)
+  longitude     Decimal? @db.Decimal(11, 8)
+  createdAt     DateTime @default(now())
   
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -245,7 +247,6 @@ model Seller {
   orders      Order[]        @relation("SellerOrders")
   favoritedBy UserFavorite[]
   cartItems   CartItem[]     // Items in user carts for this seller
-  carts       Cart[]         // Multi-seller carts for this seller
   
   @@index([status]) // Critical: filter by ONLINE sellers
   @@index([latitude, longitude]) // Geospatial queries
@@ -725,8 +726,7 @@ model Banner {
 
 model Cart {
   id          String      @id @default(cuid())
-  userId      String
-  sellerId    String
+  userId      String      @unique
   status      String      @default("active") // active | checked_out | abandoned
   
   // Timestamps
@@ -735,12 +735,9 @@ model Cart {
   
   // Relations
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  seller      Seller      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   items       CartItem[]
   
-  @@unique([userId, sellerId, status]) // One active cart per user per seller
   @@index([userId])
-  @@index([sellerId])
   @@map("carts")
 }
 

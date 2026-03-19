@@ -91,6 +91,10 @@ function ModernBottomBar({ state, navigation }: BottomTabBarProps) {
 export default function TabsLayout() {
   const isAuthenticated = useAuthStore((s) => !!s.token && !!s.user);
   const sessionExpired = useAuthStore((s) => s.sessionExpired);
+  const segments = useSegments();
+
+  // Hide bottom bar and cart tooltip on location-selector
+  const isLocationSelector = segments.some(s => s === 'location-selector');
 
   if (!isAuthenticated && !sessionExpired) {
     return <Redirect href="/(auth)/login" />;
@@ -99,7 +103,7 @@ export default function TabsLayout() {
   return (
     <View style={styles.layoutRoot}>
       <Tabs
-        tabBar={(props) => <ModernBottomBar {...props} />}
+        tabBar={(props) => !isLocationSelector ? <ModernBottomBar {...props} /> : null}
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
@@ -125,7 +129,7 @@ export default function TabsLayout() {
         />
       </Tabs>
 
-      <StickyMultiCartBar tabBarHeight={88} />
+      {!isLocationSelector && <StickyMultiCartBar tabBarHeight={88} />}
     </View>
   );
 }

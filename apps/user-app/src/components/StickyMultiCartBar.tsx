@@ -21,6 +21,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 interface StickyMultiCartBarProps {
   tabBarHeight?: number;
@@ -29,6 +30,8 @@ interface StickyMultiCartBarProps {
 export const StickyMultiCartBar: React.FC<StickyMultiCartBarProps> = ({
   tabBarHeight = 92,
 }) => {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const carts = useMultiCartStore((state) => state.carts);
@@ -141,23 +144,23 @@ export const StickyMultiCartBar: React.FC<StickyMultiCartBarProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 24,
-    right: 24,
+    left: 20,
+    right: 20,
     zIndex: 70,
   },
   wrapper: {
-    backgroundColor: '#0f172a',
-    borderRadius: 24,
+    backgroundColor: colors.primary, // Using primary for high impact as per design North Star
+    borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 10,
   },
   content: {
     flexDirection: 'row',
@@ -172,35 +175,37 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   previewWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   previewImage: {
     width: '100%',
     height: '100%',
   },
   label: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: -0.3,
   },
   details: {
-    fontSize: 10,
-    color: '#20b2aa',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 1,
   },
   checkoutButton: {
-    backgroundColor: '#20b2aa',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   checkoutButtonText: {
-    color: '#fff',
-    fontSize: 12,
+    color: colors.primary,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

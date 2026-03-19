@@ -68,4 +68,54 @@ export class LocationService {
       area: 'Current Location',
     };
   }
+
+  /**
+   * Autocomplete: search query -> list of suggested areas/addresses.
+   */
+  async getAutocomplete(query: string): Promise<Array<{
+    description: string;
+    placeId: string;
+    mainText: string;
+    secondaryText: string;
+  }>> {
+    const useGoogle = this.configService.get<string>(
+      'GOOGLE_GEO_API_KEY', // Changed to match common naming
+    );
+    if (useGoogle) {
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${useGoogle}`,
+        );
+        const data = await res.json();
+        if (data.status === 'OK') {
+          return data.predictions.map((p: any) => ({
+            description: p.description,
+            placeId: p.place_id,
+            mainText: p.structured_formatting?.main_text ?? '',
+            secondaryText: p.structured_formatting?.secondary_text ?? '',
+          }));
+        }
+      } catch (e) {
+        this.logger.warn('Autocomplete failed, returning mock', e);
+      }
+    }
+
+    // Mock response for common local areas
+    const mocks = [
+      { mainText: 'Cyber City', secondaryText: 'DLF Phase 2, Gurugram' },
+      { mainText: 'Cyber Hub', secondaryText: 'DLF Phase 3, Gurugram' },
+      { mainText: 'Ambience Mall', secondaryText: 'NH-8, Gurugram' },
+      { mainText: 'Sector 29', secondaryText: 'Main Market, Gurugram' },
+      { mainText: 'M.G. Road', secondaryText: 'Iffco Chowk, Gurugram' },
+    ];
+
+    return mocks
+      .filter(m => m.mainText.toLowerCase().includes(query.toLowerCase()) || m.secondaryText.toLowerCase().includes(query.toLowerCase()))
+      .map((m, index) => ({
+        description: `${m.mainText}, ${m.secondaryText}`,
+        placeId: `mock-id-${index}`,
+        mainText: m.mainText,
+        secondaryText: m.secondaryText,
+      }));
+  }
 }

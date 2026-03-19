@@ -26,4 +26,14 @@ export class CreateAddressDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @ApiPropertyOptional({ description: 'Receiver name for delivery' })
+  @IsOptional()
+  @IsString()
+  receiverName?: string;
+
+  @ApiPropertyOptional({ description: 'Receiver phone for delivery' })
+  @IsOptional()
+  @IsString()
+  receiverPhone?: string;
 }

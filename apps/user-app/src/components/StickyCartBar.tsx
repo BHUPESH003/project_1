@@ -21,6 +21,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { CartModal } from './CartModal';
 import { locationService } from '@/services/location.service';
 import { deliveryQuotesCacheService } from '@/services/deliveryQuotesCache.service';
+import { useThemeColors, useThemedStyles } from '@/theme';
+import { useRouter } from 'expo-router';
 
 interface StickyCartBarProps {
   sellerId: string;
@@ -37,6 +39,9 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
   sellerLng,
   onCheckout,
 }) => {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const router = useRouter();
   const [cartModalVisible, setCartModalVisible] = useState(false);
 
   // Silently fetch delivery quotes when component mounts
@@ -91,10 +96,12 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
     setCartModalVisible(true);
   };
 
-  const handleCheckout = (sellerIdToCheckout: string) => {
+  const handleCheckoutAction = (sellerIdToCheckout: string) => {
     setCartModalVisible(false);
     if (onCheckout) {
       onCheckout(sellerIdToCheckout);
+    } else {
+      router.push('/cart');
     }
   };
 
@@ -126,23 +133,27 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
         sellerId={sellerId}
         sellerName={sellerName}
         onClose={() => setCartModalVisible(false)}
-        onCheckout={handleCheckout}
+        onCheckout={handleCheckoutAction}
       />
     </>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 0, // No-Line rule
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 10,
   },
   content: {
     flexDirection: 'row',
@@ -153,27 +164,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
   details: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
   },
   viewCartButton: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 16,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   viewCartText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

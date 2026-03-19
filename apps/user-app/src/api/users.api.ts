@@ -27,6 +27,8 @@ export interface CreateAddressBody {
   addressLine: string;
   latitude?: number;
   longitude?: number;
+  receiverName?: string;
+  receiverPhone?: string;
 }
 
 export interface NotificationPreferences {

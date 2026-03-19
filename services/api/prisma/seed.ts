@@ -30,53 +30,96 @@ async function main() {
 
     await prisma.category.upsert({
       where: { id: 'printing' },
-      update: {},
+      update: { iconPath: 'https://images.unsplash.com/photo-1563986768494-4dee2763ff0f?auto=format&fit=crop&w=200&q=80' },
       create: {
         id: 'printing',
         name: 'Printing',
         description: 'Print documents, photos, and more',
         status: CategoryStatus.ACTIVE,
         displayOrder: 1,
+        iconPath: 'https://images.unsplash.com/photo-1563986768494-4dee2763ff0f?auto=format&fit=crop&w=200&q=80',
       },
     });
 
     await prisma.category.upsert({
       where: { id: 'hardware' },
-      update: {},
+      update: { iconPath: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=200&q=80' },
       create: {
         id: 'hardware',
         name: 'Hardware',
         description: 'Plumbing, electrical, and construction supplies',
         status: CategoryStatus.ACTIVE,
         displayOrder: 2,
+        iconPath: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=200&q=80',
       },
     });
 
     await prisma.category.upsert({
       where: { id: 'stationery' },
-      update: {},
+      update: { iconPath: 'https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=200&q=80' },
       create: {
         id: 'stationery',
         name: 'Stationery',
         description: 'Office supplies and stationery items',
         status: CategoryStatus.COMING_SOON,
         displayOrder: 3,
+        iconPath: 'https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=200&q=80',
       },
     });
 
     await prisma.category.upsert({
       where: { id: 'sports' },
-      update: {},
+      update: { iconPath: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=200&q=80' },
       create: {
         id: 'sports',
         name: 'Sports',
         description: 'Sports equipment, fitness gear, and outdoor accessories',
         status: CategoryStatus.ACTIVE,
         displayOrder: 4,
+        iconPath: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=200&q=80',
       },
     });
 
     console.log('✅ Categories seeded');
+
+    // ──────────────────────────────────────────────
+    // BANNERS
+    // ──────────────────────────────────────────────
+    console.log('Seeding banners...');
+    await prisma.banner.deleteMany({});
+    await prisma.banner.createMany({
+      data: [
+        {
+          badge: 'SALE',
+          title: '50% off on your first print order',
+          subtitle: 'Use code PRINT50 at checkout',
+          imagePath: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+          ctaText: 'Shop Now',
+          displayOrder: 1,
+          isActive: true,
+        },
+        {
+          badge: 'NEW',
+          title: 'Hardware materials delivered locally',
+          subtitle: 'Get tools and supplies in 30 mins',
+          imagePath: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+          ctaText: 'Explore',
+          displayOrder: 2,
+          isActive: true,
+        },
+        {
+          badge: 'SPORTS',
+          title: 'Gear up for the season',
+          subtitle: 'Top quality equipment',
+          imagePath: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=80',
+          ctaText: 'Buy Now',
+          displayOrder: 3,
+          isActive: true,
+        }
+      ],
+    });
+    console.log('✅ Banners seeded');
+
 
     // ──────────────────────────────────────────────
     // USERS
@@ -164,6 +207,8 @@ async function main() {
         longitude: '77.2090',
         pricePerPage: '2.0',
         prepTimeMinutes: 30,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919999999999',
@@ -173,6 +218,8 @@ async function main() {
         longitude: '77.1198',
         pricePerPage: '2.5',
         prepTimeMinutes: 20,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
         isTrending: true,
       },
       {
@@ -183,6 +230,8 @@ async function main() {
         longitude: '77.2045',
         pricePerPage: '1.8',
         prepTimeMinutes: 25,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919222222222',
@@ -192,6 +241,8 @@ async function main() {
         longitude: '77.2164',
         pricePerPage: '3.5',
         prepTimeMinutes: 35,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919333333333',
@@ -201,6 +252,8 @@ async function main() {
         longitude: '77.1899',
         pricePerPage: '2.2',
         prepTimeMinutes: 20,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919444444444',
@@ -210,6 +263,8 @@ async function main() {
         longitude: '77.2297',
         pricePerPage: '2.8',
         prepTimeMinutes: 28,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
     ];
 
@@ -222,6 +277,8 @@ async function main() {
         latitude: '28.5620',
         longitude: '77.2235',
         prepTimeMinutes: 15,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919666666666',
@@ -230,6 +287,8 @@ async function main() {
         latitude: '28.6500',
         longitude: '77.1847',
         prepTimeMinutes: 20,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
         isTrending: true,
       },
       {
@@ -239,6 +298,8 @@ async function main() {
         latitude: '28.5920',
         longitude: '77.0474',
         prepTimeMinutes: 18,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919888888888',
@@ -247,6 +308,8 @@ async function main() {
         latitude: '28.4746',
         longitude: '77.5559',
         prepTimeMinutes: 25,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919100000001',
@@ -255,6 +318,8 @@ async function main() {
         latitude: '28.7041',
         longitude: '77.1025',
         prepTimeMinutes: 22,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
         isTrending: true,
       },
       {
@@ -264,6 +329,8 @@ async function main() {
         latitude: '28.4089',
         longitude: '77.3178',
         prepTimeMinutes: 30,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
     ];
 
@@ -276,6 +343,8 @@ async function main() {
         latitude: '28.6439',
         longitude: '77.1195',
         prepTimeMinutes: 20,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
         isTrending: true,
       },
       {
@@ -285,6 +354,8 @@ async function main() {
         latitude: '28.5697',
         longitude: '77.3219',
         prepTimeMinutes: 25,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
       {
         phone: '+919200000003',
@@ -293,6 +364,8 @@ async function main() {
         latitude: '28.7005',
         longitude: '77.1489',
         prepTimeMinutes: 15,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
         isTrending: true,
       },
       {
@@ -302,6 +375,8 @@ async function main() {
         latitude: '28.4595',
         longitude: '77.0266',
         prepTimeMinutes: 30,
+        imagePath: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+        rating: 4.5,
       },
     ];
 
@@ -311,7 +386,7 @@ async function main() {
       const { phone, ...rest } = def;
       return prisma.seller.upsert({
         where: { userId },
-        update: { status: SellerStatus.ONLINE },
+        update: { status: SellerStatus.ONLINE, ...rest }, // ensure imagePath gets updated
         create: { userId, status: SellerStatus.ONLINE, pricePerPage: null, ...rest },
       });
     };
@@ -653,32 +728,26 @@ async function main() {
       // Create sample carts for each seller
       for (let i = 0; i < sellers.length; i++) {
         // Check if cart already exists
-        const existingCart = await prisma.cart.findUnique({
-          where: {
-            userId_sellerId_status: {
-              userId: testUser.id,
-              sellerId: sellers[i].id,
-              status: 'active',
-            },
-          },
+                let cart = await prisma.cart.findUnique({
+          where: { userId: testUser.id },
         });
 
-        if (!existingCart) {
-          const cart = await prisma.cart.create({
+        if (!cart) {
+          cart = await prisma.cart.create({
             data: {
               userId: testUser.id,
-              sellerId: sellers[i].id,
               status: 'active',
             },
           });
+        }
 
-          // Add 2-3 sample items to each cart
-          const products = await prisma.product.findMany({
-            where: { sellerId: sellers[i].id },
-            take: 3,
-          });
+        // Add 2-3 sample items to each cart
+        const products = await prisma.product.findMany({
+          where: { sellerId: sellers[i].id },
+          take: 3,
+        });
 
-          for (let j = 0; j < products.length; j++) {
+        for (let j = 0; j < products.length; j++) {
             await prisma.cartItem.create({
               data: {
                 cartId: cart.id,
@@ -689,7 +758,6 @@ async function main() {
                 priceAtAdd: new Decimal(products[j].price?.toString() || '0'),
               },
             });
-          }
         }
       }
     }

@@ -61,7 +61,6 @@ export default function RefinedHomeScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  // State
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORY_ALL);
   const [favoriteOverrides, setFavoriteOverrides] = useState<Record<string, boolean>>({});
 
@@ -204,7 +203,7 @@ export default function RefinedHomeScreen() {
   };
 
   const onSearchPress = () => {
-    router.push('/(tabs)/home/sellers');
+    router.push('/(tabs)/home/search');
   };
 
   const onNotificationPress = () => {
@@ -255,7 +254,7 @@ export default function RefinedHomeScreen() {
                 <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.avatar, { backgroundColor: colors.primary }]}
               onPress={onAvatarPress}
             >
@@ -439,18 +438,18 @@ export default function RefinedHomeScreen() {
                     activeOpacity={0.8}
                   >
                     <View style={styles.shopImageContainer}>
-                  {shop.imageUrl ? (
-                    <Image
-                      source={{
-                        uri: shop.imageUrl,
-                      }}
-                      style={styles.shopImage}
-                    />
-                  ) : (
-                    <View style={[styles.shopImage, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ fontSize: 12, color: '#999' }}>No Image</Text>
-                    </View>
-                  )}
+                      {shop.imageUrl ? (
+                        <Image
+                          source={{
+                            uri: shop.imageUrl,
+                          }}
+                          style={styles.shopImage}
+                        />
+                      ) : (
+                        <View style={[styles.shopImage, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                          <Text style={{ fontSize: 12, color: '#999' }}>No Image</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.shopCardContent}>
                       <Text style={[styles.shopName, { color: '#000000' }]} numberOfLines={1}>
@@ -657,6 +656,8 @@ export default function RefinedHomeScreen() {
             )}
           </View>
         </ScrollView>
+
+
 
       </View>
     </ScreenWrapper>

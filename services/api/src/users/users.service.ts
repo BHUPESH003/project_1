@@ -58,6 +58,8 @@ export class UsersService {
       addressLine: dto.addressLine,
       latitude: dto.latitude,
       longitude: dto.longitude,
+      receiverName: dto.receiverName,
+      receiverPhone: dto.receiverPhone,
     });
     return {
       id: a.id,
@@ -65,6 +67,8 @@ export class UsersService {
       addressLine: a.addressLine,
       latitude: a.latitude,
       longitude: a.longitude,
+      receiverName: a.receiverName,
+      receiverPhone: a.receiverPhone,
       createdAt: a.createdAt,
     };
   }

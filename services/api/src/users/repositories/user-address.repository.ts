@@ -6,6 +6,8 @@ export interface UserAddressEntity {
   userId: string;
   label: string;
   addressLine: string;
+  receiverName: string | null;
+  receiverPhone: string | null;
   latitude: number | null;
   longitude: number | null;
   createdAt: Date;
@@ -39,6 +41,8 @@ export class UserAddressRepository {
     addressLine: string;
     latitude?: number | null;
     longitude?: number | null;
+    receiverName?: string;
+    receiverPhone?: string;
   }): Promise<UserAddressEntity> {
     const a = await this.prisma.prisma.userAddress.create({
       data: {
@@ -47,7 +51,9 @@ export class UserAddressRepository {
         addressLine: data.addressLine,
         latitude: data.latitude ?? undefined,
         longitude: data.longitude ?? undefined,
-      },
+        receiverName: data.receiverName,
+        receiverPhone: data.receiverPhone,
+      } as any,
     });
     return this.map(a);
   }
@@ -59,20 +65,14 @@ export class UserAddressRepository {
     return result.count > 0;
   }
 
-  private map(a: {
-    id: string;
-    userId: string;
-    label: string;
-    addressLine: string;
-    latitude: unknown;
-    longitude: unknown;
-    createdAt: Date;
-  }): UserAddressEntity {
+  private map(a: any): UserAddressEntity {
     return {
       id: a.id,
       userId: a.userId,
       label: a.label,
       addressLine: a.addressLine,
+      receiverName: a.receiverName ?? null,
+      receiverPhone: a.receiverPhone ?? null,
       latitude: a.latitude != null ? Number(a.latitude) : null,
       longitude: a.longitude != null ? Number(a.longitude) : null,
       createdAt: a.createdAt,

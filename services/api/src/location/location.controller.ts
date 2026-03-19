@@ -20,4 +20,12 @@ export class LocationController {
   getAddress(@Query() query: ReverseGeocodeQueryDto) {
     return this.locationService.getAddressFromCoordinates(query.lat, query.lng);
   }
+
+  @Get('autocomplete')
+  @ApiOperation({ summary: 'Search for location suggestions' })
+  @ApiQuery({ name: 'query', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'List of suggestions' })
+  getAutocomplete(@Query('query') query: string) {
+    return this.locationService.getAutocomplete(query);
+  }
 }
