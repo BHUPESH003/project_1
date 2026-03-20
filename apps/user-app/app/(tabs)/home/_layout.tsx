@@ -5,7 +5,6 @@ export default function HomeStackLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="location-selector" />
       <Stack.Screen name="sellers" />
       <Stack.Screen name="no-sellers" />
     </Stack>

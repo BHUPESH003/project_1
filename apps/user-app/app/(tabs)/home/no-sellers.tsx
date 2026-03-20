@@ -9,11 +9,13 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { TouchableOpacity } from 'react-native';
 import { useThemeColors, useThemedStyles } from '@/theme';
+import { useAddressStore } from '@/store/address.store';
 
 export default function NoSellersScreen() {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
+  const setSelectorVisible = useAddressStore((s) => s.setSelectorVisible);
 
   return (
     <ScreenWrapper>
@@ -30,7 +32,7 @@ export default function NoSellersScreen() {
         </View>
         <Text style={styles.message}>No nearby shops available</Text>
         <View style={styles.actions}>
-          <PrimaryButton label="Change Location" onPress={() => router.push('/(tabs)/home/location-selector')} />
+          <PrimaryButton label="Change Location" onPress={() => setSelectorVisible(true)} />
           <TouchableOpacity style={styles.tryAgain} onPress={() => router.back()}>
             <Text style={styles.tryAgainText}>Try Again</Text>
           </TouchableOpacity>

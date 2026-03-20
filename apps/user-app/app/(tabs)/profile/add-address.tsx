@@ -4,53 +4,37 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
-import { usersApi } from '@/api/users.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
+import { showToast } from '@/lib/toast';
 
 export default function AddAddressScreen() {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const params = useLocalSearchParams();
   const returnTo = (params?.returnTo as string) || null;
-  const coords = useLocationStore((s) => s.coords);
-  const fetchLocation = useLocationStore((s) => s.fetchLocation);
-  const locationLoading = useLocationStore((s) => s.loading);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+  const fetchCurrentLocation = useAddressStore((s) => s.fetchCurrentLocation);
+  const saveAddress = useAddressStore((s) => s.saveAddress);
+  const addressLoading = useAddressStore((s) => s.loading);
 
   const [label, setLabel] = useState('');
   const [addressLine, setAddressLine] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  const addMutation = useMutation({
-    mutationFn: (body: { label: string; addressLine: string; latitude?: number; longitude?: number }) =>
-      usersApi.addAddress(body),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      // If coming from order flow, return to delivery with the new address ID
-      if (returnTo === '/order/delivery' && data?.id) {
-        router.replace(`/order/delivery?selectedAddressId=${data.id}`);
-      } else {
-        router.back();
-      }
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Failed to add address'),
-  });
+  const [isSaving, setIsSaving] = useState(false);
 
   const onUseCurrentLocation = async () => {
-    const c = await fetchLocation();
-    if (c?.label) setAddressLine(c.label);
-    else if (c) setAddressLine(`${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}`);
+    const addr = await fetchCurrentLocation();
+    if (addr?.fullAddress) setAddressLine(addr.fullAddress);
   };
 
-  const onSave = () => {
+  const onSave = async () => {
     setError(null);
     const trimmedLabel = label.trim();
     const trimmedLine = addressLine.trim();
@@ -58,11 +42,29 @@ export default function AddAddressScreen() {
       setError('Label and address are required');
       return;
     }
-    addMutation.mutate({
+
+    const lat = selectedAddress?.lat ?? 0;
+    const lng = selectedAddress?.lng ?? 0;
+
+    setIsSaving(true);
+    const saved = await saveAddress({
       label: trimmedLabel,
-      addressLine: trimmedLine,
-      ...(coords && { latitude: coords.latitude, longitude: coords.longitude }),
+      fullAddress: trimmedLine,
+      lat,
+      lng,
     });
+    setIsSaving(false);
+
+    if (saved) {
+      showToast({ type: 'success', message: 'Address saved!' });
+      if (returnTo === '/order/delivery' && saved.id) {
+        router.replace(`/order/delivery?selectedAddressId=${saved.id}`);
+      } else {
+        router.back();
+      }
+    } else {
+      setError('Failed to add address');
+    }
   };
 
   return (
@@ -102,7 +104,7 @@ export default function AddAddressScreen() {
           <TouchableOpacity
             style={styles.useLocationBtn}
             onPress={onUseCurrentLocation}
-            disabled={locationLoading}
+            disabled={addressLoading}
           >
             <MaterialIcons name="my-location" size={20} color={colors.primary} />
             <Text style={styles.useLocationText}>Use current location</Text>
@@ -111,9 +113,9 @@ export default function AddAddressScreen() {
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <View style={styles.footer}>
           <PrimaryButton
-            label={addMutation.isPending ? 'Saving…' : 'Save'}
+            label={isSaving ? 'Saving…' : 'Save'}
             onPress={onSave}
-            disabled={!label.trim() || !addressLine.trim() || addMutation.isPending}
+            disabled={!label.trim() || !addressLine.trim() || isSaving}
           />
         </View>
       </KeyboardAvoidingView>

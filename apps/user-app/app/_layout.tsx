@@ -1,18 +1,20 @@
 /**
- * Root layout – QueryClient, SafeArea, auth restore and 401 session handling.
+ * Root layout – QueryClient, SafeArea, auth restore, 401 session handling,
+ * and global AddressSync (replaces old LocationSync).
  */
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { useAuthStore } from '@/store/auth.store';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
 import { setOnSessionExpired } from '@/api/client';
 import { ThemeProvider, useResolvedThemeMode } from '@/theme';
 import { workSansFonts } from '@/constants/typography';
 import { ToastHost } from '@/components/ToastHost';
+import { AddressSelector } from '@/components/AddressSelector';
 
 setOnSessionExpired(() => {
   useAuthStore.getState().clearSession();
@@ -44,24 +46,30 @@ function AuthSync() {
   return null;
 }
 
-function LocationSync() {
-  const router = useRouter();
-  const coords = useLocationStore((s) => s.coords);
-  const loading = useLocationStore((s) => s.loading);
-  const segments = useSegments();
-  const isLocationSelector = segments.join('/').includes('location-selector');
+/**
+ * AddressSync – on app start:
+ * 1. Zustand persist auto-restores selectedAddress from AsyncStorage.
+ * 2. If no persisted address, fetch GPS location.
+ * 3. If permission denied and still no address, show AddressSelector modal.
+ */
+function AddressSync() {
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+  const loading = useAddressStore((s) => s.loading);
+  const locationPermissionStatus = useAddressStore((s) => s.locationPermissionStatus);
+  const fetchCurrentLocation = useAddressStore((s) => s.fetchCurrentLocation);
+  const setSelectorVisible = useAddressStore((s) => s.setSelectorVisible);
 
   useEffect(() => {
-    // Only redirect if we don't have location, we're not already on the selector, 
-    // and we're not in the middle of loading location
-    if (!coords && !isLocationSelector && !loading) {
-      // Small delay to ensure navigation is ready
-      const timer = setTimeout(() => {
-        router.replace('/(tabs)/home/location-selector');
-      }, 500);
-      return () => clearTimeout(timer);
+    // If no address after persist hydration, try GPS
+    if (!selectedAddress && !loading) {
+      fetchCurrentLocation().then((addr) => {
+        // If GPS failed (permission denied), force manual selection
+        if (!addr) {
+          setSelectorVisible(true);
+        }
+      });
     }
-  }, [coords, isLocationSelector, loading, router]);
+  }, []); // Run once on mount
 
   return null;
 }
@@ -91,14 +99,20 @@ export default function RootLayout() {
 
 function AppShell() {
   const resolvedThemeMode = useResolvedThemeMode();
+  const selectorVisible = useAddressStore((s) => s.selectorVisible);
+  const setSelectorVisible = useAddressStore((s) => s.setSelectorVisible);
 
   return (
     <>
       <StatusBar style={resolvedThemeMode === 'dark' ? 'light' : 'dark'} />
       <AuthSync />
-      <LocationSync />
+      <AddressSync />
       <Stack screenOptions={{ headerShown: false }} />
       <ToastHost />
+      <AddressSelector
+        visible={selectorVisible}
+        onClose={() => setSelectorVisible(false)}
+      />
     </>
   );
 }

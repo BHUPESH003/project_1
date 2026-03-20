@@ -17,7 +17,7 @@ import { useMultiCartStore } from '@/store/multiCartStore';
 import { MultiCartView } from '@/components/MultiCartView';
 import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
 import { usersApi } from '@/api/users.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
 import { AddressSelector } from '@/components/AddressSelector';
 
 export default function CartScreen() {
@@ -34,33 +34,41 @@ export default function CartScreen() {
   const [viewMode, setViewMode] = useState<'carts' | 'checkout'>('carts');
   const [addressMode, setAddressMode] = useState<'same' | 'different'>('same');
   const [proceededToCheckout, setProceededToCheckout] = useState(false);
-  
+  const [addressSelectorOpen, setAddressSelectorOpen] = useState(false);
+
   // Track which seller we are currently selecting address for (if mode is 'different')
   const [activeSellerSelection, setActiveSellerSelection] = useState<string | null>(null);
 
-  const [deliveryAddress, setDeliveryAddress] = useState<{
-    latitude: number;
-    longitude: number;
-    address: string;
-    label?: string;
-  } | null>(null);
-  
+  // Global address
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+
   const [perSellerAddresses, setPerSellerAddresses] = useState<Record<string, {
     latitude: number;
     longitude: number;
     address: string;
     label?: string;
-  }>>({});
+  }>>({}); 
 
   const cartCount = useMemo(() => Object.keys(carts).length, [carts]);
 
-  const handleAddressSelect = (addr: { latitude: number; longitude: number; address: string; label?: string }) => {
-    if (addressMode === 'same' || selectedForCheckout.size === 1) {
-      setDeliveryAddress(addr);
+  // When address selector closes after selection (for 'same' mode)
+  const handleAddressSelectorClose = () => {
+    setAddressSelectorOpen(false);
+    // If global address is set, proceed to checkout
+    const addr = useAddressStore.getState().selectedAddress;
+    if (addr && (addressMode === 'same' || selectedForCheckout.size === 1)) {
       setProceededToCheckout(true);
-    } else if (activeSellerSelection) {
-      setPerSellerAddresses(prev => ({ ...prev, [activeSellerSelection]: addr }));
-      setActiveSellerSelection(null); // Return to list
+    } else if (addr && activeSellerSelection) {
+      setPerSellerAddresses(prev => ({
+        ...prev,
+        [activeSellerSelection]: {
+          latitude: addr.lat,
+          longitude: addr.lng,
+          address: addr.fullAddress,
+          label: addr.label,
+        },
+      }));
+      setActiveSellerSelection(null);
     }
   };
 
@@ -133,7 +141,6 @@ export default function CartScreen() {
             onPress={() => {
               setViewMode('carts');
               setProceededToCheckout(false);
-              setDeliveryAddress(null);
               setPerSellerAddresses({});
             }}
             style={styles.backBtn}
@@ -148,21 +155,26 @@ export default function CartScreen() {
       {proceededToCheckout ? (
         <ScrollView style={styles.scrollview}>
           <CombinedCheckoutFlow
-            deliveryAddress={deliveryAddress!}
+            deliveryAddress={selectedAddress ? {
+              latitude: selectedAddress.lat,
+              longitude: selectedAddress.lng,
+              address: selectedAddress.fullAddress,
+            } : { latitude: 0, longitude: 0, address: '' }}
             deliveryAddresses={Object.keys(perSellerAddresses).length > 0 ? perSellerAddresses : undefined}
             onSuccess={() => {
               setViewMode('carts');
-              setDeliveryAddress(null);
               setPerSellerAddresses({});
               setProceededToCheckout(false);
             }}
           />
         </ScrollView>
       ) : activeSellerSelection ? (
-        <AddressSelector 
-          onSelect={handleAddressSelect}
-          onClose={() => setActiveSellerSelection(null)}
-        />
+        <>
+          <AddressSelector
+            visible={true}
+            onClose={handleAddressSelectorClose}
+          />
+        </>
       ) : (addressMode === 'same' || selectedForCheckout.size === 1) ? (
         <View style={{ flex: 1 }}>
           {selectedForCheckout.size > 1 && (
@@ -185,9 +197,9 @@ export default function CartScreen() {
               </TouchableOpacity>
             </View>
           )}
-          <AddressSelector 
-            onSelect={handleAddressSelect}
-            onClose={() => setViewMode('carts')}
+          <AddressSelector
+            visible={addressSelectorOpen || (viewMode === 'checkout' && !proceededToCheckout && !activeSellerSelection && (addressMode === 'same' || selectedForCheckout.size === 1))}
+            onClose={handleAddressSelectorClose}
           />
         </View>
       ) : (
@@ -196,7 +208,7 @@ export default function CartScreen() {
             <View style={[styles.addressModeRow, { marginBottom: spacing.lg }]}>
               <TouchableOpacity
                 style={[styles.addressModeBtn, (addressMode as string) === 'same' && styles.addressModeBtnActive]}
-                onPress={() => { setAddressMode('same'); setDeliveryAddress(null); setPerSellerAddresses({}); }}
+                onPress={() => { setAddressMode('same'); setPerSellerAddresses({}); }}
               >
                 <Text style={[styles.addressModeText, (addressMode as string) === 'same' && styles.addressModeTextActive]}>
                   Same for all
@@ -250,7 +262,6 @@ export default function CartScreen() {
                 onPress={() => {
                   const first = Object.values(perSellerAddresses)[0];
                   if (first) {
-                    setDeliveryAddress(first);
                     setProceededToCheckout(true);
                   }
                 }}

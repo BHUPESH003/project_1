@@ -93,8 +93,7 @@ export default function TabsLayout() {
   const sessionExpired = useAuthStore((s) => s.sessionExpired);
   const segments = useSegments();
 
-  // Hide bottom bar and cart tooltip on location-selector
-  const isLocationSelector = segments.some(s => s === 'location-selector');
+  // location-selector page was removed — AddressSelector is now a modal
 
   if (!isAuthenticated && !sessionExpired) {
     return <Redirect href="/(auth)/login" />;
@@ -103,7 +102,7 @@ export default function TabsLayout() {
   return (
     <View style={styles.layoutRoot}>
       <Tabs
-        tabBar={(props) => !isLocationSelector ? <ModernBottomBar {...props} /> : null}
+        tabBar={(props) => <ModernBottomBar {...props} />}
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
@@ -129,7 +128,7 @@ export default function TabsLayout() {
         />
       </Tabs>
 
-      {!isLocationSelector && <StickyMultiCartBar tabBarHeight={88} />}
+      <StickyMultiCartBar tabBarHeight={88} />
     </View>
   );
 }

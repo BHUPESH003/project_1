@@ -47,7 +47,7 @@ import { favoritesApi } from '@/api/favorites.api';
 import { productsApi } from '@/api/products.api';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/store/auth.store';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
 import { colors } from '@/constants/colors';
 
 const CATEGORY_ALL = 'all';
@@ -67,10 +67,9 @@ export default function RefinedHomeScreen() {
 
   // Store hooks
   const user = useAuthStore((s) => s.user);
-  const locationCoords = useLocationStore((s) => s.coords);
-  const locationLabel = useLocationStore((s) => s.coords?.label);
-  const locationLoading = useLocationStore((s) => s.loading);
-  const fetchLocation = useLocationStore((s) => s.fetchLocation);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+  const addressLoading = useAddressStore((s) => s.loading);
+  const setSelectorVisible = useAddressStore((s) => s.setSelectorVisible);
 
   // API Queries
   const { data: categoriesData = [] } = useQuery({
@@ -92,19 +91,19 @@ export default function RefinedHomeScreen() {
     isFetchingNextPage,
     refetch: refetchSellers,
   } = useInfiniteQuery({
-    queryKey: ['nearby-sellers', selectedCategoryId, locationCoords?.latitude, locationCoords?.longitude],
+    queryKey: ['nearby-sellers', selectedCategoryId, selectedAddress?.lat, selectedAddress?.lng],
     initialPageParam: 0,
     queryFn: ({ pageParam = 0 }) =>
       sellersApi.getNearbySellers({
-        lat: locationCoords?.latitude || 28.7041,
-        lng: locationCoords?.longitude || 77.1025,
+        lat: selectedAddress?.lat || 28.7041,
+        lng: selectedAddress?.lng || 77.1025,
         categoryId: selectedCategoryId !== CATEGORY_ALL ? selectedCategoryId : undefined,
         offset: pageParam * SELLERS_PER_PAGE,
         limit: SELLERS_PER_PAGE,
       }),
     getNextPageParam: (lastPage: NearbySellersPage, allPages: any) =>
       lastPage.sellers.length === SELLERS_PER_PAGE ? allPages.length : undefined,
-    enabled: !!locationCoords,
+    enabled: !!selectedAddress,
   });
 
   const { data: favoritesData = [] } = useQuery({
@@ -137,7 +136,7 @@ export default function RefinedHomeScreen() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: ['nearby-sellers', selectedCategoryId, locationCoords?.latitude, locationCoords?.longitude],
+        queryKey: ['nearby-sellers', selectedCategoryId, selectedAddress?.lat, selectedAddress?.lng],
       });
     },
   });
@@ -169,12 +168,7 @@ export default function RefinedHomeScreen() {
     return Array.isArray(favoritesData) ? favoritesData.slice(0, 6) : [];
   }, [favoritesData]);
 
-  // Effects
-  useEffect(() => {
-    if (!locationCoords) {
-      fetchLocation();
-    }
-  }, []);
+  // Address is auto-fetched by AddressSync in _layout.tsx
 
   // Prefetch products for visible sellers so shop-detail loads instantly
   useEffect(() => {
@@ -212,7 +206,7 @@ export default function RefinedHomeScreen() {
   };
 
   const onLocationPress = () => {
-    router.push('/(tabs)/home/location-selector');
+    setSelectorVisible(true);
   };
 
   const onCategoryPress = (categoryId: string) => {
@@ -232,9 +226,9 @@ export default function RefinedHomeScreen() {
     }
   };
 
-  const locationDisplay = locationLoading
+  const locationDisplay = addressLoading
     ? 'Getting location...'
-    : locationLabel || 'Set location';
+    : selectedAddress?.fullAddress || 'Set delivery location';
 
   const greeting = `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${user?.name?.split(' ')[0] || 'there'}`;
 

@@ -1,4 +1,13 @@
-import React, { useState } from 'react';
+/**
+ * AddressSelector – unified address selection modal.
+ *
+ * Used on:  app open · home screen · checkout · profile
+ *
+ * Reads/writes exclusively through useAddressStore.
+ * Shows:  GPS location · Search autocomplete · Saved addresses · Recent addresses
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,650 +15,777 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Image,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
   Platform,
   LayoutAnimation,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
-import { typography } from '@/constants/typography';
-import { usersApi, UserAddressItem } from '@/api/users.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
+import { locationApi, type LocationSuggestion } from '@/api/location.api';
 import { showToast } from '@/lib/toast';
+import type { Address } from '@/types/address';
 import { colors } from '@/constants/colors';
 
+/* ─── Props ──────────────────────────────────────── */
+
 interface AddressSelectorProps {
-  onSelect: (address: { latitude: number; longitude: number; address: string; label?: string }) => void;
-  onClose?: () => void;
-  showMap?: boolean;
+  visible: boolean;
+  onClose: () => void;
 }
 
-export const AddressSelector: React.FC<AddressSelectorProps> = ({
-  onSelect,
-  onClose,
-  showMap = true,
-}) => {
+/* ─── Component ──────────────────────────────────── */
+
+export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClose }) => {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const queryClient = useQueryClient();
-  const locationStore = useLocationStore();
 
+  // Global store
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+  const savedAddresses = useAddressStore((s) => s.savedAddresses);
+  const recentAddresses = useAddressStore((s) => s.recentAddresses);
+  const loading = useAddressStore((s) => s.loading);
+  const selectAddress = useAddressStore((s) => s.selectAddress);
+  const fetchCurrentLocation = useAddressStore((s) => s.fetchCurrentLocation);
+  const loadSavedAddresses = useAddressStore((s) => s.loadSavedAddresses);
+  const saveAddress = useAddressStore((s) => s.saveAddress);
+
+  // Local UI state
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [showManualForm, setShowManualForm] = useState(false);
-
-  // Manual form state
-  const [manualAddress, setManualAddress] = useState({
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [saveFormData, setSaveFormData] = useState({
     houseNo: '',
     floor: '',
     landmark: '',
-    label: 'Home', // Default label
+    label: 'Home' as string,
   });
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch saved addresses
-  const { data: savedAddresses = [], isLoading: loadingAddresses } = useQuery({
-    queryKey: ['user-addresses'],
-    queryFn: () => usersApi.getMyAddresses(),
-  });
+  // Pending address to save (from GPS or search, before the form)
+  const [pendingAddress, setPendingAddress] = useState<{ lat: number; lng: number; fullAddress: string } | null>(null);
 
-  // Add address mutation
-  const addAddressMutation = useMutation({
-    mutationFn: (body: any) => usersApi.addAddress(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-addresses'] });
-      showToast({ type: 'success', message: 'Address saved successfully' });
-    },
-    onError: () => {
-      showToast({ type: 'error', message: 'Failed to save address' });
-    },
-  });
-
-  const handleUseCurrentLocation = async () => {
-    setIsSearching(true);
-    try {
-      const coords = await locationStore.fetchLocation();
-      if (coords) {
-        const [address] = await Location.reverseGeocodeAsync({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        });
-
-        const addressLine = address
-          ? [address.streetNumber, address.street, address.district, address.city].filter(Boolean).join(', ')
-          : `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
-
-        const label = address?.city || 'Current Location';
-
-        onSelect({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          address: addressLine,
-          label: label,
-        });
-      }
-    } catch (error) {
-      showToast({ type: 'error', message: 'Could not get your location' });
-    } finally {
-      setIsSearching(false);
+  // Load saved addresses on open
+  useEffect(() => {
+    if (visible) {
+      loadSavedAddresses();
+      setSearchQuery('');
+      setSuggestions([]);
+      setShowSaveForm(false);
+      setPendingAddress(null);
     }
-  };
+  }, [visible, loadSavedAddresses]);
 
-  const handleManualSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setIsSearching(true);
-    try {
-      const results = await Location.geocodeAsync(searchQuery);
-      if (results.length > 0) {
-        const { latitude, longitude } = results[0];
-
-        // Reverse geocode to get formal address
-        const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
-        const addressLine = address
-          ? [address.streetNumber, address.street, address.district, address.city].filter(Boolean).join(', ')
-          : searchQuery;
-
-        onSelect({
-          latitude,
-          longitude,
-          address: addressLine,
-          label: searchQuery,
-        });
-      } else {
-        showToast({ type: 'error', message: 'No results found' });
-      }
-    } catch (err) {
-      showToast({ type: 'error', message: 'Search failed' });
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSaveManualAddress = async () => {
-    if (!manualAddress.houseNo || !manualAddress.label) {
-      showToast({ type: 'error', message: 'Please fill required fields' });
+  // Debounced search
+  useEffect(() => {
+    if (searchQuery.length < 3) {
+      setSuggestions([]);
       return;
     }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await locationApi.getAutocomplete(searchQuery);
+        console.log("here", searchQuery, results)
 
-    const currentCoords = locationStore.coords;
-    if (!currentCoords) {
-      showToast({ type: 'error', message: 'Location coords missing. Use GPS first.' });
-      return;
-    }
-
-    const fullAddressLine = `${manualAddress.houseNo}, ${manualAddress.floor ? manualAddress.floor + ', ' : ''}${manualAddress.landmark ? 'Near ' + manualAddress.landmark : ''}`;
-
-    addAddressMutation.mutate({
-      label: manualAddress.label,
-      addressLine: fullAddressLine,
-      latitude: currentCoords.latitude,
-      longitude: currentCoords.longitude,
-    }, {
-      onSuccess: (newAddr) => {
-        onSelect({
-          latitude: newAddr.latitude || currentCoords.latitude,
-          longitude: newAddr.longitude || currentCoords.longitude,
-          address: newAddr.addressLine,
-          label: newAddr.label,
-        });
+        setSuggestions(results);
+      } catch {
+        setSuggestions([]);
       }
-    });
-  };
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  const toggleManualForm = () => {
+  /* ── Handlers ──────────────────────────────────── */
+
+  const handleUseCurrentLocation = useCallback(async () => {
+    const addr = await fetchCurrentLocation();
+    if (addr) {
+      onClose();
+    } else {
+      showToast({ type: 'error', message: 'Could not get your location. Please search manually.' });
+    }
+  }, [fetchCurrentLocation, onClose]);
+
+  const handleSelectSuggestion = useCallback(
+    async (suggestion: LocationSuggestion) => {
+      setIsSearching(true);
+      setSuggestions([]);
+      setSearchQuery(suggestion.description);
+      try {
+        const results = await Location.geocodeAsync(suggestion.description);
+        if (results.length > 0) {
+          const { latitude, longitude } = results[0];
+
+          // Reverse geocode for a cleaner address
+          let fullAddress = suggestion.description;
+          try {
+            const [geo] = await Location.reverseGeocodeAsync({ latitude, longitude });
+            if (geo) {
+              fullAddress =
+                [geo.streetNumber, geo.street, geo.district, geo.city]
+                  .filter(Boolean)
+                  .join(', ') || fullAddress;
+            }
+          } catch {
+            // keep suggestion.description
+          }
+
+          const addr: Address = {
+            id: `search-${Date.now()}`,
+            label: suggestion.mainText || 'Search Result',
+            fullAddress,
+            lat: latitude,
+            lng: longitude,
+          };
+          selectAddress(addr);
+          onClose();
+        } else {
+          showToast({ type: 'error', message: 'No results found for this location' });
+        }
+      } catch {
+        showToast({ type: 'error', message: 'Search failed. Please try again.' });
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [selectAddress, onClose]
+  );
+
+  const handleSelectSaved = useCallback(
+    (addr: Address) => {
+      selectAddress(addr);
+      onClose();
+    },
+    [selectAddress, onClose]
+  );
+
+  const handleOpenSaveForm = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setShowManualForm(!showManualForm);
-  };
+    setShowSaveForm((v) => !v);
+  }, []);
+
+  const handleSaveNewAddress = useCallback(async () => {
+    if (!saveFormData.houseNo || !saveFormData.label) {
+      showToast({ type: 'error', message: 'Please fill house/flat number and label' });
+      return;
+    }
+
+    // Need coords — either from pending or selected or GPS
+    let lat = pendingAddress?.lat ?? selectedAddress?.lat;
+    let lng = pendingAddress?.lng ?? selectedAddress?.lng;
+
+    if (lat == null || lng == null) {
+      showToast({ type: 'error', message: 'Location coordinates missing. Use GPS first.' });
+      return;
+    }
+
+    const fullAddr = [
+      saveFormData.houseNo,
+      saveFormData.floor ? `Floor ${saveFormData.floor}` : '',
+      saveFormData.landmark ? `Near ${saveFormData.landmark}` : '',
+      pendingAddress?.fullAddress || selectedAddress?.fullAddress || '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    setIsSaving(true);
+    const saved = await saveAddress({
+      label: saveFormData.label,
+      fullAddress: fullAddr,
+      lat,
+      lng,
+      landmark: saveFormData.landmark || undefined,
+    });
+
+    setIsSaving(false);
+
+    if (saved) {
+      showToast({ type: 'success', message: 'Address saved!' });
+      onClose();
+    } else {
+      showToast({ type: 'error', message: 'Failed to save address' });
+    }
+  }, [saveFormData, pendingAddress, selectedAddress, saveAddress, onClose]);
+
+  /* ── Render ────────────────────────────────────── */
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Search Bar */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <MaterialIcons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Neighborhood, street, or city"
-              placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleManualSearch}
-            />
-          </View>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: colors.black }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* ── Header ─────────────────────────────── */}
+        <View style={[styles.header, { backgroundColor: colors.black }]}>
+          <TouchableOpacity onPress={onClose} style={styles.headerBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <MaterialIcons name="close" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Select Address</Text>
+          <View style={styles.headerBtn} />
         </View>
 
-        {/* GPS Button */}
-        <TouchableOpacity
-          style={styles.gpsButton}
-          onPress={handleUseCurrentLocation}
-          activeOpacity={0.9}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.gpsIconRow}>
-            <View style={styles.gpsIconCircle}>
-              {isSearching ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <MaterialIcons name="my-location" size={20} color="#fff" />
+          {/* ── Search ───────────────────────────── */}
+          <View style={styles.searchSection}>
+            <View style={[styles.searchContainer, { backgroundColor: colors.surfaceLight || colors.surface }]}>
+              <MaterialIcons name="search" size={20} color={colors.textMuted} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.textDark }]}
+                placeholder="Search for area, street name..."
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchQuery(''); setSuggestions([]); }}>
+                  <MaterialIcons name="close" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
               )}
             </View>
-            <View>
-              <Text style={styles.gpsTitle}>Use Current Location</Text>
-              <Text style={styles.gpsSubtitle}>Using GPS to find you</Text>
-            </View>
-          </View>
-          <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
 
-        {/* Map Preview Placeholder */}
-        {showMap && (
-          <View style={styles.mapContainer}>
-            <Image
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCx89WjaKyVaaBc9pQkfvVr4jOAz0mwtJUNdT0UtRjrOeaDZasAgkYumD3GyFH6Y3Xzs5B0Q90ovUEXIKdFyTgVY0Aqg-1FaIOQDDrgcqximok-UpElUpycVMBy-AuLg0dKDkgz5alxuDqzAz-NEEivUdJKn59Kpq9McZ_XOZWZftab4GS5L028qvR5220vN5btkmz8taeDtXPa18HhnmJoyiy--hADmWzR2FNZIQAh_K7TuYl-LpD3HUmhrnRtHWHeRU6kP2Re4Nxa' }}
-              style={styles.mapImage}
-            />
-            <View style={styles.mapPin}>
-              <View style={styles.pinCircle}>
-                <MaterialIcons name="home" size={18} color="#fff" />
+            {/* Search suggestions */}
+            {suggestions.length > 0 && (
+              <View style={[styles.suggestionsList, { backgroundColor: colors.black }]}>
+                {suggestions.map((s) => (
+                  <TouchableOpacity
+                    key={s.placeId}
+                    style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleSelectSuggestion(s)}
+                  >
+                    <MaterialIcons name="location-on" size={18} color={colors.textMuted} />
+                    <View style={styles.suggestionText}>
+                      <Text style={[styles.suggestionMain, { color: colors.textPrimary }]}>{s.mainText}</Text>
+                      <Text style={[styles.suggestionSecondary, { color: colors.textMuted }]} numberOfLines={1}>
+                        {s.secondaryText}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <View style={styles.pinShadow} />
-            </View>
+            )}
           </View>
-        )}
 
-        {/* Saved Locations */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Saved Locations</Text>
-          <View style={styles.sectionDot} />
-        </View>
+          {isSearching && <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 16 }} />}
 
-        <View style={styles.bentoGrid}>
-          {loadingAddresses ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : savedAddresses.length > 0 ? (
-            savedAddresses.map((addr) => (
-              <TouchableOpacity
-                key={addr.id}
-                style={styles.bentoCard}
-                onPress={() => onSelect({
-                  latitude: addr.latitude || 0,
-                  longitude: addr.longitude || 0,
-                  address: addr.addressLine,
-                  label: addr.label,
-                })}
-              >
-                <View style={[
-                  styles.bentoIconWrap,
-                  { backgroundColor: addr.label.toLowerCase() === 'work' ? colors.primaryLight : colors.orange + '20' }
-                ]}>
-                  <MaterialIcons
-                    name={addr.label.toLowerCase() === 'work' ? 'work' : 'home'}
-                    size={20}
-                    color={addr.label.toLowerCase() === 'work' ? colors.primary : colors.orange}
-                  />
-                </View>
-                <Text style={styles.bentoLabel}>{addr.label}</Text>
-                <Text style={styles.bentoAddress} numberOfLines={1}>{addr.addressLine}</Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No saved addresses yet</Text>
-          )}
-        </View>
-
-        {/* Manual Address Accordion */}
-        <View style={styles.manualEntrySection}>
+          {/* ── GPS Button ───────────────────────── */}
           <TouchableOpacity
-            style={styles.manualEntryHeader}
-            onPress={toggleManualForm}
-            activeOpacity={0.7}
+            style={[styles.gpsButton, { backgroundColor: colors.primary }]}
+            onPress={handleUseCurrentLocation}
+            activeOpacity={0.9}
           >
-            <View style={styles.manualHeaderLeft}>
-              <View style={styles.manualIconCircle}>
-                <MaterialIcons name="edit-location" size={16} color={colors.primary} />
-              </View>
-              <Text style={styles.manualHeaderText}>Enter address manually</Text>
-            </View>
-            <MaterialIcons
-              name={showManualForm ? "expand-less" : "expand-more"}
-              size={24}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
-
-          {showManualForm && (
-            <View style={styles.manualForm}>
-              <View style={styles.formRow}>
-                <View style={styles.formInputContainer}>
-                  <Text style={styles.formLabel}>House/Flat No.</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. 402-A"
-                    placeholderTextColor={colors.textMuted}
-                    value={manualAddress.houseNo}
-                    onChangeText={(text) => setManualAddress(prev => ({ ...prev, houseNo: text }))}
-                  />
-                </View>
-                <View style={styles.formInputContainer}>
-                  <Text style={styles.formLabel}>Floor</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. 4th Floor"
-                    placeholderTextColor={colors.textMuted}
-                    value={manualAddress.floor}
-                    onChangeText={(text) => setManualAddress(prev => ({ ...prev, floor: text }))}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formInputContainerFull}>
-                <Text style={styles.formLabel}>Landmark</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Near Public Park"
-                  placeholderTextColor={colors.textMuted}
-                  value={manualAddress.landmark}
-                  onChangeText={(text) => setManualAddress(prev => ({ ...prev, landmark: text }))}
-                />
-              </View>
-
-              <View style={styles.formInputContainerFull}>
-                <Text style={styles.formLabel}>Save As (Label)</Text>
-                <View style={styles.labelChips}>
-                  {['Home', 'Work', 'Other'].map(l => (
-                    <TouchableOpacity
-                      key={l}
-                      style={[styles.labelChip, manualAddress.label === l && styles.labelChipActive]}
-                      onPress={() => setManualAddress(prev => ({ ...prev, label: l }))}
-                    >
-                      <Text style={[styles.labelChipText, manualAddress.label === l && styles.labelChipTextActive]}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.saveContinueBtn}
-                onPress={handleSaveManualAddress}
-              >
-                {addAddressMutation.isPending ? (
+            <View style={styles.gpsIconRow}>
+              <View style={styles.gpsIconCircle}>
+                {loading ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.saveContinueBtnText}>Save & Continue</Text>
+                  <MaterialIcons name="my-location" size={20} color="#fff" />
                 )}
-              </TouchableOpacity>
+              </View>
+              <View>
+                <Text style={styles.gpsTitle}>Use Current Location</Text>
+                <Text style={styles.gpsSubtitle}>Using GPS to find you</Text>
+              </View>
             </View>
-          )}
-        </View>
+            <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
+          {/* ── Saved Addresses ──────────────────── */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Saved Addresses</Text>
+            <View style={[styles.sectionDot, { backgroundColor: colors.primary }]} />
+          </View>
+
+          <View style={styles.bentoGrid}>
+            {savedAddresses.length > 0 ? (
+              savedAddresses.map((addr) => {
+                const isActive = selectedAddress?.id === addr.id;
+                return (
+                  <TouchableOpacity
+                    key={addr.id}
+                    style={[
+                      styles.bentoCard,
+                      { backgroundColor: colors.background },
+                      isActive && { borderColor: colors.primary, borderWidth: 2 },
+                    ]}
+                    onPress={() => handleSelectSaved(addr)}
+                  >
+                    <View
+                      style={[
+                        styles.bentoIconWrap,
+                        {
+                          backgroundColor:
+                            addr.label.toLowerCase() === 'work'
+                              ? (colors.primaryLight || colors.primary) + '30'
+                              : colors.orange + '20',
+                        },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={addr.label.toLowerCase() === 'work' ? 'work' : addr.label.toLowerCase() === 'other' ? 'place' : 'home'}
+                        size={20}
+                        color={addr.label.toLowerCase() === 'work' ? colors.primary : colors.orange}
+                      />
+                    </View>
+                    <Text style={[styles.bentoLabel, { color: colors.textPrimary }]}>{addr.label}</Text>
+                    <Text style={[styles.bentoAddress, { color: colors.textMuted }]} numberOfLines={1}>
+                      {addr.fullAddress}
+                    </Text>
+                    {isActive && (
+                      <View style={[styles.activeBadge, { backgroundColor: colors.primary }]}>
+                        <MaterialIcons name="check" size={12} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No saved addresses yet</Text>
+            )}
+          </View>
+
+          {/* ── Recent Addresses ─────────────────── */}
+          {recentAddresses.length > 0 && (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent</Text>
+                <View style={[styles.sectionDot, { backgroundColor: colors.primary }]} />
+              </View>
+
+              {recentAddresses.map((addr) => (
+                <TouchableOpacity
+                  key={addr.id}
+                  style={[styles.recentItem, { backgroundColor: colors.background, borderColor: colors.border }]}
+                  onPress={() => handleSelectSaved(addr)}
+                >
+                  <MaterialIcons name="history" size={20} color={colors.textMuted} />
+                  <View style={styles.recentText}>
+                    <Text style={[styles.recentLabel, { color: colors.textPrimary }]}>{addr.label}</Text>
+                    <Text style={[styles.recentAddress, { color: colors.textMuted }]} numberOfLines={1}>
+                      {addr.fullAddress}
+                    </Text>
+                  </View>
+                  {selectedAddress?.id === addr.id && (
+                    <MaterialIcons name="check-circle" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+
+          {/* ── Save New Address Accordion ────────── */}
+          <View style={styles.manualEntrySection}>
+            <TouchableOpacity style={styles.manualEntryHeader} onPress={handleOpenSaveForm} activeOpacity={0.7}>
+              <View style={styles.manualHeaderLeft}>
+                <View style={[styles.manualIconCircle, { backgroundColor: colors.surfaceDark || '#1a1a1a' }]}>
+                  <MaterialIcons name="edit-location" size={16} color={colors.primary} />
+                </View>
+                <Text style={[styles.manualHeaderText, { color: colors.textPrimary }]}>Save a new address</Text>
+              </View>
+              <MaterialIcons
+                name={showSaveForm ? 'expand-less' : 'expand-more'}
+                size={24}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            {showSaveForm && (
+              <View style={styles.manualForm}>
+                <View style={styles.formRow}>
+                  <View style={styles.formInputContainer}>
+                    <Text style={styles.formLabel}>House / Flat No. *</Text>
+                    <TextInput
+                      style={[styles.formInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="e.g. 402-A"
+                      placeholderTextColor={colors.textMuted}
+                      value={saveFormData.houseNo}
+                      onChangeText={(t) => setSaveFormData((p) => ({ ...p, houseNo: t }))}
+                    />
+                  </View>
+                  <View style={styles.formInputContainer}>
+                    <Text style={styles.formLabel}>Floor</Text>
+                    <TextInput
+                      style={[styles.formInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="e.g. 4th"
+                      placeholderTextColor={colors.textMuted}
+                      value={saveFormData.floor}
+                      onChangeText={(t) => setSaveFormData((p) => ({ ...p, floor: t }))}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.formInputContainerFull}>
+                  <Text style={styles.formLabel}>Landmark</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                    placeholder="Near Park"
+                    placeholderTextColor={colors.textMuted}
+                    value={saveFormData.landmark}
+                    onChangeText={(t) => setSaveFormData((p) => ({ ...p, landmark: t }))}
+                  />
+                </View>
+
+                <View style={styles.formInputContainerFull}>
+                  <Text style={styles.formLabel}>Save As *</Text>
+                  <View style={styles.labelChips}>
+                    {['Home', 'Work', 'Other'].map((l) => (
+                      <TouchableOpacity
+                        key={l}
+                        style={[
+                          styles.labelChip,
+                          { borderColor: colors.border },
+                          saveFormData.label === l && { backgroundColor: colors.primary, borderColor: colors.primary },
+                        ]}
+                        onPress={() => setSaveFormData((p) => ({ ...p, label: l }))}
+                      >
+                        <Text
+                          style={[
+                            styles.labelChipText,
+                            { color: colors.textMuted },
+                            saveFormData.label === l && { color: '#fff' },
+                          ]}
+                        >
+                          {l}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.saveContinueBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleSaveNewAddress}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.saveContinueBtnText}>Save & Continue</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
 
-const createStyles = () => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: colors.surface,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    color: colors.primary,
-    letterSpacing: -0.5,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  searchSection: {
-    marginBottom: 20,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 52,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.textDark,
-    fontWeight: '500',
-  },
-  gpsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  gpsIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  gpsIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gpsTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  gpsSubtitle: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 1,
-  },
-  mapContainer: {
-    height: 200,
-    borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 30,
-    backgroundColor: colors.surfaceDark,
-  },
-  mapImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.8,
-  },
-  mapPin: {
-    position: 'absolute',
-    top: '40%',
-    left: '48%',
-    alignItems: 'center',
-  },
-  pinCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  pinShadow: {
-    width: 8,
-    height: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    marginTop: 4,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  sectionDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
-  },
-  bentoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  bentoCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#2d3434',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  bentoIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  bentoLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  bentoAddress: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  manualEntrySection: {
-    backgroundColor: '#000000',
-    borderRadius: 16,
-    overflow: 'hidden',
-    padding: 4,
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  manualEntryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-  },
-  manualHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  manualIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1a1a1a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  manualHeaderText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  manualForm: {
-    padding: 12,
-    paddingTop: 4,
-    backgroundColor: '#000000',
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  formInputContainer: {
-    flex: 1,
-  },
-  formInputContainerFull: {
-    width: '100%',
-    marginBottom: 12,
-  },
-  formLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#999999',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-    marginLeft: 4,
-  },
-  formInput: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '500',
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  labelChips: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  labelChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  labelChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  labelChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#999999',
-  },
-  labelChipTextActive: {
-    color: '#ffffff',
-  },
-  saveContinueBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-  },
-  saveContinueBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  emptyText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-});
+/* ─── Styles ────────────────────────────────────── */
+
+const createStyles = () =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+    },
+    headerBtn: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      letterSpacing: -0.5,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 10,
+    },
+
+    /* Search */
+    searchSection: {
+      marginBottom: 20,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      height: 52,
+      gap: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 5,
+      elevation: 2,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    suggestionsList: {
+      marginTop: 4,
+      borderRadius: 12,
+      paddingVertical: 8,
+      maxHeight: 220,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    suggestionItem: {
+      flexDirection: 'row',
+      padding: 12,
+      borderBottomWidth: 1,
+      alignItems: 'center',
+    },
+    suggestionText: {
+      marginLeft: 12,
+      flex: 1,
+    },
+    suggestionMain: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    suggestionSecondary: {
+      fontSize: 12,
+      marginTop: 2,
+    },
+
+    /* GPS */
+    gpsButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 24,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.15,
+      shadowRadius: 15,
+      elevation: 8,
+    },
+    gpsIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    gpsIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    gpsTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#ffffff',
+    },
+    gpsSubtitle: {
+      fontSize: 11,
+      color: 'rgba(255,255,255,0.8)',
+      marginTop: 1,
+    },
+
+    /* Section Headers */
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 14,
+      gap: 8,
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: '800',
+    },
+    sectionDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+    },
+
+    /* Bento Grid (saved) */
+    bentoGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 24,
+    },
+    bentoCard: {
+      flex: 1,
+      minWidth: '45%',
+      borderRadius: 20,
+      padding: 16,
+      borderColor: colors.surface,
+      borderWidth: 1,
+      shadowColor: colors.surface,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.04,
+      shadowRadius: 10,
+      elevation: 2,
+      position: 'relative',
+    },
+    bentoIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    bentoLabel: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    bentoAddress: {
+      fontSize: 11,
+      marginTop: 2,
+    },
+    activeBadge: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    /* Recent */
+    recentItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 14,
+      borderRadius: 12,
+      marginBottom: 10,
+      borderWidth: 1,
+    },
+    recentText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    recentLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    recentAddress: {
+      fontSize: 12,
+      marginTop: 2,
+    },
+
+    /* Manual Form */
+    manualEntrySection: {
+      backgroundColor: colors.surfaceDark || '#0a0a0a',
+      borderRadius: 16,
+      overflow: 'hidden',
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border || '#333',
+      marginTop: 8,
+    },
+    manualEntryHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 12,
+    },
+    manualHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    manualIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    manualHeaderText: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    manualForm: {
+      padding: 12,
+      paddingTop: 4,
+    },
+    formRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 12,
+    },
+    formInputContainer: {
+      flex: 1,
+    },
+    formInputContainerFull: {
+      width: '100%',
+      marginBottom: 12,
+    },
+    formLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#999999',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 6,
+      marginLeft: 4,
+    },
+    formInput: {
+      backgroundColor: colors.surfaceDark || '#1a1a1a',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 14,
+      fontWeight: '500',
+      borderWidth: 1,
+    },
+    labelChips: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    labelChip: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1,
+    },
+    labelChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    saveContinueBtn: {
+      borderRadius: 12,
+      height: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+    },
+    saveContinueBtnText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    emptyText: {
+      fontSize: 12,
+      fontStyle: 'italic',
+    },
+  });

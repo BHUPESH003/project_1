@@ -1,4 +1,5 @@
 import client from './client';
+import { unwrap } from './unwrap';
 
 export interface LocationSuggestion {
     description: string;
@@ -18,11 +19,11 @@ export interface AddressDetails {
 export const locationApi = {
     getAutocomplete: async (query: string): Promise<LocationSuggestion[]> => {
         const response = await client.get(`/location/autocomplete?query=${encodeURIComponent(query)}`);
-        return response.data;
+        return unwrap(response) as LocationSuggestion[];
     },
     
     getAddressFromCoords: async (lat: number, lng: number): Promise<AddressDetails> => {
         const response = await client.get(`/location/address?lat=${lat}&lng=${lng}`);
-        return response.data;
+        return unwrap(response) as AddressDetails;
     }
 };

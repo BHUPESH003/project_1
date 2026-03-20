@@ -28,7 +28,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { usersApi } from '@/api/users.api';
 import { ordersApi } from '@/api/orders.api';
 import { sellersApi } from '@/api/sellers.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
+import { AddressSelector } from '@/components/AddressSelector';
 
 type Step = 'address' | 'delivery' | 'placing';
 
@@ -50,26 +51,19 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   const sellerId = props.sellerId ?? '';
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
-  const [deliveryAddress, setDeliveryAddress] = useState<{
-    lat: number;
-    lng: number;
-    address: string;
-  } | null>(null);
   const [selectedPartner, setSelectedPartner] = useState<DeliveryOption | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryOption[]>([]);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [addressSelectorOpen, setAddressSelectorOpen] = useState(false);
 
   const cart = useMultiCartStore((state) => state.carts[sellerId]);
   const clearCart = useMultiCartStore((state) => state.clearCart);
-  const locationCoords = useLocationStore((s) => s.coords);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
   const setOrderDraftId = useOrderDraftStore((s) => s.setOrderId);
 
-  const { data: addresses = [] } = useQuery({
-    queryKey: ['user-addresses'],
-    queryFn: () => usersApi.getMyAddresses(),
-  });
+  // Removed local address query — addresses are in global store
 
   const { data: sellerData } = useQuery({
     queryKey: ['seller', sellerId],
@@ -78,7 +72,7 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   });
 
   useEffect(() => {
-    if (deliveryAddress && orderId && deliveryPartners.length === 0 && !deliveryLoading) {
+    if (selectedAddress && orderId && deliveryPartners.length === 0 && !deliveryLoading) {
       setDeliveryLoading(true);
       ordersApi
         .getDeliveryQuotes(orderId)
@@ -97,7 +91,19 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
         .catch(() => setDeliveryPartners([]))
         .finally(() => setDeliveryLoading(false));
     }
-  }, [deliveryAddress, orderId, deliveryPartners.length, deliveryLoading]);
+  }, [selectedAddress, orderId, deliveryPartners.length, deliveryLoading]);
+
+  // Auto-proceed when address is already selected
+  useEffect(() => {
+    if (selectedAddress && currentStep === 'address' && !orderId) {
+      setCurrentStep('delivery');
+      createOrderAndFetchQuotes({
+        lat: selectedAddress.lat,
+        lng: selectedAddress.lng,
+        address: selectedAddress.fullAddress,
+      });
+    }
+  }, [selectedAddress]);
 
   if (!cart || cart.items.length === 0) {
     return (
@@ -119,25 +125,17 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   const deliveryFee = selectedPartner?.price ?? 0;
   const totalAmount = cartTotal + deliveryFee;
 
-  const handleAddressSelect = (addr?: { lat: number; lng: number; address: string }) => {
-    if (addr) {
-      setDeliveryAddress(addr);
-      setCurrentStep('delivery');
-      createOrderAndFetchQuotes(addr);
-    } else {
-      if (!locationCoords) {
-        alert('Location not available. Please allow location permissions.');
-        return;
-      }
-      const fallback = {
-        lat: locationCoords.latitude,
-        lng: locationCoords.longitude,
-        address: locationCoords.label ?? 'Current location',
-      };
-      setDeliveryAddress(fallback);
-      setCurrentStep('delivery');
-      createOrderAndFetchQuotes(fallback);
-    }
+  const handleChangeAddress = () => {
+    setAddressSelectorOpen(true);
+  };
+
+  const handleAddressChanged = () => {
+    setAddressSelectorOpen(false);
+    // Reset order when address changes
+    setOrderId(null);
+    setDeliveryPartners([]);
+    setSelectedPartner(null);
+    setCurrentStep('address');
   };
 
   const createOrderAndFetchQuotes = async (addr: { lat: number; lng: number; address: string }) => {
@@ -164,7 +162,7 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   };
 
   const handlePlaceOrder = async () => {
-    if (!deliveryAddress || !selectedPartner || !orderId) {
+    if (!selectedAddress || !selectedPartner || !orderId) {
       Alert.alert('Missing Info', 'Please select address and delivery partner');
       return;
     }
@@ -287,53 +285,28 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
       <>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Delivery Address</Text>
-            {deliveryAddress ? (
+            {selectedAddress ? (
               <View style={styles.addressBox}>
-                <Text style={styles.addressText}>{deliveryAddress.address}</Text>
-                <TouchableOpacity onPress={() => {
-                  setDeliveryAddress(null);
-                  setOrderId(null);
-                  setDeliveryPartners([]);
-                  setSelectedPartner(null);
-                  setCurrentStep('address');
-                }}>
+                <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
+                <Text style={styles.addressText}>{selectedAddress.fullAddress}</Text>
+                <TouchableOpacity onPress={handleChangeAddress}>
                   <Text style={styles.changeLink}>Change</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <>
-                {addresses.length > 0 ? (
-                  addresses.map((addr) => (
-                    <TouchableOpacity
-                      key={addr.id}
-                      style={styles.addressOption}
-                      onPress={() =>
-                        handleAddressSelect(
-                          addr.latitude != null && addr.longitude != null
-                            ? { lat: addr.latitude, lng: addr.longitude, address: addr.addressLine }
-                            : undefined,
-                        )
-                      }
-                    >
-                      <Text style={styles.addressLabel}>{addr.label}</Text>
-                      <Text style={styles.addressText}>{addr.addressLine}</Text>
-                    </TouchableOpacity>
-                  ))
-                ) : null}
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={() => handleAddressSelect()}
-                >
-                  <Text style={styles.buttonText}>
-                    Use current location
-                  </Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => setAddressSelectorOpen(true)}
+              >
+                <Text style={styles.buttonText}>
+                  Select delivery address
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
 
           {/* Step 2: Delivery Partner */}
-          {deliveryAddress && (
+          {selectedAddress && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Delivery Partner</Text>
               {deliveryLoading ? (
@@ -389,6 +362,11 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
             </View>
           )}
         </>
+
+      <AddressSelector
+        visible={addressSelectorOpen}
+        onClose={handleAddressChanged}
+      />
       </ScrollView>
   );
 };

@@ -1,10 +1,9 @@
 /**
  * Saved addresses – GET /users/me/addresses, add, delete (Phase 4G).
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -12,71 +11,35 @@ import { Loader } from '@/components/Loader';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
-import { usersApi, type UserAddressItem } from '@/api/users.api';
+import { useAddressStore } from '@/store/address.store';
+import type { Address } from '@/types/address';
 
 export default function SavedAddressesScreen() {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const { data: addresses = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['addresses'],
-    queryFn: () => usersApi.getMyAddresses(),
-  });
+  const savedAddresses = useAddressStore((s) => s.savedAddresses);
+  const loadSavedAddresses = useAddressStore((s) => s.loadSavedAddresses);
+  const deleteAddress = useAddressStore((s) => s.deleteAddress);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => usersApi.deleteAddress(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['addresses'] }),
-  });
+  useEffect(() => {
+    loadSavedAddresses().finally(() => setIsLoading(false));
+  }, [loadSavedAddresses]);
 
   const onAddAddress = () => router.push('/(tabs)/profile/add-address');
 
-  const onDelete = (item: UserAddressItem) => {
+  const onDelete = (item: Address) => {
     Alert.alert('Delete address', `Remove "${item.label}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => deleteMutation.mutate(item.id),
+        onPress: () => deleteAddress(item.id),
       },
     ]);
   };
-
-  if (isLoading) {
-    return (
-      <ScreenWrapper>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Saved Addresses</Text>
-          <View style={styles.placeholder} />
-        </View>
-        <View style={styles.loaderWrap}><Loader /></View>
-      </ScreenWrapper>
-    );
-  }
-
-  if (isError) {
-    return (
-      <ScreenWrapper>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Saved Addresses</Text>
-          <View style={styles.placeholder} />
-        </View>
-        <View style={styles.errorWrap}>
-          <Text style={styles.errorText}>{(error as Error)?.message ?? 'Failed to load addresses'}</Text>
-          <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </ScreenWrapper>
-    );
-  }
 
   return (
     <ScreenWrapper>
@@ -87,32 +50,36 @@ export default function SavedAddressesScreen() {
         <Text style={styles.title}>Saved Addresses</Text>
         <View style={styles.placeholder} />
       </View>
-      <FlatList
-        data={addresses}
-        keyExtractor={(item, index) => item.id ?? `address-${index}`}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>No saved addresses. Add one below.</Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <MaterialIcons name="location-on" size={22} color={colors.primary} />
-            <View style={styles.cardText}>
-              <Text style={styles.cardLabel}>{item.label}</Text>
-              <Text style={styles.cardLine}>{item.addressLine}</Text>
+
+      {isLoading ? (
+        <View style={styles.loaderWrap}><Loader /></View>
+      ) : (
+        <FlatList
+          data={savedAddresses}
+          keyExtractor={(item, index) => item.id ?? `address-${index}`}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyText}>No saved addresses. Add one below.</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => onDelete(item)}
-              disabled={deleteMutation.isPending}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialIcons name="delete-outline" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
-      />
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <MaterialIcons name="location-on" size={22} color={colors.primary} />
+              <View style={styles.cardText}>
+                <Text style={styles.cardLabel}>{item.label}</Text>
+                <Text style={styles.cardLine}>{item.fullAddress}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => onDelete(item)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MaterialIcons name="delete-outline" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      )}
       <View style={styles.footer}>
         <PrimaryButton label="Add New Address" onPress={onAddAddress} />
       </View>

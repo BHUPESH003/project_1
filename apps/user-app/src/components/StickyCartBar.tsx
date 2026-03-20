@@ -19,7 +19,7 @@ import {
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CartModal } from './CartModal';
-import { locationService } from '@/services/location.service';
+import { useAddressStore } from '@/store/address.store';
 import { deliveryQuotesCacheService } from '@/services/deliveryQuotesCache.service';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { useRouter } from 'expo-router';
@@ -43,27 +43,26 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const [cartModalVisible, setCartModalVisible] = useState(false);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
 
   // Silently fetch delivery quotes when component mounts
   useEffect(() => {
     const silentlyFetchDeliveryQuotes = async () => {
       try {
-        const userLocation = locationService.getUserLocation();
-
         // Only fetch if we have both user location and seller location
-        if (userLocation && sellerLat && sellerLng) {
+        if (selectedAddress && sellerLat && sellerLng) {
           // This call happens silently - it returns mock data immediately
           // and fetches real data in the background, storing in cache
           await deliveryQuotesCacheService.getDeliveryQuotes(
             sellerId,
             sellerLat,
             sellerLng,
-            userLocation.latitude,
-            userLocation.longitude,
-            userLocation.address,
+            selectedAddress.lat,
+            selectedAddress.lng,
+            selectedAddress.fullAddress,
           );
           console.log(`✓ Silently fetched delivery quotes for ${sellerName}`);
-        } else if (!userLocation) {
+        } else if (!selectedAddress) {
           console.log('User location not available, skipping delivery quotes fetch');
         }
       } catch (error) {
@@ -73,7 +72,7 @@ export const StickyCartBar: React.FC<StickyCartBarProps> = ({
     };
 
     silentlyFetchDeliveryQuotes();
-  }, [sellerId, sellerName, sellerLat, sellerLng]);
+  }, [sellerId, sellerName, sellerLat, sellerLng, selectedAddress]);
   
   // Subscribe to this seller's cart directly
   const cart = useMultiCartStore((state) => state.carts[sellerId]);

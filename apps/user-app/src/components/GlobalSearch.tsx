@@ -20,7 +20,7 @@ import { radius } from '@/constants/radius';
 import { typography } from '@/constants/typography';
 import { sellersApi, type NearbySeller } from '@/api/sellers.api';
 import { productsApi, type Product } from '@/api/products.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
 
 interface GlobalSearchProps {
   onClose: () => void;
@@ -31,7 +31,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onClose }) => {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const coords = useLocationStore((s) => s.coords);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
 
   // Debounce query
   useEffect(() => {
@@ -43,12 +43,12 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onClose }) => {
 
   // Search Sellers
   const { data: sellers = [], isLoading: sellersLoading } = useQuery({
-    queryKey: ['search-sellers', debouncedQuery, coords?.latitude, coords?.longitude],
+    queryKey: ['search-sellers', debouncedQuery, selectedAddress?.lat, selectedAddress?.lng],
     queryFn: async () => {
-      if (!debouncedQuery.trim() || !coords) return [];
+      if (!debouncedQuery.trim() || !selectedAddress) return [];
       const res = await sellersApi.getNearbySellers({
-        lat: coords.latitude,
-        lng: coords.longitude,
+        lat: selectedAddress.lat,
+        lng: selectedAddress.lng,
         limit: 5,
       });
       // Filter client-side if API doesn't support query yet, 
@@ -60,7 +60,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onClose }) => {
         s.description?.toLowerCase().includes(debouncedQuery.toLowerCase())
       );
     },
-    enabled: debouncedQuery.length > 2 && !!coords,
+    enabled: debouncedQuery.length > 2 && !!selectedAddress,
   });
 
   // Search Products

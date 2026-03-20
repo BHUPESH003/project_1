@@ -16,7 +16,8 @@ import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { sellersApi, type SellerListItem } from '@/api/sellers.api';
-import { useLocationStore } from '@/store/location.store';
+import { useAddressStore } from '@/store/address.store';
+import { AddressSelector } from '@/components/AddressSelector';
 
 // LayoutAnimation works without setLayoutAnimationEnabledExperimental on New Architecture (no-op there)
 
@@ -52,20 +53,21 @@ export default function SellersScreen() {
   const params = useLocalSearchParams();
   const [sort, setSort] = useState<SortLabel>('Recommended');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const coords = useLocationStore((s) => s.coords);
+  const selectedAddress = useAddressStore((s) => s.selectedAddress);
+  const setSelectorVisible = useAddressStore((s) => s.setSelectorVisible);
 
   // Get category from route params, fallback to default
   const category = (params.category as string) || DEFAULT_CATEGORY;
   const categoryTitle = CATEGORY_TITLES[category] || `${category} Shops`;
 
-  const hasCoords = coords?.latitude != null && coords?.longitude != null;
+  const hasCoords = selectedAddress?.lat != null && selectedAddress?.lng != null;
   const { data: list = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['sellers', category, coords?.latitude, coords?.longitude],
+    queryKey: ['sellers', category, selectedAddress?.lat, selectedAddress?.lng],
     queryFn: () =>
       sellersApi.getAvailableSellers({
         category,
-        lat: coords?.latitude,
-        lng: coords?.longitude,
+        lat: selectedAddress?.lat,
+        lng: selectedAddress?.lng,
       }),
     enabled: hasCoords,
   });
@@ -111,7 +113,7 @@ export default function SellersScreen() {
         </View>
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyText}>Set your location to see nearby shops</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/home/location-selector')} style={styles.retryBtn}>
+          <TouchableOpacity onPress={() => setSelectorVisible(true)} style={styles.retryBtn}>
             <Text style={styles.retryText}>Set location</Text>
           </TouchableOpacity>
         </View>
@@ -166,7 +168,7 @@ export default function SellersScreen() {
         </View>
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyText}>No shops available in this area</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/home/location-selector')} style={styles.retryBtn}>
+          <TouchableOpacity onPress={() => setSelectorVisible(true)} style={styles.retryBtn}>
             <Text style={styles.retryText}>Change location</Text>
           </TouchableOpacity>
         </View>
