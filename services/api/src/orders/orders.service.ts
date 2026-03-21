@@ -513,6 +513,7 @@ export class OrdersService {
     return orders.map((order) => ({
       order_id: order.id,
       status: order.status,
+      items: (order.orderPayload as any)?.items || [],
       seller: order.seller
         ? {
             id: order.seller.id,
@@ -546,6 +547,7 @@ export class OrdersService {
     return {
       order_id: order.id,
       status: order.status,
+      items: (order.orderPayload as any)?.items || [],
       seller: order.seller
         ? {
             id: order.seller.id,
@@ -558,7 +560,9 @@ export class OrdersService {
         order.status === OrderStatus.PICKED_UP ||
         order.status === OrderStatus.DELIVERED
           ? {
-              status: 'pending',
+              status: order.delivery?.status || 'pending',
+              providerName: order.delivery?.providerName || null,
+              trackingUrl: order.delivery?.providerTrackingUrl || null,
             }
           : null,
       pricing: {

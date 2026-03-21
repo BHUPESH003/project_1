@@ -9,16 +9,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useMultiCartStore } from '@/store/multiCartStore';
 import { MultiCartView } from '@/components/MultiCartView';
-import { CombinedCheckoutFlow } from '@/components/CombinedCheckoutFlow';
-import { usersApi } from '@/api/users.api';
 import { useAddressStore } from '@/store/address.store';
-import { AddressSelector } from '@/components/AddressSelector';
+import { useCheckoutStore } from '@/store/checkout.store';
 
 export default function CartScreen() {
   const colors = useThemeColors();
@@ -31,256 +28,108 @@ export default function CartScreen() {
   const rawSelected = useMultiCartStore((s) => s.selectedForCheckout);
   const selectedForCheckout = rawSelected instanceof Set ? rawSelected : new Set<string>();
 
-  const [viewMode, setViewMode] = useState<'carts' | 'checkout'>('carts');
-  const [addressMode, setAddressMode] = useState<'same' | 'different'>('same');
-  const [proceededToCheckout, setProceededToCheckout] = useState(false);
-  const [addressSelectorOpen, setAddressSelectorOpen] = useState(false);
-
-  // Track which seller we are currently selecting address for (if mode is 'different')
-  const [activeSellerSelection, setActiveSellerSelection] = useState<string | null>(null);
-
-  // Global address
-  const selectedAddress = useAddressStore((s) => s.selectedAddress);
-
-  const [perSellerAddresses, setPerSellerAddresses] = useState<Record<string, {
-    latitude: number;
-    longitude: number;
-    address: string;
-    label?: string;
-  }>>({}); 
-
   const cartCount = useMemo(() => Object.keys(carts).length, [carts]);
-
-  // When address selector closes after selection (for 'same' mode)
-  const handleAddressSelectorClose = () => {
-    setAddressSelectorOpen(false);
-    // If global address is set, proceed to checkout
-    const addr = useAddressStore.getState().selectedAddress;
-    if (addr && (addressMode === 'same' || selectedForCheckout.size === 1)) {
-      setProceededToCheckout(true);
-    } else if (addr && activeSellerSelection) {
-      setPerSellerAddresses(prev => ({
-        ...prev,
-        [activeSellerSelection]: {
-          latitude: addr.lat,
-          longitude: addr.lng,
-          address: addr.fullAddress,
-          label: addr.label,
-        },
-      }));
-      setActiveSellerSelection(null);
-    }
-  };
 
   if (cartCount === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top / 2 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon}>
+            <MaterialIcons name="arrow-back" size={26} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Your Cart</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
 
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="shopping-cart" size={64} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Your cart is empty</Text>
-          <Text style={styles.emptyDesc}>Start shopping to add items to your cart</Text>
+          <View style={styles.emptyIconContainer}>
+            <MaterialIcons name="shopping-basket" size={64} color={colors.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Empty Cart</Text>
+          <Text style={styles.emptyDesc}>Looks like you haven't added anything yet. Explore our marketplace for amazing finds!</Text>
           <TouchableOpacity
             style={styles.continueshoppingBtn}
             onPress={() => router.push('/(tabs)/home')}
           >
-            <Text style={styles.continueshoppingBtnText}>Continue Shopping</Text>
+            <Text style={styles.continueshoppingBtnText}>Start Shopping</Text>
+            <MaterialIcons name="arrow-forward" size={18} color="#ffffff" />
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  if (viewMode === 'carts') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            Your Cart ({cartCount} {cartCount === 1 ? 'seller' : 'sellers'})
-          </Text>
-          <View style={{ width: 40 }} />
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon}>
+          <MaterialIcons name="arrow-back" size={26} color="#ffffff" />
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>Your Cart</Text>
+          <Text style={styles.headerSubtitle}>{cartCount} {cartCount === 1 ? 'Seller' : 'Sellers'}</Text>
         </View>
+        <View style={{ width: 44 }} />
+      </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollview}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        style={styles.scrollview}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+      >
+        <View style={styles.content}>
           <MultiCartView />
-          <View style={{ height: spacing.xl * 2 }} />
-        </ScrollView>
+        </View>
+      </ScrollView>
 
-        {selectedForCheckout.size > 0 && (
-          <View style={[styles.checkoutFooter, { paddingBottom: insets.bottom + spacing.md }]}>
+      {/* Checkout Footer */}
+      {selectedForCheckout.size > 0 && (
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={styles.footerContent}>
+            <View style={styles.selectionInfo}>
+              <Text style={styles.selectionLabel}>Selected Sellers</Text>
+              <Text style={styles.selectionCount}>{selectedForCheckout.size}</Text>
+            </View>
+            
             <TouchableOpacity
               style={styles.checkoutBtn}
-              onPress={() => setViewMode('checkout')}
+              activeOpacity={0.8}
+              onPress={() => {
+                const allCarts = useMultiCartStore.getState().carts;
+                const selectedSellers = Array.from(selectedForCheckout).map(id => allCarts[id]);
+                
+                const checkoutStore = useCheckoutStore.getState();
+                const currentAddr = useAddressStore.getState().selectedAddress;
+                
+                checkoutStore.reset();
+                checkoutStore.initFromCarts(selectedSellers, currentAddr ? {
+                  label: currentAddr.label || 'Home',
+                  fullAddress: currentAddr.fullAddress,
+                  lat: currentAddr.lat,
+                  lng: currentAddr.lng
+                } : null);
+                
+                router.push('/(root)/checkout');
+              }}
             >
-              <Text style={styles.checkoutBtnText}>
-                Checkout ({selectedForCheckout.size})
-              </Text>
+              <Text style={styles.checkoutBtnText}>Proceed to Checkout</Text>
+              <View style={styles.checkoutIcon}>
+                <MaterialIcons name="chevron-right" size={24} color="#ffffff" />
+              </View>
             </TouchableOpacity>
           </View>
-        )}
-      </SafeAreaView>
-    );
-  }
-
-  // Checkout flow
-  return (
-    <SafeAreaView style={styles.container}>
-      {!proceededToCheckout && !activeSellerSelection && (
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <TouchableOpacity
-            onPress={() => {
-              setViewMode('carts');
-              setProceededToCheckout(false);
-              setPerSellerAddresses({});
-            }}
-            style={styles.backBtn}
-          >
-            <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Select Location</Text>
-          <View style={{ width: 40 }} />
         </View>
       )}
-
-      {proceededToCheckout ? (
-        <ScrollView style={styles.scrollview}>
-          <CombinedCheckoutFlow
-            deliveryAddress={selectedAddress ? {
-              latitude: selectedAddress.lat,
-              longitude: selectedAddress.lng,
-              address: selectedAddress.fullAddress,
-            } : { latitude: 0, longitude: 0, address: '' }}
-            deliveryAddresses={Object.keys(perSellerAddresses).length > 0 ? perSellerAddresses : undefined}
-            onSuccess={() => {
-              setViewMode('carts');
-              setPerSellerAddresses({});
-              setProceededToCheckout(false);
-            }}
-          />
-        </ScrollView>
-      ) : activeSellerSelection ? (
-        <>
-          <AddressSelector
-            visible={true}
-            onClose={handleAddressSelectorClose}
-          />
-        </>
-      ) : (addressMode === 'same' || selectedForCheckout.size === 1) ? (
-        <View style={{ flex: 1 }}>
-          {selectedForCheckout.size > 1 && (
-            <View style={[styles.addressModeRow, { padding: spacing.md, backgroundColor: colors.surface }]}>
-              <TouchableOpacity
-                style={[styles.addressModeBtn, addressMode === 'same' && styles.addressModeBtnActive]}
-                onPress={() => setAddressMode('same')}
-              >
-                <Text style={[styles.addressModeText, addressMode === 'same' && styles.addressModeTextActive]}>
-                  Same address
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.addressModeBtn, addressMode === 'different' && styles.addressModeBtnActive]}
-                onPress={() => setAddressMode('different')}
-              >
-                <Text style={[styles.addressModeText, addressMode === 'different' && styles.addressModeTextActive]}>
-                  Different address
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <AddressSelector
-            visible={addressSelectorOpen || (viewMode === 'checkout' && !proceededToCheckout && !activeSellerSelection && (addressMode === 'same' || selectedForCheckout.size === 1))}
-            onClose={handleAddressSelectorClose}
-          />
-        </View>
-      ) : (
-        <ScrollView style={styles.scrollview}>
-          <View style={styles.addressSection}>
-            <View style={[styles.addressModeRow, { marginBottom: spacing.lg }]}>
-              <TouchableOpacity
-                style={[styles.addressModeBtn, (addressMode as string) === 'same' && styles.addressModeBtnActive]}
-                onPress={() => { setAddressMode('same'); setPerSellerAddresses({}); }}
-              >
-                <Text style={[styles.addressModeText, (addressMode as string) === 'same' && styles.addressModeTextActive]}>
-                  Same for all
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.addressModeBtn, (addressMode as string) === 'different' && styles.addressModeBtnActive]}
-                onPress={() => setAddressMode('different')}
-              >
-                <Text style={[styles.addressModeText, (addressMode as string) === 'different' && styles.addressModeTextActive]}>
-                  Different per seller
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {Array.from(selectedForCheckout).map((sellerId) => {
-              const cart = carts[sellerId];
-              const addr = perSellerAddresses[sellerId];
-              return (
-                <TouchableOpacity 
-                  key={sellerId} 
-                  style={[styles.perSellerBlock, { borderColor: addr ? colors.primary : colors.border }]}
-                  onPress={() => setActiveSellerSelection(sellerId)}
-                >
-                  <View style={styles.perSellerHeader}>
-                    <Text style={[styles.perSellerLabel, { color: colors.textPrimary }]}>
-                      {cart?.sellerName ?? sellerId}
-                    </Text>
-                    <MaterialIcons 
-                      name={addr ? "check-circle" : "add-location"} 
-                      size={20} 
-                      color={addr ? colors.primary : colors.textMuted} 
-                    />
-                  </View>
-                  {addr ? (
-                    <Text style={[styles.addressText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {addr.address}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.addressText, { color: colors.textMuted }]}>
-                      Tap to select delivery address
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-
-            {Object.keys(perSellerAddresses).length === selectedForCheckout.size && (
-              <TouchableOpacity
-                style={styles.continueshoppingBtn}
-                onPress={() => {
-                  const first = Object.values(perSellerAddresses)[0];
-                  if (first) {
-                    setProceededToCheckout(true);
-                  }
-                }}
-              >
-                <Text style={styles.continueshoppingBtnText}>Proceed to Checkout</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </ScrollView>
-      )}
-    </SafeAreaView>
+    </View>
   );
 }
 
-const createStyles = (colors: import('@/theme/types').ThemeColors) =>
+const createStyles = (colors: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: '#000000',
     },
     header: {
       flexDirection: 'row',
@@ -288,143 +137,143 @@ const createStyles = (colors: import('@/theme/types').ThemeColors) =>
       justifyContent: 'space-between',
       paddingHorizontal: spacing.lg,
       paddingBottom: spacing.lg,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      backgroundColor: '#000000',
     },
-    backBtn: {
-      width: 40,
-      height: 40,
+    headerIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
       justifyContent: 'center',
       alignItems: 'center',
     },
     headerTitle: {
-      ...typography.screenTitle,
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: colors.textPrimary,
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.primary,
+      textAlign: 'center',
+      letterSpacing: -0.5,
+    },
+    headerSubtitle: {
+      fontSize: 12,
+      color: '#999999',
+      textAlign: 'center',
+      fontWeight: '600',
+      marginTop: 2,
     },
     scrollview: {
       flex: 1,
+    },
+    content: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
     },
     emptyContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: spacing.lg,
+      paddingHorizontal: 40,
+    },
+    emptyIconContainer: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: 'rgba(13, 148, 136, 0.1)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 32,
     },
     emptyTitle: {
-      ...typography.sectionHeader,
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      marginTop: spacing.lg,
+      fontSize: 24,
+      fontWeight: '800',
+      color: '#ffffff',
+      marginBottom: 12,
     },
     emptyDesc: {
-      ...typography.primary,
-      color: colors.textMuted,
-      marginTop: spacing.sm,
+      fontSize: 15,
+      lineHeight: 22,
+      color: '#999999',
       textAlign: 'center',
+      marginBottom: 40,
     },
     continueshoppingBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
       backgroundColor: colors.primary,
-      borderRadius: 10,
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      marginTop: spacing.lg,
+      borderRadius: 16,
+      paddingHorizontal: 28,
+      paddingVertical: 18,
+      gap: 10,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 8,
     },
     continueshoppingBtnText: {
-      color: colors.textLight,
-      fontWeight: '600',
-      fontSize: 15,
-      textAlign: 'center',
-    },
-    checkoutFooter: {
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      backgroundColor: colors.surface,
-    },
-    checkoutBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      paddingVertical: spacing.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: 50,
-    },
-    checkoutBtnText: {
-      color: colors.textLight,
-      fontWeight: '600',
+      color: '#ffffff',
+      fontWeight: '800',
       fontSize: 16,
     },
-    disabledContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: spacing.lg,
+    footer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.05)',
     },
-    addressSection: {
-      padding: spacing.lg,
-    },
-    sectionTitle: {
-      ...typography.sectionHeader,
-      marginBottom: spacing.md,
-    },
-    addressOption: {
-      borderWidth: 1,
-      borderRadius: 10,
-      padding: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    addressModeRow: {
+    footerContent: {
       flexDirection: 'row',
-      gap: spacing.sm,
-      backgroundColor: '#000000',
-      padding: spacing.sm,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: '#333333',
-    },
-    addressModeBtn: {
-      flex: 1,
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.md,
-      borderRadius: 8,
       alignItems: 'center',
+      gap: 16,
     },
-    addressModeBtnActive: {
-      backgroundColor: colors.primary,
+    selectionInfo: {
+      flex: 0.4,
     },
-    addressModeText: {
-      fontSize: 13,
-      fontWeight: '700',
+    selectionLabel: {
+      fontSize: 11,
       color: '#999999',
-    },
-    addressModeTextActive: {
-      color: '#ffffff',
-    },
-    perSellerBlock: {
-      borderWidth: 1,
-      borderRadius: 10,
-      padding: spacing.md,
-      marginBottom: spacing.lg,
-    },
-    perSellerHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: spacing.xs,
-    },
-    perSellerLabel: {
-      fontSize: 14,
       fontWeight: '700',
-    },
-    addressLabel: {
-      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 1,
       marginBottom: 4,
     },
-    addressText: {
-      fontSize: 14,
+    selectionCount: {
+      fontSize: 24,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    checkoutBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.primary,
+      borderRadius: 20,
+      paddingLeft: 24,
+      paddingRight: 10,
+      height: 64,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+    checkoutBtnText: {
+      color: '#ffffff',
+      fontWeight: '800',
+      fontSize: 16,
+    },
+    checkoutIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
   });

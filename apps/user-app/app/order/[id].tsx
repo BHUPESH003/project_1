@@ -2,7 +2,7 @@
  * Order tracking – GET order, timeline from stateHistory.
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -59,6 +59,15 @@ export default function OrderTrackingScreen() {
     enabled: !!id,
   });
 
+  // Debug logging for detail verification
+  React.useEffect(() => {
+    if (order) {
+      console.log('Order Detail Fetch Success:', order.order_id);
+      console.log('Items Count:', order.items?.length || 0);
+      console.log('Pricing:', order.pricing);
+    }
+  }, [order]);
+
   const timeline = buildTimeline(order?.stateHistory);
   const statusStr = order?.status ? (STATUS_LABELS[order.status] ?? order.status.replace(/_/g, ' ')) : '—';
   const isFailure =
@@ -66,6 +75,16 @@ export default function OrderTrackingScreen() {
     order?.status === 'SELLER_REJECTED' ||
     order?.status === 'DELIVERY_FAILED' ||
     order?.status === 'USER_CANCELLED';
+  
+  const showTracking = (order?.status === 'PICKED_UP' || order?.status === 'READY_FOR_PICKUP') && order?.delivery?.trackingUrl;
+
+  const handleTrackLive = () => {
+    if (order?.delivery?.trackingUrl) {
+      Linking.openURL(order.delivery.trackingUrl).catch(err => {
+        console.error("Failed to open tracking URL", err);
+      });
+    }
+  };
 
   if (!id) {
     router.replace('/(tabs)/orders');
@@ -120,6 +139,77 @@ export default function OrderTrackingScreen() {
             </View>
           </View>
         </View>
+
+        {showTracking && (
+          <View style={styles.trackingCard}>
+            <View style={styles.trackingHeader}>
+              <View style={styles.trackingIconBg}>
+                <MaterialIcons name="local-shipping" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.trackingInfo}>
+                <Text style={styles.trackingTitle}>Your order is on the way</Text>
+                <Text style={styles.trackingSubtitle}>
+                  {order?.delivery?.providerName ? `via ${order.delivery.providerName}` : 'Live Tracking Available'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.trackBtn} 
+              onPress={handleTrackLive}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.trackBtnText}>Track Live</Text>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ITEMS LIST */}
+        <Text style={styles.sectionTitle}>ITEMS</Text>
+        <View style={styles.itemsCard}>
+          {order?.items && order.items.length > 0 ? (
+            order.items.map((item, idx) => (
+              <View key={idx} style={styles.itemRow}>
+                <View style={styles.itemMain}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  <Text style={styles.itemMeta}>Qty: {item.quantity}</Text>
+                </View>
+                <Text style={styles.itemPrice}>₹{(item.price * item.quantity).toFixed(2)}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.timelineDesc}>No items available</Text>
+          )}
+        </View>
+
+        {/* ADDRESS */}
+        <Text style={styles.sectionTitle}>DELIVERY ADDRESS</Text>
+        <View style={styles.addressCard}>
+          <View style={styles.addressRow}>
+            <MaterialIcons name="location-on" size={20} color={colors.primary} />
+            <Text style={styles.addressText}>{order?.dropAddress || 'No address provided'}</Text>
+          </View>
+        </View>
+
+        {/* PRICING BREAKDOWN */}
+        <Text style={styles.sectionTitle}>PRICING</Text>
+        <View style={styles.pricingCard}>
+          <View style={styles.pricingRow}>
+            <Text style={styles.pricingLabel}>Item Total</Text>
+            <Text style={styles.pricingValue}>₹{(order?.pricing?.itemCost || 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.pricingRow}>
+            <Text style={styles.pricingLabel}>Delivery Fee</Text>
+            <Text style={styles.pricingValue}>₹{(order?.pricing?.deliveryFee || 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>₹{(order?.pricing?.totalAmount || 0).toFixed(2)}</Text>
+          </View>
+        </View>
+
+        {/* TIMELINE */}
+        <Text style={styles.sectionTitle}>ORDER TIMELINE</Text>
         {timeline.length > 0 && (
           <View style={styles.timeline}>
             {timeline.map((step, i) => (
@@ -177,7 +267,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.primaryTint,
     borderWidth: 1,
-    borderColor: 'colors.primaryGlow',
+    borderColor: colors.primaryGlow,
   },
   badgeText: { fontSize: 12, fontWeight: '500', color: colors.primary },
   badgeSuccess: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
@@ -209,4 +299,162 @@ const createStyles = (colors: any) => StyleSheet.create({
   timelineLabel: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
   timelineTime: { fontSize: 12, color: colors.textMuted },
   timelineDesc: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  trackingCard: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.primary + '33', // Subtle primary border
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  trackingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  trackingIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  trackingInfo: {
+    flex: 1,
+  },
+  trackingTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  trackingSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  trackBtn: {
+    backgroundColor: colors.primary,
+    height: 52,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  trackBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: 12,
+    marginTop: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  itemsCard: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderDark,
+  },
+  itemMain: {
+    flex: 1,
+    marginRight: 12,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  itemMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  itemPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  pricingCard: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pricingLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  pricingValue: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderDark,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  addressCard: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  addressText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
 });

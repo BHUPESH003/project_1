@@ -48,8 +48,16 @@ export default function OrdersScreen() {
     };
   }, [ordersData]);
 
-  // First active order for display (or null)
-  const activeOrder = activeOrders[0] ?? null;
+  // Debug logging for API verification
+  React.useEffect(() => {
+    if (ordersData) {
+      console.log('Orders API Response Length:', ordersData.length);
+      console.log('Active Orders Count:', activeOrders.length);
+      if (activeOrders.length > 0) {
+        console.log('Sample Active Order Keys:', Object.keys(activeOrders[0]));
+      }
+    }
+  }, [ordersData, activeOrders]);
 
   // Show loading if fetching orders
   if (isLoading) {
@@ -93,13 +101,13 @@ export default function OrdersScreen() {
         contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Active Order Section */}
-        {activeOrder && (
-          <View style={styles.section}>
+        {/* Active Orders Section */}
+        {activeOrders.map((order: OrderListItem) => (
+          <View key={order.order_id} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>ACTIVE ORDER</Text>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>{activeOrder.status.replace(/_/g, ' ')}</Text>
+                <Text style={styles.statusBadgeText}>{order.status.replace(/_/g, ' ')}</Text>
               </View>
             </View>
             <View style={styles.statusPlaceholder}>
@@ -113,27 +121,27 @@ export default function OrdersScreen() {
                   <MaterialIcons name="store" size={28} color={colors.textMuted} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.shopName}>{activeOrder.seller?.shopName ?? 'Shop'}</Text>
-                  <Text style={styles.orderMeta}>Order #{activeOrder.order_id}</Text>
+                  <Text style={styles.shopName}>{order.seller?.shopName ?? 'Shop'}</Text>
+                  <Text style={styles.orderMeta}>Order #{order.order_id}</Text>
                 </View>
                 <View style={styles.amountBox}>
                   <Text style={styles.amountLabel}>AMOUNT</Text>
                   <Text style={styles.amountValue}>
-                    ₹{(activeOrder.pricing?.totalAmount ?? activeOrder.pricing?.itemCost ?? 0).toFixed(2)}
+                    ₹{(order.pricing?.totalAmount ?? order.pricing?.itemCost ?? 0).toFixed(2)}
                   </Text>
                 </View>
               </View>
               <TouchableOpacity
                 style={styles.contactBtn}
-                onPress={() => router.push(`/order/${activeOrder.order_id}`)}
+                onPress={() => router.push(`/order/${order.order_id}`)}
               >
                 <Text style={styles.contactBtnText}>Track Order</Text>
               </TouchableOpacity>
             </View>
           </View>
-        )}
+        ))}
 
-        {!activeOrder && (activeOrders.length === 0 && pastOrders.length === 0) && (
+        {activeOrders.length === 0 && pastOrders.length === 0 && !isLoading && (
           <View style={styles.section}>
             <View style={styles.emptyWrap}>
               <MaterialIcons name="receipt-long" size={64} color={colors.textMuted} />

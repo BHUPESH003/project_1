@@ -60,6 +60,12 @@ export interface OrderEntity {
     reason: string | null;
     createdAt: Date;
   }>;
+  delivery?: {
+    id: string;
+    status: string;
+    providerName: string | null;
+    providerTrackingUrl: string | null;
+  } | null;
 }
 
 /**
@@ -147,6 +153,14 @@ export class OrderRepository {
             triggeredBy: true,
             reason: true,
             createdAt: true,
+          },
+        },
+        delivery: {
+          select: {
+            id: true,
+            status: true,
+            providerName: true,
+            providerTrackingUrl: true,
           },
         },
       };
@@ -382,6 +396,7 @@ export class OrderRepository {
         fromStatus: h.fromStatus as OrderStatus | null,
         toStatus: h.toStatus as OrderStatus,
       })),
+      delivery: order.delivery,
     };
   }
 }

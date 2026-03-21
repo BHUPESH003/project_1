@@ -27,6 +27,7 @@ export interface OrderListItem {
   seller: { id: string; shopName: string; address: string } | null;
   category: { id: string; name: string } | null;
   pricing: { itemCost: number | null; deliveryFee: number | null; totalAmount: number | null };
+  items?: Array<{ productId: string; name: string; quantity: number; price: number }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,8 +45,14 @@ export interface OrderDetail {
   order_id: string;
   status: OrderStatus;
   seller: { id: string; shopName: string; address: string } | null;
-  delivery: unknown;
+  delivery: {
+    status: string;
+    providerName?: string;
+    trackingUrl?: string;
+  } | null;
   pricing: { itemCost: number | null; deliveryFee: number | null; totalAmount: number | null };
+  items?: Array<{ productId: string; name: string; quantity: number; price: number }>;
+  dropAddress?: string | null;
   createdAt: string;
   updatedAt: string;
   stateHistory?: OrderStateHistoryItem[];

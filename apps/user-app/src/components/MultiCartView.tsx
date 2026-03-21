@@ -12,22 +12,25 @@
 import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
-  ScrollView,
   View,
   Text,
   TouchableOpacity,
-  FlatList,
-  Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMultiCartStore } from '@/store/multiCartStore';
+import { useCheckoutStore } from '@/store/checkout.store';
+import { useAddressStore } from '@/store/address.store';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useThemeColors, useThemedStyles } from '@/theme';
 
 const { width } = Dimensions.get('window');
 
 export const MultiCartView: React.FC = () => {
   const router = useRouter();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [expandedSellers, setExpandedSellers] = useState<Set<string>>(
     new Set()
   );
@@ -43,18 +46,7 @@ export const MultiCartView: React.FC = () => {
 
   // Empty state
   if (carts.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <MaterialIcons name="shopping-cart" size={64} color="#ccc" />
-        <Text style={styles.emptyText}>Your cart is empty</Text>
-        <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={() => router.push('/(tabs)/home')}
-        >
-          <Text style={styles.emptyButtonText}>Continue Shopping</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    return null;
   }
 
   const toggleExpand = (sellerId: string) => {
@@ -68,78 +60,97 @@ export const MultiCartView: React.FC = () => {
   };
 
   const handleCheckout = (sellerId: string) => {
-    router.push({ pathname: '/single-checkout', params: { sellerId } });
+    const cart = rawCarts[sellerId];
+    if (!cart) return;
+
+    const checkoutStore = useCheckoutStore.getState();
+    const currentAddr = useAddressStore.getState().selectedAddress;
+
+    checkoutStore.reset();
+    checkoutStore.initFromCarts([cart], currentAddr ? {
+      label: currentAddr.label || 'Home',
+      fullAddress: currentAddr.fullAddress,
+      lat: currentAddr.lat,
+      lng: currentAddr.lng
+    } : null);
+
+    router.push('/(root)/checkout');
   };
 
   return (
     <View style={styles.container}>
-      {/* Carts List */}
-      <ScrollView
-        style={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {carts.map((cart) => {
-          const isExpanded = expandedSellers.has(cart.sellerId);
-          const itemCount = cart.items.reduce(
-            (sum, item) => sum + item.quantity,
-            0
-          );
-          // Use getState() for synchronous access (avoid hook call inside map)
-          const total = useMultiCartStore.getState().getCartTotal(cart.sellerId);
+      {carts.map((cart) => {
+        const isExpanded = expandedSellers.has(cart.sellerId);
+        const isSelected = selectedForCheckout.has(cart.sellerId);
+        const itemCount = cart.items.reduce(
+          (sum, item) => sum + item.quantity,
+          0
+        );
+        const total = useMultiCartStore.getState().getCartTotal(cart.sellerId);
 
-          return (
-            <View key={cart.sellerId} style={styles.cartCard}>
-              {/* Cart Header - Always Visible */}
+        return (
+          <View key={cart.sellerId} style={[styles.cartCard, isSelected && styles.cartCardSelected]}>
+            {/* Header */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.cartHeader}
+              onPress={() => toggleExpand(cart.sellerId)}
+            >
               <TouchableOpacity
-                style={styles.cartHeader}
-                onPress={() => toggleExpand(cart.sellerId)}
+                style={styles.checkbox}
+                activeOpacity={0.6}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  toggleCheckoutSelection(cart.sellerId);
+                }}
               >
-                <TouchableOpacity
-                  style={styles.checkbox}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    toggleCheckoutSelection(cart.sellerId);
-                  }}
-                >
-                  <MaterialIcons
-                    name={selectedForCheckout.has(cart.sellerId) ? 'check-box' : 'check-box-outline-blank'}
-                    size={24}
-                    color={selectedForCheckout.has(cart.sellerId) ? '#FF6B35' : '#ccc'}
-                  />
-                </TouchableOpacity>
-
-                {/* Header Info */}
-                <View style={styles.headerInfo}>
-                  <Text style={styles.sellerName}>{cart.sellerName}</Text>
-                  <Text style={styles.itemCount}>
-                    {itemCount} item{itemCount !== 1 ? 's' : ''} • ₹
-                    {total.toFixed(2)}
-                  </Text>
-                </View>
-
-                {/* Expand Arrow */}
                 <MaterialIcons
-                  name={isExpanded ? 'expand-less' : 'expand-more'}
-                  size={24}
-                  color="#666"
+                  name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                  size={26}
+                  color={isSelected ? colors.primary : '#444'}
                 />
               </TouchableOpacity>
 
-              {/* Cart Items - Show When Expanded */}
-              {isExpanded && (
-                <View style={styles.itemsSection}>
-                  {cart.items.map((item) => (
-                    <View key={item.id} style={styles.itemRow}>
+              <View style={styles.headerInfo}>
+                <Text style={styles.sellerName}>{cart.sellerName}</Text>
+                <Text style={styles.itemCount}>
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'} • ₹{total.toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity 
+                  style={styles.directCheckoutBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleCheckout(cart.sellerId);
+                  }}
+                >
+                  <Text style={styles.directCheckoutText}>Checkout</Text>
+                </TouchableOpacity>
+                <MaterialIcons
+                  name={isExpanded ? 'expand-less' : 'expand-more'}
+                  size={24}
+                  color="#999"
+                />
+              </View>
+            </TouchableOpacity>
+
+            {/* Expanded Items */}
+            {isExpanded && (
+              <View style={styles.itemsSection}>
+                {cart.items.map((item) => (
+                  <View key={item.id} style={styles.itemRow}>
+                    <View style={styles.itemMain}>
                       <View style={styles.itemDetails}>
-                        <Text style={styles.itemName} numberOfLines={2}>
+                        <Text style={styles.itemName} numberOfLines={1}>
                           {item.name}
                         </Text>
                         <Text style={styles.itemPrice}>
-                          ₹{item.price.toFixed(2)} each
+                          ₹{item.price.toFixed(2)}
                         </Text>
                       </View>
                       
-                      {/* Quantity Controls */}
                       <View style={styles.quantityControl}>
                         <TouchableOpacity
                           style={styles.qtyButton}
@@ -151,7 +162,7 @@ export const MultiCartView: React.FC = () => {
                             }
                           }}
                         >
-                          <MaterialIcons name="remove" size={16} color="#FF6B35" />
+                          <MaterialIcons name="remove" size={16} color="#ffffff" />
                         </TouchableOpacity>
                         
                         <Text style={styles.qtyText}>{item.quantity}</Text>
@@ -162,258 +173,192 @@ export const MultiCartView: React.FC = () => {
                             useMultiCartStore.getState().updateQuantity(cart.sellerId, item.id, item.quantity + 1);
                           }}
                         >
-                          <MaterialIcons name="add" size={16} color="#FF6B35" />
+                          <MaterialIcons name="add" size={16} color="#ffffff" />
                         </TouchableOpacity>
-
-                        <Text style={styles.itemTotal}>
-                          ₹{(item.price * item.quantity).toFixed(2)}
-                        </Text>
                       </View>
+                    </View>
 
-                      {/* Delete Button */}
+                    <View style={styles.itemRight}>
+                      <Text style={styles.itemTotalAmount}>
+                        ₹{(item.price * item.quantity).toFixed(2)}
+                      </Text>
                       <TouchableOpacity
                         style={styles.deleteBtn}
                         onPress={() => {
                           useMultiCartStore.getState().removeItem(cart.sellerId, item.id);
                         }}
                       >
-                        <MaterialIcons name="delete" size={18} color="#e74c3c" />
+                        <MaterialIcons name="delete-outline" size={20} color="#ff4444" />
                       </TouchableOpacity>
                     </View>
-                  ))}
-
-                  {/* Divider */}
-                  <View style={styles.divider} />
-
-                  {/* Cart Total */}
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Subtotal</Text>
-                    <Text style={styles.totalValue}>
-                      ₹{total.toFixed(2)}
-                    </Text>
                   </View>
+                ))}
 
-                  {/* Checkout Button */}
-                  <TouchableOpacity
-                    style={styles.checkoutButton}
-                    onPress={() => handleCheckout(cart.sellerId)}
-                  >
-                    <Text style={styles.checkoutButtonText}>
-                      Checkout
-                    </Text>
-                  </TouchableOpacity>
+                <View style={styles.cardFooter}>
+                  <View style={styles.totalBlock}>
+                    <Text style={styles.subtotalLabel}>Subtotal</Text>
+                    <Text style={styles.subtotalValue}>₹{total.toFixed(2)}</Text>
+                  </View>
                 </View>
-              )}
-            </View>
-          );
-        })}
-      </ScrollView>
+              </View>
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
-  listContainer: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  emptyButton: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 6,
-  },
-  emptyButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  cartCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  cartHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  sellerName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
-  },
-  itemCount: {
-    fontSize: 12,
-    color: '#666',
-  },
-  itemsSection: {
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
-    gap: 8,
-  },
-  itemDetails: {
-    flex: 1,
-    marginRight: 8,
-  },
-  itemName: {
-    fontSize: 13,
-    color: '#333',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  itemPrice: {
-    fontSize: 11,
-    color: '#999',
-  },
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-    backgroundColor: '#fafafa',
-  },
-  qtyButton: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qtyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  itemTotal: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FF6B35',
-    minWidth: 50,
-    textAlign: 'right',
-  },
-  deleteBtn: {
-    padding: 6,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginVertical: 8,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-  },
-  totalValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FF6B35',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  viewButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FF6B35',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  viewButtonText: {
-    color: '#FF6B35',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  checkoutButton: {
-    flex: 1,
-    backgroundColor: '#FF6B35',
-    paddingVertical: 10,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkoutButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  bottomAction: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    backgroundColor: '#fff',
-  },
-  combinedCheckoutButton: {
-    backgroundColor: '#FF6B35',
-    paddingVertical: 14,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  combinedCheckoutText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#000000',
+    },
+    cartCard: {
+      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      borderRadius: 24,
+      marginBottom: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    cartCardSelected: {
+      borderColor: 'rgba(13, 148, 136, 0.3)',
+      backgroundColor: 'rgba(13, 148, 136, 0.02)',
+    },
+    cartHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 20,
+      gap: 16,
+    },
+    checkbox: {
+      width: 32,
+      height: 32,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerInfo: {
+      flex: 1,
+    },
+    sellerName: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#ffffff',
+      marginBottom: 2,
+    },
+    itemCount: {
+      fontSize: 12,
+      color: '#888',
+      fontWeight: '500',
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    directCheckoutBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      backgroundColor: 'rgba(13, 148, 136, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(13, 148, 136, 0.2)',
+    },
+    directCheckoutText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    itemsSection: {
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.03)',
+    },
+    itemRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255, 255, 255, 0.02)',
+    },
+    itemMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    itemDetails: {
+      flex: 1,
+    },
+    itemName: {
+      fontSize: 14,
+      color: '#eeeeee',
+      marginBottom: 2,
+      fontWeight: '600',
+    },
+    itemPrice: {
+      fontSize: 12,
+      color: '#666',
+    },
+    quantityControl: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: 12,
+      padding: 4,
+      gap: 8,
+    },
+    qtyButton: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    qtyText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#ffffff',
+      minWidth: 20,
+      textAlign: 'center',
+    },
+    itemRight: {
+      alignItems: 'flex-end',
+      gap: 8,
+      paddingLeft: 12,
+    },
+    itemTotalAmount: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#ffffff',
+    },
+    deleteBtn: {
+      padding: 4,
+    },
+    cardFooter: {
+      marginTop: 16,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.03)',
+    },
+    totalBlock: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    subtotalLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#888',
+    },
+    subtotalValue: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+  });

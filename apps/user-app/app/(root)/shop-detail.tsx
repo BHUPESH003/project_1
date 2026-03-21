@@ -26,6 +26,8 @@ import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useMultiCartStore } from '@/store/multiCartStore';
+import { useCheckoutStore } from '@/store/checkout.store';
+import { useAddressStore } from '@/store/address.store';
 import { ordersApi, DeliveryQuoteOption } from '@/api/orders.api';
 import { sellersApi } from '@/api/sellers.api';
 import { productsApi, Product } from '@/api/products.api';
@@ -391,7 +393,24 @@ export default function ShopDetailScreen() {
 
   const handleCheckout = () => {
     if (itemCount > 0) {
-      router.push('/cart');
+      const cart = useMultiCartStore.getState().carts[shopId];
+      if (cart) {
+        // Initialize checkout state with this seller only for a direct flow
+        const checkoutStore = useCheckoutStore.getState();
+        const currentAddr = useAddressStore.getState().selectedAddress;
+
+        checkoutStore.reset();
+        checkoutStore.initFromCarts([cart], currentAddr ? {
+          label: currentAddr.label || 'Home',
+          fullAddress: currentAddr.fullAddress,
+          lat: currentAddr.lat,
+          lng: currentAddr.lng
+        } : null);
+
+        router.push('/(root)/checkout');
+      } else {
+        router.push('/cart');
+      }
     }
   };
 

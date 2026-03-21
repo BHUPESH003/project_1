@@ -36,6 +36,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Loader } from '@/components/Loader';
 import { Skeleton } from '@/components/Skeleton';
+import { ActiveOrderTracker } from '@/components/ActiveOrderTracker';
 import { useThemeColors, useThemedStyles } from '@/theme';
 import { spacing } from '@/constants/spacing';
 import { radius } from '@/constants/radius';
@@ -653,7 +654,8 @@ export default function RefinedHomeScreen() {
           </View>
         </ScrollView>
 
-
+        {/* ACTIVE ORDER FLOATING BAR */}
+        <ActiveOrderTracker />
 
       </View>
       <AddressSelector

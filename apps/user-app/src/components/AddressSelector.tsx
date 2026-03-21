@@ -36,11 +36,12 @@ import { colors } from '@/constants/colors';
 interface AddressSelectorProps {
   visible: boolean;
   onClose: () => void;
+  onSelect?: (addr: Address) => void;
 }
 
 /* ─── Component ──────────────────────────────────── */
 
-export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClose }) => {
+export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClose, onSelect }) => {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
 
@@ -105,6 +106,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClo
   const handleUseCurrentLocation = useCallback(async () => {
     const addr = await fetchCurrentLocation();
     if (addr) {
+      onSelect?.(addr);
       onClose();
     } else {
       showToast({ type: 'error', message: 'Could not get your location. Please search manually.' });
@@ -143,6 +145,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClo
             lng: longitude,
           };
           selectAddress(addr);
+          onSelect?.(addr);
           onClose();
         } else {
           showToast({ type: 'error', message: 'No results found for this location' });
@@ -159,6 +162,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClo
   const handleSelectSaved = useCallback(
     (addr: Address) => {
       selectAddress(addr);
+      onSelect?.(addr);
       onClose();
     },
     [selectAddress, onClose]
@@ -206,6 +210,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ visible, onClo
 
     if (saved) {
       showToast({ type: 'success', message: 'Address saved!' });
+      onSelect?.(saved);
       onClose();
     } else {
       showToast({ type: 'error', message: 'Failed to save address' });

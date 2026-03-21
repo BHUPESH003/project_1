@@ -36,6 +36,11 @@ export interface MultiCartOrder {
   totalAmount?: number; // Including delivery
   status: string;
   createdAt: string;
+  pricing?: {
+    itemCost: number;
+    deliveryFee: number;
+    totalAmount: number;
+  };
 }
 
 /** Delivery address for an order */
@@ -200,7 +205,19 @@ export const multiCartOrdersApi = {
     };
     const res = await client.post('/orders/batch', backendPayload);
     const data = unwrap(res) as {
-      results: Array<{ sellerId: string; orderId?: string; status: string; error?: string }>;
+      results: Array<{ 
+        sellerId: string; 
+        orderId?: string; 
+        status: string; 
+        error?: string;
+        orderData?: {
+          pricing?: {
+            itemCost: number;
+            deliveryFee: number;
+            totalAmount: number;
+          }
+        }
+      }>;
       totalProcessed: number;
       successCount: number;
       failureCount: number;
@@ -209,6 +226,8 @@ export const multiCartOrdersApi = {
       .filter((r) => r.status === 'success' && r.orderId)
       .map((r) => {
         const order = payload.orders.find((o) => o.sellerId === r.sellerId);
+        const pricing = r.orderData?.pricing;
+        
         const items = (order?.items ?? []).map((item, idx) => ({
           id: `${r.orderId}-${idx}`,
           productId: item.productId,
@@ -217,7 +236,10 @@ export const multiCartOrdersApi = {
           quantity: item.quantity,
           totalPrice: item.price * item.quantity,
         }));
-        const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+
+        // Use backend subtotal (itemCost) if available, otherwise calculate
+        const subtotal = pricing?.itemCost ?? items.reduce((s, i) => s + i.price * i.quantity, 0);
+        
         return {
           orderId: r.orderId!,
           sellerId: r.sellerId,
@@ -226,6 +248,7 @@ export const multiCartOrdersApi = {
           subtotal,
           status: 'CREATED',
           createdAt: new Date().toISOString(),
+          pricing, // Pass through backend pricing
         };
       });
     const failedOrders = data.results
