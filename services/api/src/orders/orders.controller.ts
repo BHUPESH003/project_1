@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -59,6 +60,8 @@ import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
 @ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
   constructor(private readonly ordersService: OrdersService) {}
 
   /**
@@ -133,6 +136,11 @@ export class OrdersController {
     @Body() createBatchOrdersDto: CreateBatchOrdersDto,
     @Request() req: { user: { id: string } },
   ): Promise<CreateBatchOrdersResponseDto> {
+    this.logger.log(`Incoming createBatch from user ${req.user.id}`);
+    if (createBatchOrdersDto.orders?.length > 0) {
+      this.logger.log(`Order 0 Payload Keys: ${Object.keys(createBatchOrdersDto.orders[0].orderPayload || {})}`);
+      this.logger.log(`Order 0 Items Count: ${(createBatchOrdersDto.orders[0].orderPayload as any)?.items?.length || 0}`);
+    }
     return this.ordersService.createBatch(req.user.id, createBatchOrdersDto);
   }
 

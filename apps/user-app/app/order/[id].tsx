@@ -62,9 +62,12 @@ export default function OrderTrackingScreen() {
   // Debug logging for detail verification
   React.useEffect(() => {
     if (order) {
-      console.log('Order Detail Fetch Success:', order.order_id);
-      console.log('Items Count:', order.items?.length || 0);
-      console.log('Pricing:', order.pricing);
+      console.log('[DEBUG] Order Detail Fetched:', order.order_id);
+      console.log('[DEBUG] Items count:', order.items?.length);
+      console.log('[DEBUG] Pricing:', JSON.stringify(order.pricing));
+      if (order.items && order.items.length > 0) {
+        console.log('[DEBUG] First item:', JSON.stringify(order.items[0]));
+      }
     }
   }, [order]);
 
@@ -138,6 +141,13 @@ export default function OrderTrackingScreen() {
               <Text style={[styles.badgeText, isFailure && styles.badgeFailureText]}>{statusStr}</Text>
             </View>
           </View>
+        </View>
+
+        {/* DEBUG SECTION */}
+        <View style={{ backgroundColor: '#1a1a1a', padding: 8, borderRadius: 8, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#006c5c' }}>
+          <Text style={{ color: '#aaa', fontSize: 10, marginBottom: 4 }}>DEBUG DATA (Tap to hide later)</Text>
+          <Text style={{ color: '#fff', fontSize: 12 }}>Items: {order?.items?.length || 0}</Text>
+          <Text style={{ color: '#fff', fontSize: 12 }}>Pricing: {JSON.stringify(order?.pricing)}</Text>
         </View>
 
         {showTracking && (

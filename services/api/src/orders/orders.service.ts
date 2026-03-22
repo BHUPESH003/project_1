@@ -151,11 +151,13 @@ export class OrdersService {
           );
         }
       }
-
+      this.logger.log(`Enriched ${enrichedItems.length} items. Total Cost: ${itemCost}`);
+ 
       enrichedPayload = {
         ...enrichedPayload,
         items: enrichedItems,
       };
+      this.logger.log(`Enriched Payload Items: ${enrichedPayload.items?.length || 0}`);
     }
 
     // Ensure category exists in DB (auto-create if dynamically generated)
@@ -510,28 +512,33 @@ export class OrdersService {
    */
   async findAllForUser(userId: string) {
     const orders = await this.orderRepository.findByUserId(userId);
-    return orders.map((order) => ({
-      order_id: order.id,
-      status: order.status,
-      items: (order.orderPayload as any)?.items || [],
-      seller: order.seller
-        ? {
-            id: order.seller.id,
-            shopName: order.seller.shopName,
-            address: order.seller.address,
-          }
-        : null,
-      category: order.category
-        ? { id: order.category.id, name: order.category.name }
-        : null,
-      pricing: {
-        itemCost: order.itemCost,
-        deliveryFee: order.deliveryFee,
-        totalAmount: order.totalAmount,
-      },
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-    }));
+    this.logger.log(`Found ${orders.length} orders for user ${userId}`);
+    return orders.map((order) => {
+      const items = (order.orderPayload as any)?.items || [];
+      this.logger.log(`Order ${order.id}: ${items.length} items. First item: ${items[0]?.name || 'N/A'}`);
+      return {
+        order_id: order.id,
+        status: order.status,
+        items: items,
+        seller: order.seller
+          ? {
+              id: order.seller.id,
+              shopName: order.seller.shopName,
+              address: order.seller.address,
+            }
+          : null,
+        category: order.category
+          ? { id: order.category.id, name: order.category.name }
+          : null,
+        pricing: {
+          itemCost: order.itemCost,
+          deliveryFee: order.deliveryFee,
+          totalAmount: order.totalAmount,
+        },
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      };
+    });
   }
 
   /**
@@ -543,11 +550,14 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
+ 
+    const items = (order.orderPayload as any)?.items || [];
+    this.logger.log(`Order Detail fetched: ${orderId}, items: ${items.length}, itemCost: ${order.itemCost}`);
 
     return {
       order_id: order.id,
       status: order.status,
-      items: (order.orderPayload as any)?.items || [],
+      items: items,
       seller: order.seller
         ? {
             id: order.seller.id,
