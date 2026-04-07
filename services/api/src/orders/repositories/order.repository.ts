@@ -5,7 +5,7 @@
  * Abstracts Prisma-specific queries from services.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OrderStatus } from '@repo/types';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
@@ -96,7 +96,103 @@ export interface UpdateOrderData {
 
 @Injectable()
 export class OrderRepository {
+  private readonly logger = new Logger(OrderRepository.name);
+
   constructor(private readonly prismaService: PrismaService) {}
+
+  private isTransientReadError(error: unknown): boolean {
+    const candidate = error as { code?: string; message?: string } | undefined;
+
+    return (
+      candidate?.code === 'ETIMEDOUT' ||
+      candidate?.code === 'ECONNRESET' ||
+      candidate?.code === 'ECONNREFUSED' ||
+      candidate?.message?.includes('ETIMEDOUT') === true ||
+      candidate?.message?.includes("Can't reach database server") === true
+    );
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async findUniqueWithRetry(
+    args: Prisma.OrderFindUniqueArgs,
+    id: string,
+    maxAttempts = 3,
+  ) {
+    let attempt = 1;
+
+    while (attempt <= maxAttempts) {
+      try {
+        return await this.prismaService.prisma.order.findUnique(args);
+      } catch (error) {
+        if (!this.isTransientReadError(error) || attempt === maxAttempts) {
+          throw error;
+        }
+
+        this.logger.warn(
+          `Transient order read failure for ${id} (attempt ${attempt}/${maxAttempts}), retrying...`,
+        );
+        await this.sleep(150 * attempt);
+        attempt += 1;
+      }
+    }
+
+    return null;
+  }
+
+  private async attachUserToOrder<T extends { userId: string }>(
+    order: T | null,
+  ): Promise<(T & { user?: OrderEntity['user'] }) | null> {
+    if (!order?.userId) {
+      return order as (T & { user?: OrderEntity['user'] }) | null;
+    }
+
+    const user = await this.prismaService.prisma.user.findUnique({
+      where: { id: order.userId },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+      },
+    });
+
+    return {
+      ...order,
+      user: user || undefined,
+    };
+  }
+
+  private async attachUsersToOrders<T extends { userId: string }>(
+    orders: T[],
+  ): Promise<Array<T & { user?: OrderEntity['user'] }>> {
+    const userIds = [
+      ...new Set(orders.map((order) => order.userId).filter(Boolean)),
+    ];
+
+    if (userIds.length === 0) {
+      return orders as Array<T & { user?: OrderEntity['user'] }>;
+    }
+
+    const users = await this.prismaService.prisma.user.findMany({
+      where: {
+        id: { in: userIds },
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+      },
+    });
+
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    return orders.map((order) => ({
+      ...order,
+      user: usersById.get(order.userId),
+    }));
+  }
 
   /**
    * Find order by ID with optional relations
@@ -113,13 +209,6 @@ export class OrderRepository {
 
     if (includeRelations) {
       args.include = {
-        user: {
-          select: {
-            id: true,
-            phone: true,
-            name: true,
-          },
-        },
         seller: {
           select: {
             id: true,
@@ -166,9 +255,12 @@ export class OrderRepository {
       };
     }
 
-    const order = await this.prismaService.prisma.order.findUnique(args);
+    const order = await this.findUniqueWithRetry(args, id);
+    const orderWithUser = includeRelations
+      ? await this.attachUserToOrder(order)
+      : order;
 
-    return order ? this.mapToEntity(order) : null;
+    return orderWithUser ? this.mapToEntity(orderWithUser) : null;
   }
 
   /**
@@ -185,13 +277,6 @@ export class OrderRepository {
         // fileId is handled via File model relation
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            phone: true,
-            name: true,
-          },
-        },
         category: {
           select: {
             id: true,
@@ -255,13 +340,6 @@ export class OrderRepository {
       where: { id },
       data: updateData,
       include: {
-        user: {
-          select: {
-            id: true,
-            phone: true,
-            name: true,
-          },
-        },
         seller: {
           select: {
             id: true,
@@ -302,13 +380,6 @@ export class OrderRepository {
     const orders = await this.prismaService.prisma.order.findMany({
       where,
       include: {
-        user: {
-          select: {
-            id: true,
-            phone: true,
-            name: true,
-          },
-        },
         category: {
           select: {
             id: true,
@@ -328,7 +399,9 @@ export class OrderRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    return orders.map((order) => this.mapToEntity(order));
+    const ordersWithUsers = await this.attachUsersToOrders(orders);
+
+    return ordersWithUsers.map((order) => this.mapToEntity(order));
   }
 
   /**

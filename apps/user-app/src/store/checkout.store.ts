@@ -47,7 +47,12 @@ export interface CheckoutAddress {
   lng: number;
 }
 
-export type PaymentMethod = 'UPI_GPAY' | 'UPI_PHONEPE' | 'UPI_PAYTM' | 'CARD' | 'NET_BANKING' | null;
+export type PaymentMethod =
+  | 'UPI_GPAY'
+  | 'UPI_PHONEPE'
+  | 'UPI_PAYTM'
+  | 'CARD'
+  | null;
 
 export interface CreatedOrder {
   orderId: string;

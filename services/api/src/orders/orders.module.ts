@@ -9,10 +9,12 @@ import { AuthModule } from '@/auth/auth.module';
 import { PaymentsModule } from '@/payments/payments.module';
 import { DeliveryModule } from '@/delivery/delivery.module';
 import { QueueModule } from '@/queue/queue.module';
+import { UsersModule } from '@/users/users.module';
 
 @Module({
   imports: [
     AuthModule,
+    UsersModule,
     OrderStateMachineModule,
     CategoriesModule, // For CategoryRegistry
     SellersModule, // For SellerRepository

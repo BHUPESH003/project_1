@@ -13,7 +13,6 @@ import { Pool } from 'pg';
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private readonly pool: Pool;
-  private readonly ownsPool: boolean;
   public readonly prisma: PrismaClient;
 
   constructor(private configService: ConfigService) {
@@ -22,37 +21,18 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       throw new Error('DATABASE_URL environment variable is not set');
     }
 
-    const globalForPool = globalThis as unknown as {
-      pool: Pool | undefined;
-    };
-
-    // Check if pool already exists in global cache
-    const poolExists = !!globalForPool.pool;
-    this.pool = globalForPool.pool ?? new Pool({ connectionString });
-    this.ownsPool = !poolExists; // Only own the pool if we created it
-
-    if (process.env['NODE_ENV'] !== 'production') {
-      globalForPool.pool = this.pool;
-    }
+    // Nest already gives us a singleton service instance, so a process-level
+    // global cache only increases the chance of reusing a stale pool in watch mode.
+    this.pool = new Pool({ connectionString });
 
     const adapter = new PrismaPg(this.pool);
-    const globalForPrisma = globalThis as unknown as {
-      prisma: PrismaClient | undefined;
-    };
-
-    this.prisma =
-      globalForPrisma.prisma ??
-      new PrismaClient({
-        adapter,
-        log:
-          process.env['NODE_ENV'] === 'development'
-            ? ['query', 'error', 'warn']
-            : ['error'],
-      });
-
-    if (process.env['NODE_ENV'] !== 'production') {
-      globalForPrisma.prisma = this.prisma;
-    }
+    this.prisma = new PrismaClient({
+      adapter,
+      log:
+        process.env['NODE_ENV'] === 'development'
+          ? ['query', 'error', 'warn']
+          : ['error'],
+    });
   }
 
   async onModuleInit(): Promise<void> {
@@ -60,24 +40,15 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Prisma Client connected');
   }
 
-  private poolEnded = false;
-
   async onModuleDestroy(): Promise<void> {
     await this.prisma.$disconnect();
 
-    // Only end the pool if this instance owns it (created it)
-    // In development mode, the pool is shared globally and should only be ended once
-    if (this.ownsPool && !this.poolEnded) {
-      this.poolEnded = true;
-      try {
-        // Under pg 8.x, this throws if already ended
-        // The property this.pool.ending is true if it's ending/ended
-        if (!(this.pool as any).ending) {
-          await this.pool.end();
-        }
-      } catch (error) {
-        // silently ignore multiple end calls
+    try {
+      if (!(this.pool as any).ending) {
+        await this.pool.end();
       }
+    } catch (error) {
+      // Silently ignore duplicate close attempts during shutdown.
     }
 
     this.logger.log('Prisma Client disconnected');

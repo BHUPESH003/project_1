@@ -26,6 +26,7 @@ import { DeliveryService } from '@/delivery/delivery.service';
 import { DeliveryPartnerRepository } from '@/delivery/repositories/delivery-partner.repository';
 import { PrismaService } from '@/prisma/prisma.service';
 import { QueueService } from '@/queue/queue.service';
+import { UserRepository } from '@/users/repositories/user.repository';
 import { CreateOrderDto } from './dto/create-order.dto';
 import {
   CreateBatchOrdersDto,
@@ -54,7 +55,24 @@ export class OrdersService {
     private readonly prismaService: PrismaService,
     private readonly queueService: QueueService,
     private readonly configService: ConfigService,
+    private readonly userRepository: UserRepository,
   ) {}
+
+  private async getOrderUserContact(userId: string): Promise<{
+    phone: string;
+    name?: string;
+  }> {
+    const user = await this.userRepository.findById(userId);
+
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
+    }
+
+    return {
+      phone: user.phone,
+      name: user.name || undefined,
+    };
+  }
 
   /**
    * Create draft order (USER APP)
@@ -151,13 +169,17 @@ export class OrdersService {
           );
         }
       }
-      this.logger.log(`Enriched ${enrichedItems.length} items. Total Cost: ${itemCost}`);
- 
+      this.logger.log(
+        `Enriched ${enrichedItems.length} items. Total Cost: ${itemCost}`,
+      );
+
       enrichedPayload = {
         ...enrichedPayload,
         items: enrichedItems,
       };
-      this.logger.log(`Enriched Payload Items: ${enrichedPayload.items?.length || 0}`);
+      this.logger.log(
+        `Enriched Payload Items: ${enrichedPayload.items?.length || 0}`,
+      );
     }
 
     // Ensure category exists in DB (auto-create if dynamically generated)
@@ -384,7 +406,7 @@ export class OrdersService {
    */
   async update(orderId: string, userId: string, updateOrderDto: any) {
     // Fetch existing order
-    const order = await this.orderRepository.findById(orderId);
+    const order = await this.orderRepository.findById(orderId, false);
     if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
@@ -515,7 +537,9 @@ export class OrdersService {
     this.logger.log(`Found ${orders.length} orders for user ${userId}`);
     return orders.map((order) => {
       const items = (order.orderPayload as any)?.items || [];
-      this.logger.log(`Order ${order.id}: ${items.length} items. First item: ${items[0]?.name || 'N/A'}`);
+      this.logger.log(
+        `Order ${order.id}: ${items.length} items. First item: ${items[0]?.name || 'N/A'}`,
+      );
       return {
         order_id: order.id,
         status: order.status,
@@ -550,9 +574,11 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
- 
+
     const items = (order.orderPayload as any)?.items || [];
-    this.logger.log(`Order Detail fetched: ${orderId}, items: ${items.length}, itemCost: ${order.itemCost}`);
+    this.logger.log(
+      `Order Detail fetched: ${orderId}, items: ${items.length}, itemCost: ${order.itemCost}`,
+    );
 
     return {
       order_id: order.id,
@@ -969,15 +995,14 @@ export class OrdersService {
     }
 
     // Get user info for payment
-    const orderWithUser = await this.orderRepository.findById(orderId, false);
-    const userPhone = orderWithUser?.user?.phone || '';
+    const userContact = await this.getOrderUserContact(order.userId);
 
     // Create payment intent with specified provider (defaults to configured provider)
     const paymentIntent = await this.paymentsService.createPayment(
       orderId,
       PaymentMethod.UPI,
-      userPhone,
-      orderWithUser?.user?.name || undefined,
+      userContact.phone,
+      userContact.name,
       provider,
     );
 
@@ -1110,8 +1135,7 @@ export class OrdersService {
     }
 
     // Get user info for payment
-    const orderWithUser = await this.orderRepository.findById(orderId, false);
-    const userPhone = orderWithUser?.user?.phone || '';
+    const userContact = await this.getOrderUserContact(order.userId);
 
     // Create payment intent via PaymentsService
     // Payment method defaults to UPI for MVP
@@ -1120,8 +1144,8 @@ export class OrdersService {
     const paymentIntent = await this.paymentsService.createPayment(
       orderId,
       paymentMethod,
-      userPhone,
-      orderWithUser?.user?.name || undefined,
+      userContact.phone,
+      userContact.name,
     );
 
     this.logger.log(

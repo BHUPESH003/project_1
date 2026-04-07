@@ -130,16 +130,12 @@ export class RazorpayProvider implements PaymentProvider {
         amount: amountInPaise,
         currency: 'INR',
         receipt: request.orderId,
-        description: `Order #${request.orderId}`,
-        customer_details: {
-          name: request.customerName || 'Customer',
-          email: `${request.customerPhone}@customer.local`,
-          contact: request.customerPhone,
-        },
         // Metadata to track order in webhook
         notes: {
           orderId: request.orderId,
           paymentMethod: request.method,
+          customerName: request.customerName || '',
+          customerPhone: request.customerPhone || '',
         },
       });
 

@@ -5,8 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import RazorpayCheckout from 'react-native-razorpay';
-import { paymentsApi, PaymentProvider } from '@/api/payments.api';
-import { useRouter } from 'expo-router';
+import { paymentsApi } from '@/api/payments.api';
 
 export interface RazorpayPaymentConfig {
   keyId: string;
@@ -21,12 +20,16 @@ export interface RazorpayPaymentConfig {
     color?: string;
   };
   notes?: Record<string, unknown>;
+  enabledMethods?: {
+    upi?: boolean;
+    card?: boolean;
+  };
 }
 
 export interface UseRazorpayPaymentResult {
   isLoading: boolean;
   error: string | null;
-  initiatePayment: (config: RazorpayPaymentConfig) => Promise<void>;
+  initiatePayment: (config: RazorpayPaymentConfig) => Promise<any>;
   verifyPayment: (razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) => Promise<boolean>;
 }
 
@@ -35,7 +38,6 @@ export interface UseRazorpayPaymentResult {
  * Handles payment initiation, verification, and success/failure handling
  */
 export function useRazorpayPayment(orderId: string): UseRazorpayPaymentResult {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,34 +70,36 @@ export function useRazorpayPayment(orderId: string): UseRazorpayPaymentResult {
           },
           notes: config.notes || {
             orderId,
-            provider: PaymentProvider.RAZORPAY,
+            provider: 'razorpay',
           },
           timeout: 900, // 15 minutes
           method: {
-            upi: true,
-            card: true,
-            wallet: true,
-            netbanking: true,
+            upi: config.enabledMethods?.upi ?? true,
+            card: config.enabledMethods?.card ?? true,
+            wallet: false,
+            netbanking: false,
           },
         };
 
         // Open Razorpay checkout
-        await new Promise<void>((resolve, reject) => {
+        const data = await new Promise<any>((resolve, reject) => {
           RazorpayCheckout.open(razorpayConfig)
             .then((paymentData: any) => {
               // Payment successful - paymentData contains razorpay_payment_id, razorpay_order_id, razorpay_signature
-              resolve();
+              resolve(paymentData);
             })
             .catch((error: any) => {
               // Payment failed or user cancelled
               if (error?.code === 'CANCELLED') {
                 setError('Payment cancelled by user');
               } else {
-                setError(`Payment failed: ${error?.message || 'Unknown error'}`);
+                setError(`Payment failed: ${error?.description || error?.message || 'Unknown error'}`);
               }
               reject(error);
             });
         });
+
+        return data;
       } catch (err: any) {
         const errorMessage = err?.message || 'Payment initiation failed';
         setError(errorMessage);

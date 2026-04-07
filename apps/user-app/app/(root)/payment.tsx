@@ -26,6 +26,7 @@ import { multiCartOrdersApi } from '@/api/multiCartOrders.api';
 import { paymentsApi } from '@/api/payments.api';
 import { showToast } from '@/lib/toast';
 import RazorpayCheckout from 'react-native-razorpay';
+import { useRazorpayPayment } from '@/hooks/useRazorpayPayment';
 
 // ── Design Tokens ────────────────────────────────
 const C = {
@@ -77,15 +78,22 @@ export default function PaymentScreen() {
   const selectPaymentMethod = useCheckoutStore((s) => s.selectPaymentMethod);
   const setStep = useCheckoutStore((s) => s.setStep);
   const clearCheckoutState = useMultiCartStore((s) => s.clearCheckoutState);
-  const checkoutReset = useCheckoutStore((s) => s.reset);
+  const resetCheckout = useCheckoutStore((s) => s.reset);
 
   const [paying, setPaying] = useState(false);
+
+  // Use Razorpay Hook
+  const { initiatePayment, verifyPayment } = useRazorpayPayment(
+    orders.length > 0 ? orders[0].orderId : '',
+  );
 
   const handlePay = useCallback(async () => {
     if (!selectedPaymentMethod) {
       showToast({ type: 'error', message: 'Please select a payment method', duration: 2000 });
       return;
     }
+
+    const gatewayMethod = selectedPaymentMethod === 'CARD' ? 'CARD' : 'UPI';
 
     setPaying(true);
     try {
@@ -105,7 +113,7 @@ export default function PaymentScreen() {
 
       const confirmResponse = await multiCartOrdersApi.confirmMultipleOrders({
         deliveryConfirmations,
-        paymentMethod: 'UPI',
+        paymentMethod: gatewayMethod,
       });
 
       if (!confirmResponse.success) {
@@ -138,7 +146,22 @@ export default function PaymentScreen() {
           console.log('[Payment] Razorpay Availability:', isRazorpayModuleAvailable);
 
           if (isRazorpayModuleAvailable) {
-            data = await RazorpayCheckout.open(options);
+            // Use the hook for native Razorpay
+            data = await initiatePayment({
+              keyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? '',
+              amount: paymentIntent.payment_intent?.amount ?? grandTotal,
+              orderId: options.order_id,
+              description: options.description,
+              theme: options.theme,
+              notes: {
+                paymentIntentId: paymentIntent.payment_id,
+                paymentMethod: gatewayMethod,
+              },
+              enabledMethods: {
+                upi: gatewayMethod === 'UPI',
+                card: gatewayMethod === 'CARD',
+              },
+            });
           } else {
             console.log('[Payment] Entering Simulation Mode...');
             // Simulation Mode for Expo Go/Web or missing module
@@ -163,16 +186,29 @@ export default function PaymentScreen() {
             };
           }
 
-          // Verify payment
-          await paymentsApi.verifyPayment(primaryOrder.orderId, {
-            razorpay_payment_id: data.razorpay_payment_id,
-            razorpay_order_id: data.razorpay_order_id,
-            razorpay_signature: data.razorpay_signature,
-          });
+          // Verify payment using the hook or API
+          if (isRazorpayModuleAvailable) {
+            const verified = await verifyPayment(
+              data.razorpay_order_id,
+              data.razorpay_payment_id,
+              data.razorpay_signature,
+            );
+
+            if (!verified) {
+              throw new Error('Payment verification failed');
+            }
+          } else {
+            await paymentsApi.verifyPayment(primaryOrder.orderId, {
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_signature: data.razorpay_signature,
+            });
+          }
 
           // Success
           const sellerIds = sellers.map((s) => s.sellerId);
           clearCheckoutState(sellerIds);
+          resetCheckout();
           setStep('success');
           router.replace('/(root)/checkout-success');
         } catch (payErr: any) {
@@ -196,7 +232,7 @@ export default function PaymentScreen() {
     } finally {
       setPaying(false);
     }
-  }, [selectedPaymentMethod, sellers, orders, grandTotal]);
+  }, [selectedPaymentMethod, sellers, orders, grandTotal, initiatePayment, verifyPayment, clearCheckoutState, resetCheckout, setStep, router]);
 
   const handleBack = useCallback(() => {
     router.back();
@@ -308,12 +344,11 @@ export default function PaymentScreen() {
           })}
         </View>
 
-        {/* ── Other Methods ─────────────────── */}
+        {/* ── Card Payments ─────────────────── */}
         <Text style={[styles.sectionTitle, { marginTop: 32 }]}>
-          Other Methods
+          Card Payments
         </Text>
         <View style={styles.methodsList}>
-          {/* Saved Card */}
           <TouchableOpacity
             style={styles.methodRow}
             onPress={() => selectPaymentMethod('CARD')}
@@ -327,48 +362,13 @@ export default function PaymentScreen() {
                 />
               </View>
               <View>
-                <Text style={styles.methodName}>HDFC Bank Debit Card</Text>
-                <Text style={styles.methodDetail}>XXXX XXXX 4290</Text>
+                <Text style={styles.methodName}>Credit or debit card</Text>
+                <Text style={styles.methodDetail}>Pay securely through Razorpay</Text>
               </View>
             </View>
-            <MaterialIcons name="chevron-right" size={24} color={C.slate600} />
-          </TouchableOpacity>
-
-          <View style={styles.methodDivider} />
-
-          {/* Net Banking */}
-          <TouchableOpacity
-            style={styles.methodRow}
-            onPress={() => selectPaymentMethod('NET_BANKING')}
-          >
-            <View style={styles.methodLeft}>
-              <View style={styles.methodIcon}>
-                <MaterialIcons
-                  name="account-balance"
-                  size={24}
-                  color={selectedPaymentMethod === 'NET_BANKING' ? C.teal400 : C.slate400}
-                />
-              </View>
-              <View>
-                <Text style={styles.methodName}>Net Banking</Text>
-                <Text style={styles.methodDetail}>Choose from all Indian banks</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color={C.slate600} />
-          </TouchableOpacity>
-
-          <View style={styles.methodDivider} />
-
-          {/* Add new card */}
-          <TouchableOpacity style={styles.methodRow}>
-            <View style={styles.methodLeft}>
-              <View style={styles.methodIconDashed}>
-                <MaterialIcons name="add" size={24} color={C.slate500} />
-              </View>
-              <Text style={styles.methodAddText}>
-                Add new credit/debit card
-              </Text>
-            </View>
+            {selectedPaymentMethod === 'CARD' && (
+              <MaterialIcons name="check-circle" size={20} color={C.teal400} />
+            )}
           </TouchableOpacity>
         </View>
 

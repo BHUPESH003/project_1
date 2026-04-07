@@ -59,7 +59,6 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
   const [addressSelectorOpen, setAddressSelectorOpen] = useState(false);
 
   const cart = useMultiCartStore((state) => state.carts[sellerId]);
-  const clearCart = useMultiCartStore((state) => state.clearCart);
   const selectedAddress = useAddressStore((s) => s.selectedAddress);
   const setOrderDraftId = useOrderDraftStore((s) => s.setOrderId);
 
@@ -171,29 +170,8 @@ export const SingleCheckoutFlow: React.FC<SingleCheckoutFlowProps> = (props) => 
 
     try {
       await ordersApi.updateOrder(orderId, { deliveryFee: selectedPartner.price });
-      const confirmResponse = await ordersApi.confirmOrder(orderId, 'UPI');
-      
-      // Check if payment_intent is returned
-      const paymentIntent = (confirmResponse as any)?.payment?.payment_intent;
-      const paymentId = (confirmResponse as any)?.payment?.payment_id;
-      
-      if (paymentIntent) {
-        // Razorpay payment intent received - set orderId in store and navigate to payment screen
-        clearCart(sellerId);
-        setOrderDraftId(orderId);
-        router.push('/order/payment-method');
-      } else {
-        // No payment required (shouldn't happen, but handle gracefully)
-        clearCart(sellerId);
-        Alert.alert('Success', 'Order placed successfully!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/(tabs)/orders');
-            },
-          },
-        ]);
-      }
+      setOrderDraftId(orderId);
+      router.push('/order/payment-method');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to place order. Please try again.');
     } finally {

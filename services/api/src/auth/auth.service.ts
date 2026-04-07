@@ -4,6 +4,7 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@repo/types';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -30,6 +31,7 @@ export class AuthService {
     private otpService: OtpService,
     private jwtService: JwtService,
     private userRepository: UserRepository,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -40,6 +42,18 @@ export class AuthService {
   async requestOtp(dto: RequestOtpDto): Promise<{ success: boolean }> {
     // Generate OTP code
     const code = await this.otpService.generateOtp(dto.phone, dto.role);
+
+    // Check for global OTP bypass (useful if service is expired or for dev)
+    const bypassOtp =
+      this.configService.get<boolean>('BYPASS_OTP', false) ||
+      this.configService.get<string>('BYPASS_OTP') === 'true';
+
+    if (bypassOtp) {
+      this.logger.warn(
+        `[BYPASS] OTP for ${dto.phone}: ${code}. Skipping OTP provider send.`,
+      );
+      return { success: true };
+    }
 
     // Get OTP provider (abstracted - no provider-specific logic)
     const provider = this.otpProviderRegistry.getProvider();
