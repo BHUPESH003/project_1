@@ -27,6 +27,7 @@ import { DeliveryPartnerRepository } from '@/delivery/repositories/delivery-part
 import { PrismaService } from '@/prisma/prisma.service';
 import { QueueService } from '@/queue/queue.service';
 import { UserRepository } from '@/users/repositories/user.repository';
+import { NotificationsService } from '@/notifications/notifications.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import {
   CreateBatchOrdersDto,
@@ -56,6 +57,7 @@ export class OrdersService {
     private readonly queueService: QueueService,
     private readonly configService: ConfigService,
     private readonly userRepository: UserRepository,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async getOrderUserContact(userId: string): Promise<{
@@ -1168,6 +1170,104 @@ export class OrdersService {
   }
 
   /**
+   * Cancel an order (USER APP)
+   * Transition: <cancellable state> → USER_CANCELLED
+   *
+   * Allowed from any pre-PICKED_UP state (CREATED through READY_FOR_PICKUP),
+   * as enforced by the state machine.
+   *
+   * Side effects:
+   * - Refund: the state machine auto-enqueues the refund job on the
+   *   USER_CANCELLED transition (Phase 1.1). We intentionally do NOT enqueue a
+   *   refund here to avoid a double refund. The refund job is idempotent and
+   *   no-ops when there is no successful payment.
+   * - Delivery: any in-flight delivery task is cancelled via the adapter.
+   * - Notification: the seller is notified (best-effort).
+   */
+  async cancelOrder(orderId: string, userId: string, reason?: string) {
+    // Get order
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // Verify ownership
+    if (order.userId !== userId) {
+      throw new ForbiddenException('You can only cancel your own orders');
+    }
+
+    // Verify the order is in a cancellable state (pre-PICKED_UP). The state
+    // machine is the source of truth for which states allow USER_CANCELLED.
+    if (
+      !this.stateMachine.validateTransition(
+        order.status,
+        OrderStatus.USER_CANCELLED,
+      )
+    ) {
+      throw new BadRequestException(
+        `Order in ${order.status} state cannot be cancelled`,
+      );
+    }
+
+    const cancellationReason = reason || 'Cancelled by user';
+    const sellerId = order.sellerId;
+
+    // Record the cancellation reason on the order for quick reference
+    await this.orderRepository.update(orderId, {
+      failureReason: cancellationReason,
+    });
+
+    // Transition to USER_CANCELLED. This writes the reason to OrderStateHistory
+    // and (via the state machine side effect) auto-enqueues the refund job.
+    await this.stateMachine.transition({
+      orderId,
+      toState: OrderStatus.USER_CANCELLED,
+      triggeredBy: userId,
+      reason: cancellationReason,
+    });
+
+    this.logger.log(
+      `Order ${orderId} cancelled by user ${userId}: ${cancellationReason}`,
+    );
+
+    // Cancel any in-flight delivery (best-effort, never blocks cancellation).
+    try {
+      await this.deliveryService.cancelDelivery(orderId, cancellationReason);
+    } catch (error) {
+      this.logger.error(
+        `Error cancelling delivery for cancelled order ${orderId}:`,
+        error,
+      );
+    }
+
+    // Notify the seller (best-effort, never blocks cancellation).
+    if (sellerId) {
+      try {
+        const seller = await this.sellerRepository.findById(sellerId);
+        if (seller?.userId) {
+          await this.notificationsService.sendPushNotification(
+            seller.userId,
+            'Order cancelled',
+            `Order #${orderId} was cancelled by the customer.`,
+            { orderId, type: 'ORDER_CANCELLED', reason: cancellationReason },
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error notifying seller about cancelled order ${orderId}:`,
+          error,
+        );
+      }
+    }
+
+    return {
+      order_id: orderId,
+      status: OrderStatus.USER_CANCELLED,
+      message: 'Order cancelled successfully.',
+    };
+  }
+
+  /**
    * List orders for seller (SELLER APP)
    */
   async getSellerOrders(userId: string, query: GetSellerOrdersDto) {
@@ -1293,7 +1393,9 @@ export class OrdersService {
       sellerId: null, // Clear seller so user can select different one
     });
 
-    // Transition state: PAID → SELLER_REJECTED
+    // Transition state: PAID → SELLER_REJECTED.
+    // Phase 1.1: the state machine automatically enqueues a refund job on this
+    // transition — do NOT enqueue one here to avoid a double refund.
     await this.stateMachine.transition({
       orderId,
       toState: OrderStatus.SELLER_REJECTED,
@@ -1304,6 +1406,26 @@ export class OrdersService {
     this.logger.log(
       `Order ${orderId} rejected by seller ${sellerId}: ${rejectDto.reason}`,
     );
+
+    // Notify the user (best-effort — never blocks or throws).
+    // SELLER_REJECTED always comes from PAID, so a refund has been initiated.
+    try {
+      await this.notificationsService.sendPushNotification(
+        order.userId,
+        'Order not accepted',
+        `Your order was not accepted by ${seller.shopName}. A refund has been initiated.`,
+        {
+          orderId,
+          type: 'ORDER_SELLER_REJECTED',
+          sellerName: seller.shopName,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error notifying user ${order.userId} about rejected order ${orderId}:`,
+        error,
+      );
+    }
 
     return {
       order_id: orderId,

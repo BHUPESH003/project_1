@@ -332,6 +332,29 @@ export class CartService {
     return { success: true, itemId };
   }
 
+  /**
+   * Remove all cart items belonging to the given sellers.
+   * Called after successful order placement to clear purchased items.
+   *
+   * CartItemFile junction rows are cascade-deleted by the DB FK.
+   * The underlying File records are intentionally preserved — they are now
+   * referenced by the order's orderPayload and must not be deleted.
+   */
+  async removeItemsBySeller(
+    userId: string,
+    sellerIds: string[],
+  ): Promise<void> {
+    if (sellerIds.length === 0) return;
+    const cart = await this.prisma.prisma.cart.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!cart) return;
+    await this.prisma.prisma.cartItem.deleteMany({
+      where: { cartId: cart.id, sellerId: { in: sellerIds } },
+    });
+  }
+
   private async deleteFileEverywhere(fileId: string, storageKey: string) {
     // Delete from S3 (best effort)
     try {

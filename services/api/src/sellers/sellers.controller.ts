@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -29,6 +31,10 @@ import { SetStatusDto } from './dto/set-status.dto';
 import { FindAvailableSellersDto } from './dto/find-available-sellers.dto';
 import { GetSellerQueryDto } from './dto/get-seller.dto';
 import { SellerProductsQueryDto } from './dto/seller-products-query.dto';
+import { RegisterSellerDto } from './dto/register-seller.dto';
+import { UpdateSellerDto } from './dto/update-seller.dto';
+import { CreateProductDto } from '@/products/dto/create-product.dto';
+import { UpdateProductDto } from '@/products/dto/update-product.dto';
 
 /**
  * Sellers Controller - MVP Scope
@@ -196,6 +202,135 @@ export class SellersController {
     @Request() req: { user?: { id: string } },
   ) {
     return this.sellersService.getSellerProducts(id, query, req.user?.id);
+  }
+
+  // ─── Phase 3.1: Seller Self-Registration ────────────────────────────────
+
+  /**
+   * POST /v1/sellers/register
+   * Register as a seller. One profile per user.
+   * Requires SELLER role.
+   */
+  @Post('register')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Register a seller profile for the authenticated user',
+  })
+  @ApiResponse({ status: 201, description: 'Seller profile created' })
+  @ApiResponse({ status: 409, description: 'Seller profile already exists' })
+  registerSeller(
+    @Body() dto: RegisterSellerDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.registerSeller(req.user.id, dto);
+  }
+
+  /**
+   * GET /v1/sellers/me
+   * Get own seller profile with stats.
+   * Requires SELLER role.
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get own seller profile with order stats' })
+  @ApiResponse({ status: 200, description: 'Seller profile returned' })
+  getMyProfile(@Request() req: { user: { id: string } }) {
+    return this.sellersService.getMyProfile(req.user.id);
+  }
+
+  /**
+   * PATCH /v1/sellers/me
+   * Update own seller profile.
+   * Requires SELLER role.
+   */
+  @Patch('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update own seller profile' })
+  @ApiResponse({ status: 200, description: 'Seller profile updated' })
+  updateMyProfile(
+    @Body() dto: UpdateSellerDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.updateMyProfile(req.user.id, dto);
+  }
+
+  // ─── Phase 3.2: Seller Product Management ───────────────────────────────
+
+  /**
+   * GET /v1/sellers/me/products
+   * List own products.
+   */
+  @Get('me/products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List own products' })
+  @ApiResponse({ status: 200, description: 'Products returned' })
+  listMyProducts(
+    @Query() query: SellerProductsQueryDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.listMyProducts(req.user.id, query);
+  }
+
+  /**
+   * POST /v1/sellers/me/products
+   * Create a product under the authenticated seller.
+   */
+  @Post('me/products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a product for own catalog' })
+  @ApiResponse({ status: 201, description: 'Product created' })
+  createProduct(
+    @Body() dto: CreateProductDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.createProduct(req.user.id, dto);
+  }
+
+  /**
+   * PATCH /v1/sellers/me/products/:productId
+   * Update a product the seller owns.
+   */
+  @Patch('me/products/:productId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update own product' })
+  @ApiResponse({ status: 200, description: 'Product updated' })
+  @ApiResponse({ status: 404, description: 'Product not found' })
+  updateProduct(
+    @Param('productId') productId: string,
+    @Body() dto: UpdateProductDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.updateProduct(req.user.id, productId, dto);
+  }
+
+  /**
+   * DELETE /v1/sellers/me/products/:productId
+   * Mark product out of stock (preserves order history).
+   */
+  @Delete('me/products/:productId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove product from catalog (marks out of stock)' })
+  @ApiResponse({ status: 200, description: 'Product marked out of stock' })
+  @ApiResponse({ status: 404, description: 'Product not found' })
+  deleteProduct(
+    @Param('productId') productId: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.deleteProduct(req.user.id, productId);
   }
 
   /**

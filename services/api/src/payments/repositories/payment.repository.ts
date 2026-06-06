@@ -58,6 +58,10 @@ export interface UpdatePaymentData {
   failureReason?: string;
   failureCode?: string;
   paidAt?: Date;
+  // Refund tracking
+  refundAmount?: number;
+  refundStatus?: string;
+  refundedAt?: Date | null;
 }
 
 @Injectable()
@@ -149,6 +153,15 @@ export class PaymentRepository {
     }
     if (data.paidAt !== undefined) {
       updateData.paidAt = data.paidAt;
+    }
+    if (data.refundAmount !== undefined) {
+      updateData.refundAmount = data.refundAmount;
+    }
+    if (data.refundStatus !== undefined) {
+      updateData.refundStatus = data.refundStatus;
+    }
+    if (data.refundedAt !== undefined) {
+      updateData.refundedAt = data.refundedAt;
     }
 
     const payment = await this.prismaService.prisma.payment.update({

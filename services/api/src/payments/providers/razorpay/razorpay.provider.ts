@@ -27,6 +27,9 @@ import {
   VerifyPaymentResponse,
   WebhookPayload,
   WebhookVerificationResult,
+  RefundPaymentRequest,
+  RefundPaymentResponse,
+  RefundStatus,
 } from '../payment-provider.interface';
 import * as crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
@@ -308,6 +311,34 @@ export class RazorpayProvider implements PaymentProvider {
       const event = webhookData.event;
       const entity = webhookData.entity || {};
 
+      // Refund lifecycle events (refund.created / refund.processed / refund.failed).
+      // The entity here is a Razorpay refund object, which carries payment_id
+      // (not order_id). The internal orderId is recovered from notes set when
+      // the refund was created.
+      if (typeof event === 'string' && event.startsWith('refund.')) {
+        let refundStatus: RefundStatus = 'PENDING';
+        if (event === 'refund.processed' || entity.status === 'processed') {
+          refundStatus = 'PROCESSED';
+        } else if (event === 'refund.failed' || entity.status === 'failed') {
+          refundStatus = 'FAILED';
+        }
+
+        this.logger.log(
+          `Razorpay refund webhook verified: event=${event}, refundId=${entity.id}, paymentId=${entity.payment_id}, status=${refundStatus}`,
+        );
+
+        return {
+          valid: true,
+          eventType: 'refund',
+          orderId: entity.notes?.orderId,
+          gatewayPaymentId: entity.payment_id,
+          refundId: entity.id,
+          refundStatus,
+          amount: entity.amount ? entity.amount / 100 : undefined,
+          signature,
+        };
+      }
+
       if (!entity.order_id) {
         return {
           valid: false,
@@ -334,6 +365,7 @@ export class RazorpayProvider implements PaymentProvider {
 
       return {
         valid: true,
+        eventType: 'payment',
         orderId,
         gatewayOrderId: entity.order_id,
         gatewayPaymentId: entity.id,
@@ -380,6 +412,91 @@ export class RazorpayProvider implements PaymentProvider {
         `Webhook signature verification error: ${error?.message}`,
       );
       return false;
+    }
+  }
+
+  /**
+   * Refund a captured payment (full or partial).
+   *
+   * Razorpay refund API: POST /v1/payments/{payment_id}/refund
+   * Amount is in paise. Status returned is one of pending/processed/failed.
+   * The internal orderId is stored in notes so the refund webhook can be
+   * correlated back to the order.
+   *
+   * STATUS: REAL - Production-ready Razorpay refund integration
+   */
+  async refundPayment(
+    request: RefundPaymentRequest,
+  ): Promise<RefundPaymentResponse> {
+    if (!request.gatewayPaymentId) {
+      throw new BadRequestException(
+        'Razorpay payment ID is required to issue a refund',
+      );
+    }
+
+    try {
+      const amountInPaise = Math.round(request.amount * 100);
+
+      const refundResponse = await this.httpClient.post(
+        `/payments/${request.gatewayPaymentId}/refund`,
+        {
+          amount: amountInPaise,
+          // speed: 'normal' is the default; 'optimum' routes via the fastest mode.
+          speed: 'normal',
+          notes: {
+            ...(request.notes || {}),
+            reason: request.reason || 'Order refund',
+          },
+        },
+      );
+
+      if (!refundResponse.data || !refundResponse.data.id) {
+        throw new Error(
+          `Razorpay refund failed: ${JSON.stringify(refundResponse.data)}`,
+        );
+      }
+
+      const refund = refundResponse.data;
+      const status = this.mapRefundStatus(refund.status);
+
+      this.logger.log(
+        `Razorpay refund created for payment ${request.gatewayPaymentId} ` +
+          `(refund: ${refund.id}, status: ${refund.status} -> ${status}, amount: ₹${request.amount})`,
+      );
+
+      return {
+        refundId: refund.id,
+        status,
+        amount: refund.amount ? refund.amount / 100 : request.amount,
+      };
+    } catch (error: any) {
+      const errorMsg =
+        error?.response?.data?.error?.description ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Unknown error';
+
+      this.logger.error(
+        `Razorpay refund failed for payment ${request.gatewayPaymentId}: ${errorMsg}`,
+        error?.response?.data || error,
+      );
+
+      throw new BadRequestException(`Razorpay refund failed: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Map Razorpay refund status (pending/processed/failed) to normalized status.
+   */
+  private mapRefundStatus(razorpayStatus: string): RefundStatus {
+    switch (razorpayStatus) {
+      case 'processed':
+        return 'PROCESSED';
+      case 'failed':
+        return 'FAILED';
+      case 'pending':
+      default:
+        return 'PENDING';
     }
   }
 }

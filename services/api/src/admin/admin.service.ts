@@ -30,6 +30,8 @@ import { PaymentRepository } from '@/payments/repositories/payment.repository';
 import { PaymentStatus, DeliveryStatus } from '@repo/types';
 import { AdminAuditService, AdminActionType } from './admin-audit.service';
 import { PrismaService } from '@/prisma/prisma.service';
+import { GetSellersDto } from './dto/get-sellers.dto';
+import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
 
 @Injectable()
 export class AdminService {
@@ -43,6 +45,7 @@ export class AdminService {
     private readonly deliveryRepository: DeliveryRepository,
     private readonly paymentRepository: PaymentRepository,
     private readonly auditService: AdminAuditService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   /**
@@ -449,6 +452,120 @@ export class AdminService {
             note: 'Refund will be processed manually',
           }
         : null,
+    };
+  }
+
+  // ─── Phase 3.3: Admin Seller Management ─────────────────────────────────
+
+  async getSellers(query: GetSellersDto) {
+    return this.sellerRepository.findAll({
+      status: query.status,
+      categoryId: query.category,
+      isVerified: query.isVerified,
+      isSuspended: query.isSuspended,
+      page: query.page,
+      limit: query.limit,
+    });
+  }
+
+  async getSellerById(id: string) {
+    const seller = await this.sellerRepository.findById(id, true);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    const [totalOrders, completedOrders, revenue] = await Promise.all([
+      this.prismaService.prisma.order.count({ where: { sellerId: id } }),
+      this.prismaService.prisma.order.count({
+        where: { sellerId: id, status: 'DELIVERED' },
+      }),
+      this.prismaService.prisma.order.aggregate({
+        where: { sellerId: id, status: 'DELIVERED' },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+
+    return {
+      ...seller,
+      stats: {
+        totalOrders,
+        completedOrders,
+        totalRevenue:
+          revenue._sum.totalAmount != null
+            ? Number(revenue._sum.totalAmount)
+            : 0,
+      },
+    };
+  }
+
+  async updateSellerById(
+    id: string,
+    dto: UpdateAdminSellerDto,
+    adminId: string,
+  ) {
+    const seller = await this.sellerRepository.findById(id, false);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    const updateData: Record<string, unknown> = {};
+    if (dto.shopName !== undefined) updateData.shopName = dto.shopName;
+    if (dto.address !== undefined) updateData.address = dto.address;
+    if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.isTrending !== undefined) updateData.isTrending = dto.isTrending;
+
+    const updated = await this.sellerRepository.update(id, updateData as any);
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.REASSIGN_SELLER,
+      id,
+      `Admin updated seller profile`,
+      { changes: updateData },
+    );
+
+    return updated;
+  }
+
+  async verifySeller(id: string, adminId: string) {
+    const seller = await this.sellerRepository.findById(id, false);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    const updated = await this.sellerRepository.update(id, {
+      isVerified: true,
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.REASSIGN_SELLER,
+      id,
+      `Seller verified`,
+      {},
+    );
+
+    this.logger.log(`Admin ${adminId} verified seller ${id}`);
+    return { id: updated.id, isVerified: updated.isVerified };
+  }
+
+  async suspendSeller(id: string, adminId: string) {
+    const seller = await this.sellerRepository.findById(id, false);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    // Force OFFLINE when suspending
+    const updated = await this.sellerRepository.update(id, {
+      isSuspended: true,
+      status: 'OFFLINE',
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.REASSIGN_SELLER,
+      id,
+      `Seller suspended`,
+      {},
+    );
+
+    this.logger.log(`Admin ${adminId} suspended seller ${id}`);
+    return {
+      id: updated.id,
+      isSuspended: updated.isSuspended,
+      status: updated.status,
     };
   }
 }

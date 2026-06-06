@@ -1,9 +1,20 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SellerStatus } from '@repo/types';
 import { Prisma } from '@prisma/client';
 import { SetStatusDto } from './dto/set-status.dto';
 import { FindAvailableSellersDto } from './dto/find-available-sellers.dto';
+import { RegisterSellerDto } from './dto/register-seller.dto';
+import { UpdateSellerDto } from './dto/update-seller.dto';
+import { CreateProductDto } from '@/products/dto/create-product.dto';
+import { UpdateProductDto } from '@/products/dto/update-product.dto';
 import { SellerRepository } from './repositories/seller.repository';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FavoritesService } from '@/favorites/favorites.service';
@@ -350,5 +361,222 @@ export class SellersService {
     });
 
     return { products: rows, sync_timestamp: new Date().toISOString() };
+  }
+
+  // ─── Phase 3.1: Seller Self-Registration ──────────────────────────────────
+
+  async registerSeller(userId: string, dto: RegisterSellerDto) {
+    const existing = await this.sellerRepository.findByUserId(userId);
+    if (existing) throw new ConflictException('Seller profile already exists');
+
+    if (dto.categoryIds.length === 0) {
+      throw new BadRequestException('At least one category is required');
+    }
+
+    const seller = await this.sellerRepository.create({
+      userId,
+      shopName: dto.shopName,
+      address: dto.address,
+      description: dto.description,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      pricePerPage: dto.pricePerPage,
+      prepTimeMinutes: dto.prepTimeMinutes,
+      status: SellerStatus.OFFLINE,
+    });
+
+    // Validate categories exist and create junction records
+    const categories = await this.prismaService.prisma.category.findMany({
+      where: { id: { in: dto.categoryIds } },
+      select: { id: true },
+    });
+    const validIds = new Set(categories.map((c) => c.id));
+    const invalid = dto.categoryIds.filter((id) => !validIds.has(id));
+    if (invalid.length > 0) {
+      throw new BadRequestException(
+        `Unknown category IDs: ${invalid.join(', ')}`,
+      );
+    }
+
+    await this.prismaService.prisma.sellerCategory.createMany({
+      data: dto.categoryIds.map((categoryId) => ({
+        sellerId: seller.id,
+        categoryId,
+      })),
+      skipDuplicates: true,
+    });
+
+    this.logger.log(`Seller registered: ${seller.id} by user ${userId}`);
+
+    return this.sellerRepository.findByUserId(userId, true);
+  }
+
+  async getMyProfile(userId: string) {
+    const seller = await this.sellerRepository.findByUserId(userId, true);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+
+    const [totalOrders, completedOrders, revenue] = await Promise.all([
+      this.prismaService.prisma.order.count({ where: { sellerId: seller.id } }),
+      this.prismaService.prisma.order.count({
+        where: { sellerId: seller.id, status: 'DELIVERED' },
+      }),
+      this.prismaService.prisma.order.aggregate({
+        where: { sellerId: seller.id, status: 'DELIVERED' },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+
+    const bucket = this.configService.get<string>('S3_BUCKET_NAME');
+    const region = this.configService.get<string>('AWS_REGION');
+    const baseUrl = this.configService.get<string>('S3_PUBLIC_BASE_URL');
+
+    return {
+      id: seller.id,
+      shopName: seller.shopName,
+      address: seller.address,
+      description: seller.description,
+      latitude: seller.latitude,
+      longitude: seller.longitude,
+      pricePerPage: seller.pricePerPage,
+      prepTimeMinutes: seller.prepTimeMinutes,
+      status: seller.status,
+      statusUpdatedAt: seller.statusUpdatedAt,
+      isTrending: seller.isTrending,
+      isVerified: seller.isVerified,
+      isSuspended: seller.isSuspended,
+      imagePath: seller.imagePath,
+      imageUrl: buildAssetUrl(seller.imagePath, {
+        s3PublicBaseUrl: baseUrl ?? undefined,
+        s3Bucket: bucket ?? undefined,
+        s3Region: region ?? undefined,
+      }),
+      rating: seller.rating,
+      categories: seller.categories?.map((sc) => sc.category) ?? [],
+      stats: {
+        totalOrders,
+        completedOrders,
+        totalRevenue:
+          revenue._sum.totalAmount != null
+            ? Number(revenue._sum.totalAmount)
+            : 0,
+      },
+    };
+  }
+
+  async updateMyProfile(userId: string, dto: UpdateSellerDto) {
+    const seller = await this.sellerRepository.findByUserId(userId);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+
+    if (seller.isSuspended) {
+      throw new ForbiddenException(
+        'Suspended sellers cannot update their profile',
+      );
+    }
+
+    const updateData: Partial<{
+      shopName: string;
+      address: string;
+      description: string;
+      latitude: number;
+      longitude: number;
+      pricePerPage: number;
+      prepTimeMinutes: number;
+      imagePath: string;
+    }> = {};
+
+    if (dto.shopName !== undefined) updateData.shopName = dto.shopName;
+    if (dto.address !== undefined) updateData.address = dto.address;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.latitude !== undefined) updateData.latitude = dto.latitude;
+    if (dto.longitude !== undefined) updateData.longitude = dto.longitude;
+    if (dto.pricePerPage !== undefined)
+      updateData.pricePerPage = dto.pricePerPage;
+    if (dto.prepTimeMinutes !== undefined)
+      updateData.prepTimeMinutes = dto.prepTimeMinutes;
+    if (dto.imagePath !== undefined) updateData.imagePath = dto.imagePath;
+
+    return this.sellerRepository.update(seller.id, updateData);
+  }
+
+  // ─── Phase 3.2: Seller Product Management ─────────────────────────────────
+
+  private async getSellerForUser(userId: string) {
+    const seller = await this.sellerRepository.findByUserId(userId);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+    return seller;
+  }
+
+  async createProduct(userId: string, dto: CreateProductDto) {
+    const seller = await this.getSellerForUser(userId);
+
+    return this.prismaService.prisma.product.create({
+      data: {
+        sellerId: seller.id,
+        name: dto.name,
+        description: dto.description ?? null,
+        category: dto.category,
+        unit: dto.unit ?? null,
+        price: dto.price,
+        mrp: dto.mrp ?? null,
+        image: dto.image ?? null,
+        inStock: dto.inStock ?? true,
+        isBestSeller: dto.isBestSeller ?? false,
+      },
+    });
+  }
+
+  async updateProduct(
+    userId: string,
+    productId: string,
+    dto: UpdateProductDto,
+  ) {
+    const seller = await this.getSellerForUser(userId);
+
+    const product = await this.prismaService.prisma.product.findFirst({
+      where: { id: productId, sellerId: seller.id },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+
+    const updateData: Record<string, unknown> = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.category !== undefined) updateData.category = dto.category;
+    if (dto.unit !== undefined) updateData.unit = dto.unit;
+    if (dto.price !== undefined) updateData.price = dto.price;
+    if (dto.mrp !== undefined) updateData.mrp = dto.mrp;
+    if (dto.image !== undefined) updateData.image = dto.image;
+    if (dto.inStock !== undefined) updateData.inStock = dto.inStock;
+    if (dto.isBestSeller !== undefined)
+      updateData.isBestSeller = dto.isBestSeller;
+
+    return this.prismaService.prisma.product.update({
+      where: { id: productId },
+      data: updateData,
+    });
+  }
+
+  async deleteProduct(userId: string, productId: string) {
+    const seller = await this.getSellerForUser(userId);
+
+    const product = await this.prismaService.prisma.product.findFirst({
+      where: { id: productId, sellerId: seller.id },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+
+    // Mark out of stock rather than hard-delete to preserve order history integrity
+    await this.prismaService.prisma.product.update({
+      where: { id: productId },
+      data: { inStock: false },
+    });
+
+    return { success: true, productId };
+  }
+
+  async listMyProducts(
+    userId: string,
+    query: { filter?: string; limit?: number; offset?: number },
+  ) {
+    const seller = await this.getSellerForUser(userId);
+    return this.getSellerProducts(seller.id, query);
   }
 }

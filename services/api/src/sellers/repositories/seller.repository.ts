@@ -16,6 +16,8 @@ export interface SellerEntity {
   status: SellerStatus;
   statusUpdatedAt: Date | null;
   isTrending: boolean;
+  isVerified: boolean;
+  isSuspended: boolean;
   pricePerPage: unknown;
   prepTimeMinutes: number;
   imagePath: string | null;
@@ -86,11 +88,69 @@ export class SellerRepository {
   /**
    * Find seller by user ID
    */
-  async findByUserId(userId: string): Promise<SellerEntity | null> {
+  async findByUserId(
+    userId: string,
+    includeRelations = false,
+  ): Promise<SellerEntity | null> {
     const seller = await this.prismaService.prisma.seller.findUnique({
       where: { userId },
+      include: includeRelations
+        ? {
+            user: { select: { id: true, phone: true, name: true } },
+            categories: {
+              include: {
+                category: { select: { id: true, name: true, status: true } },
+              },
+            },
+          }
+        : undefined,
     });
     return seller ? this.mapToEntity(seller) : null;
+  }
+
+  /**
+   * Find all sellers (admin use — no ONLINE filter, supports full filter set)
+   */
+  async findAll(filters?: {
+    status?: string;
+    categoryId?: string;
+    isVerified?: boolean;
+    isSuspended?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<{ sellers: SellerEntity[]; total: number }> {
+    const page = Math.max(filters?.page ?? 1, 1);
+    const limit = Math.min(Math.max(filters?.limit ?? 20, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filters?.status) where.status = filters.status;
+    if (filters?.categoryId)
+      where.categories = { some: { categoryId: filters.categoryId } };
+    if (filters?.isVerified !== undefined)
+      where.isVerified = filters.isVerified;
+    if (filters?.isSuspended !== undefined)
+      where.isSuspended = filters.isSuspended;
+
+    const [rows, total] = await Promise.all([
+      this.prismaService.prisma.seller.findMany({
+        where,
+        include: {
+          user: { select: { id: true, phone: true, name: true } },
+          categories: {
+            include: {
+              category: { select: { id: true, name: true, status: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prismaService.prisma.seller.count({ where }),
+    ]);
+
+    return { sellers: rows.map((s) => this.mapToEntity(s)), total };
   }
 
   /**
@@ -216,10 +276,12 @@ export class SellerRepository {
     userId: string;
     shopName: string;
     address: string;
+    description?: string;
     latitude: number;
     longitude: number;
-    pricePerPage: number;
-    prepTimeMinutes: number;
+    pricePerPage?: number;
+    prepTimeMinutes?: number;
+    imagePath?: string;
     status?: SellerStatus;
   }): Promise<SellerEntity> {
     const seller = await this.prismaService.prisma.seller.create({
@@ -227,10 +289,12 @@ export class SellerRepository {
         userId: data.userId,
         shopName: data.shopName,
         address: data.address,
+        description: data.description ?? null,
         latitude: data.latitude,
         longitude: data.longitude,
-        pricePerPage: data.pricePerPage,
-        prepTimeMinutes: data.prepTimeMinutes,
+        pricePerPage: data.pricePerPage ?? 0,
+        prepTimeMinutes: data.prepTimeMinutes ?? 15,
+        imagePath: data.imagePath ?? null,
         status: (data.status ??
           SellerStatus.OFFLINE) as unknown as SellerStatus,
       },
@@ -239,22 +303,28 @@ export class SellerRepository {
   }
 
   /**
-   * Update seller
+   * Update seller — supports both seller self-edits and admin edits
    */
   async update(
     id: string,
     data: Partial<{
       shopName: string;
       address: string;
+      description: string;
       latitude: number;
       longitude: number;
       pricePerPage: number;
       prepTimeMinutes: number;
+      imagePath: string;
+      status: string;
+      isTrending: boolean;
+      isVerified: boolean;
+      isSuspended: boolean;
     }>,
   ): Promise<SellerEntity> {
     const seller = await this.prismaService.prisma.seller.update({
       where: { id },
-      data,
+      data: data as any,
     });
     return this.mapToEntity(seller);
   }
@@ -306,6 +376,8 @@ export class SellerRepository {
       ...seller,
       status: seller.status as SellerStatus,
       isTrending: seller.isTrending ?? false,
+      isVerified: seller.isVerified ?? false,
+      isSuspended: seller.isSuspended ?? false,
       prepTimeMinutes: seller.prepTimeMinutes ?? 0,
       imagePath: seller.imagePath ?? null,
       rating: seller.rating != null ? Number(seller.rating) : null,

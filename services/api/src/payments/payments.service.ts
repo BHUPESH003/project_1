@@ -21,6 +21,7 @@ import {
   CreatePaymentRequest,
   VerifyPaymentRequest,
   WebhookPayload,
+  WebhookVerificationResult,
 } from './providers/payment-provider.interface';
 
 /**
@@ -52,6 +53,23 @@ export interface VerifyPaymentResponse {
   amount?: number;
   paid_at?: Date;
   failure_reason?: string;
+}
+
+/**
+ * Initiate Refund Result
+ *
+ * Returned by initiateRefund. Intentionally does NOT throw for "not refundable"
+ * cases (no payment / not SUCCESS / already refunded) so that the auto-refund
+ * background job treats them as terminal success instead of retrying forever.
+ * Only transient/gateway errors throw (to trigger a job retry).
+ */
+export interface InitiateRefundResult {
+  refunded: boolean;
+  orderId: string;
+  refundId?: string;
+  refundStatus?: string; // PENDING | PROCESSED | FAILED
+  amount?: number;
+  message: string;
 }
 
 @Injectable()
@@ -309,9 +327,25 @@ export class PaymentsService {
       // Parse and verify webhook
       const verification = await provider.parseWebhook(payload, signature);
 
-      if (!verification.valid || !verification.orderId) {
+      if (!verification.valid) {
         this.logger.warn(
           `Invalid webhook received: ${verification.error || 'Unknown error'}`,
+        );
+        return {
+          processed: false,
+          message: verification.error || 'Invalid webhook',
+        };
+      }
+
+      // Refund lifecycle webhooks update refund status only; they never touch
+      // order state. Handled separately from payment-capture events.
+      if (verification.eventType === 'refund') {
+        return this.handleRefundWebhook(verification);
+      }
+
+      if (!verification.orderId) {
+        this.logger.warn(
+          `Invalid webhook received: ${verification.error || 'Order ID missing'}`,
         );
         return {
           processed: false,
@@ -435,6 +469,197 @@ export class PaymentsService {
       // Don't throw - webhook should return success even if state transition fails
       // State can be manually corrected by admin
     }
+  }
+
+  /**
+   * Initiate a refund for an order's payment.
+   *
+   * Called by the auto-refund background job when an order fails after payment
+   * (SELLER_REJECTED / USER_CANCELLED / DELIVERY_FAILED).
+   *
+   * Idempotent and tolerant by design:
+   * - No payment / payment not SUCCESS / already refunded → returns
+   *   { refunded: false | true } WITHOUT throwing, so the job does not retry.
+   * - Gateway/network failures throw, so the job retries with backoff.
+   *
+   * Does a full refund of the captured amount. (Partial refunds can layer on
+   * later by accepting an explicit amount.)
+   *
+   * @param orderId - Order ID whose payment should be refunded
+   * @param reason - Human-readable reason (stored on the gateway refund notes)
+   */
+  async initiateRefund(
+    orderId: string,
+    reason: string,
+  ): Promise<InitiateRefundResult> {
+    // Find payment by orderId
+    const payment = await this.paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+      this.logger.warn(
+        `Refund requested for order ${orderId} but no payment exists - nothing to refund`,
+      );
+      return {
+        refunded: false,
+        orderId,
+        message: 'No payment found for order',
+      };
+    }
+
+    // Idempotency: refund already initiated or completed → no-op
+    if (
+      payment.status === PaymentStatus.REFUNDED ||
+      payment.refundStatus === 'PROCESSED' ||
+      payment.refundStatus === 'PENDING'
+    ) {
+      this.logger.log(
+        `Refund already initiated for order ${orderId} (status: ${payment.status}, refundStatus: ${payment.refundStatus}) - idempotent`,
+      );
+      return {
+        refunded: true,
+        orderId,
+        refundStatus: payment.refundStatus || PaymentStatus.REFUNDED,
+        amount: payment.refundAmount ?? payment.amount,
+        message: 'Refund already initiated (idempotent)',
+      };
+    }
+
+    // Only SUCCESS payments are refundable. Anything else (PENDING/FAILED) means
+    // the customer was never charged, so there is nothing to refund.
+    if (payment.status !== PaymentStatus.SUCCESS) {
+      this.logger.warn(
+        `Refund skipped for order ${orderId} - payment status is ${payment.status} (only SUCCESS is refundable)`,
+      );
+      return {
+        refunded: false,
+        orderId,
+        message: `Payment status ${payment.status} is not refundable`,
+      };
+    }
+
+    if (!payment.gatewayPaymentId) {
+      // Captured payment with no gateway payment id is a data inconsistency we
+      // can't resolve automatically. Don't retry — surface for manual handling.
+      this.logger.error(
+        `Refund skipped for order ${orderId} - payment ${payment.id} is SUCCESS but has no gatewayPaymentId`,
+      );
+      return {
+        refunded: false,
+        orderId,
+        message: 'Payment is missing gateway payment id',
+      };
+    }
+
+    // Resolve the provider that processed the original payment
+    const provider = this.providerRegistry.getProvider(payment.gatewayName!);
+
+    // Call the gateway. Gateway/network errors propagate so the job retries.
+    const refund = await provider.refundPayment({
+      gatewayPaymentId: payment.gatewayPaymentId,
+      amount: payment.amount,
+      reason,
+      notes: {
+        orderId,
+        gatewayOrderId: payment.gatewayOrderId || '',
+      },
+    });
+
+    // Persist refund outcome. Payment only flips to REFUNDED once the gateway
+    // confirms the refund is PROCESSED; PENDING refunds are finalized later via
+    // the refund webhook.
+    const isProcessed = refund.status === 'PROCESSED';
+    await this.paymentRepository.update(payment.id, {
+      refundAmount: refund.amount,
+      refundStatus: refund.status,
+      refundedAt: isProcessed ? new Date() : null,
+      status: isProcessed ? PaymentStatus.REFUNDED : undefined,
+    });
+
+    this.logger.log(
+      `Refund initiated for order ${orderId} (payment: ${payment.id}, refund: ${refund.refundId}, ` +
+        `status: ${refund.status}, amount: ₹${refund.amount}, reason: ${reason})`,
+    );
+
+    return {
+      refunded: true,
+      orderId,
+      refundId: refund.refundId,
+      refundStatus: refund.status,
+      amount: refund.amount,
+      message: `Refund ${refund.status.toLowerCase()}`,
+    };
+  }
+
+  /**
+   * Handle a refund-status webhook from the gateway.
+   *
+   * Finalizes refund state when the gateway confirms (or fails) a previously
+   * initiated refund. Idempotent — duplicate webhooks are safely ignored.
+   * NEVER mutates order state.
+   */
+  private async handleRefundWebhook(
+    verification: WebhookVerificationResult,
+  ): Promise<{
+    processed: boolean;
+    orderId?: string;
+    status?: PaymentStatus;
+    message: string;
+  }> {
+    const { orderId, gatewayPaymentId, refundStatus, refundId, amount } =
+      verification;
+
+    // Locate the payment by orderId (preferred) or by gateway payment id.
+    let payment = orderId
+      ? await this.paymentRepository.findByOrderId(orderId)
+      : null;
+    if (!payment && gatewayPaymentId) {
+      payment =
+        await this.paymentRepository.findByGatewayPaymentId(gatewayPaymentId);
+    }
+
+    if (!payment) {
+      this.logger.warn(
+        `Refund webhook received but no matching payment found (orderId: ${orderId}, refundId: ${refundId})`,
+      );
+      return {
+        processed: false,
+        message: 'Payment not found for refund webhook',
+      };
+    }
+
+    // Idempotency: already finalized → ignore.
+    if (
+      payment.status === PaymentStatus.REFUNDED &&
+      payment.refundStatus === 'PROCESSED'
+    ) {
+      this.logger.log(
+        `Refund webhook already processed for order ${payment.orderId} (refund: ${refundId}) - idempotent`,
+      );
+      return {
+        processed: true,
+        orderId: payment.orderId,
+        status: payment.status,
+        message: 'Refund webhook already processed (idempotent)',
+      };
+    }
+
+    const isProcessed = refundStatus === 'PROCESSED';
+    await this.paymentRepository.update(payment.id, {
+      refundStatus: refundStatus || payment.refundStatus || undefined,
+      refundAmount: amount ?? payment.refundAmount ?? undefined,
+      refundedAt: isProcessed ? new Date() : undefined,
+      status: isProcessed ? PaymentStatus.REFUNDED : undefined,
+    });
+
+    this.logger.log(
+      `Refund webhook processed for order ${payment.orderId} (refund: ${refundId}, status: ${refundStatus})`,
+    );
+
+    return {
+      processed: true,
+      orderId: payment.orderId,
+      status: isProcessed ? PaymentStatus.REFUNDED : payment.status,
+      message: `Refund ${(refundStatus || 'updated').toLowerCase()}`,
+    };
   }
 
   /**

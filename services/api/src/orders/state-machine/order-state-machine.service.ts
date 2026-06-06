@@ -50,6 +50,17 @@ export interface TransitionResult {
   success: boolean;
 }
 
+/**
+ * Failure states that, when reached after the customer has paid, must trigger
+ * an automatic refund. The refund job itself is idempotent and no-ops when the
+ * order has no successful payment, so it is safe to enqueue unconditionally.
+ */
+const REFUND_TRIGGER_STATES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.SELLER_REJECTED,
+  OrderStatus.USER_CANCELLED,
+  OrderStatus.DELIVERY_FAILED,
+]);
+
 @Injectable()
 export class OrderStateMachineService {
   private readonly logger = new Logger(OrderStateMachineService.name);
@@ -212,7 +223,116 @@ export class OrderStateMachineService {
       `Order ${orderId} transitioned from ${fromState} to ${toState} by ${triggeredBy}`,
     );
 
+    // Emit side effects AFTER the transaction commits, so a failed job enqueue
+    // never rolls back the state change.
+    await this.emitTransitionSideEffects(
+      orderId,
+      result.fromState,
+      toState,
+      triggeredBy,
+      reason,
+    );
+
     return result;
+  }
+
+  /**
+   * Emit all side effects for a successful state transition.
+   *
+   * Runs AFTER the DB transaction commits. Each side effect is individually
+   * try/caught so a single enqueue failure never prevents the others from
+   * firing and never surfaces to the caller.
+   *
+   * Side effects per transition:
+   *  - ALL states with a notification template → enqueue state-change notification
+   *  - READY_FOR_PICKUP                        → enqueue delivery assignment
+   *  - SELLER_REJECTED | USER_CANCELLED | DELIVERY_FAILED | ORDER_EXPIRED
+   *                                            → enqueue auto-refund
+   *
+   * @param orderId     - Order ID
+   * @param fromState   - Previous state (passed to notification job)
+   * @param toState     - New state
+   * @param triggeredBy - Who/what triggered the transition
+   * @param reason      - Optional reason (carried into refund and history)
+   */
+  private async emitTransitionSideEffects(
+    orderId: string,
+    fromState: OrderStatus,
+    toState: OrderStatus,
+    triggeredBy: string,
+    reason?: string,
+  ): Promise<void> {
+    // Fetch userId + sellerId once; both are needed by multiple side effects.
+    let userId: string | undefined;
+    let sellerId: string | undefined;
+
+    try {
+      const order = await this.prisma.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { userId: true, sellerId: true },
+      });
+      if (!order) {
+        this.logger.warn(
+          `Order ${orderId} not found when emitting side effects for ${toState}`,
+        );
+        return;
+      }
+      userId = order.userId;
+      sellerId = order.sellerId ?? undefined;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch order ${orderId} context for side effects (${toState}):`,
+        error,
+      );
+      // Proceed — refund doesn't need userId/sellerId, so we can still try.
+    }
+
+    // 1. State-change notification (covers all states that have templates).
+    if (userId) {
+      try {
+        await this.queueService.enqueueStateChangeNotification(
+          orderId,
+          fromState,
+          toState,
+          userId,
+          sellerId,
+          triggeredBy,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue notification for order ${orderId} (→ ${toState}):`,
+          error,
+        );
+      }
+    }
+
+    // 2. Delivery assignment when order is ready for pickup.
+    if (toState === OrderStatus.READY_FOR_PICKUP) {
+      try {
+        await this.queueService.enqueueAssignDelivery(orderId, triggeredBy);
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue delivery assignment for order ${orderId}:`,
+          error,
+        );
+      }
+    }
+
+    // 3. Auto-refund for post-payment failure states.
+    if (REFUND_TRIGGER_STATES.has(toState)) {
+      try {
+        await this.queueService.enqueueRefund(
+          orderId,
+          reason || `Auto-refund on ${toState}`,
+          triggeredBy,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue refund for order ${orderId} (→ ${toState}):`,
+          error,
+        );
+      }
+    }
   }
 
   /**
@@ -254,68 +374,5 @@ export class OrderStateMachineService {
       where: { orderId },
       orderBy: { createdAt: 'asc' },
     });
-  }
-
-  /**
-   * Emit domain events and enqueue jobs based on state transition
-   *
-   * CRITICAL: This is the ONLY place where state transitions trigger jobs.
-   * Controllers and services must NOT enqueue jobs directly.
-   *
-   * @param orderId - Order ID
-   * @param fromState - Previous state
-   * @param toState - New state
-   * @param triggeredBy - Who triggered the transition
-   */
-  private async emitStateChangeEvents(
-    orderId: string,
-    fromState: OrderStatus,
-    toState: OrderStatus,
-    triggeredBy: string,
-  ): Promise<void> {
-    try {
-      // Get order details for job data
-      const order = await this.prisma.prisma.order.findUnique({
-        where: { id: orderId },
-        select: {
-          userId: true,
-          sellerId: true,
-          createdAt: true,
-        },
-      });
-
-      if (!order) {
-        this.logger.warn(
-          `Order ${orderId} not found when emitting state change events`,
-        );
-        return;
-      }
-
-      // Enqueue state change notification job
-      // This job will send notifications to user and seller (if applicable)
-      await this.queueService.enqueueStateChangeNotification(
-        orderId,
-        fromState,
-        toState,
-        order.userId,
-        order.sellerId || undefined,
-        triggeredBy,
-      );
-
-      // Enqueue delivery assignment job when order reaches READY_FOR_PICKUP
-      if (toState === OrderStatus.READY_FOR_PICKUP) {
-        await this.queueService.enqueueAssignDelivery(orderId, triggeredBy);
-      }
-
-      // Note: Order timeout job is enqueued when order is created (in OrdersService.create)
-      // Not enqueued here to avoid duplicate jobs
-    } catch (error) {
-      // Log error but don't fail the state transition
-      // Job enqueue failures shouldn't block state changes
-      this.logger.error(
-        `Error emitting state change events for order ${orderId}:`,
-        error,
-      );
-    }
   }
 }

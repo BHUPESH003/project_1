@@ -20,6 +20,8 @@ import { ReassignSellerDto } from './dto/reassign-seller.dto';
 import { ReassignDeliveryDto } from './dto/reassign-delivery.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateBannerDto, UpdateBannerDto } from './dto/create-banner.dto';
+import { GetSellersDto } from './dto/get-sellers.dto';
+import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
 
 /**
  * Admin Controller - MVP Scope
@@ -175,6 +177,67 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete banner' })
   deleteBanner(@Param('id') id: string) {
     return this.bannersService.remove(id);
+  }
+
+  // ─── Phase 3.3: Admin Seller Management ─────────────────────────────────
+
+  @Get('sellers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all sellers with optional filters' })
+  getSellers(@Query() query: GetSellersDto) {
+    return this.adminService.getSellers(query);
+  }
+
+  @Get('sellers/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get seller detail with order stats' })
+  getSellerById(@Param('id') id: string) {
+    return this.adminService.getSellerById(id);
+  }
+
+  @Patch('sellers/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update seller (status, isTrending, name, address)',
+  })
+  updateSeller(
+    @Param('id') id: string,
+    @Body() dto: UpdateAdminSellerDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.updateSellerById(id, dto, req.user.id);
+  }
+
+  @Post('sellers/:id/verify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark seller as verified (onboarded)' })
+  verifySeller(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.verifySeller(id, req.user.id);
+  }
+
+  @Post('sellers/:id/suspend')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Suspend seller (sets OFFLINE, blocks status changes)',
+  })
+  suspendSeller(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.suspendSeller(id, req.user.id);
   }
 
   // ❌ REMOVED: getDashboard() - Analytics not in MVP

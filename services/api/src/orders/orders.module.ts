@@ -10,6 +10,7 @@ import { PaymentsModule } from '@/payments/payments.module';
 import { DeliveryModule } from '@/delivery/delivery.module';
 import { QueueModule } from '@/queue/queue.module';
 import { UsersModule } from '@/users/users.module';
+import { NotificationsModule } from '@/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UsersModule } from '@/users/users.module';
     OrderStateMachineModule,
     CategoriesModule, // For CategoryRegistry
     SellersModule, // For SellerRepository
+    NotificationsModule, // For NotificationsService (seller cancellation notice)
     forwardRef(() => PaymentsModule), // For PaymentsService (circular dependency)
     forwardRef(() => DeliveryModule), // For DeliveryService (circular dependency)
     forwardRef(() => QueueModule), // For QueueService (circular dependency)

@@ -27,6 +27,9 @@ import {
   VerifyPaymentResponse,
   WebhookPayload,
   WebhookVerificationResult,
+  RefundPaymentRequest,
+  RefundPaymentResponse,
+  RefundStatus,
 } from '../payment-provider.interface';
 import * as crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
@@ -355,6 +358,7 @@ export class PaytmProvider implements PaymentProvider {
 
       return {
         valid: true,
+        eventType: 'payment',
         orderId: extractedOrderId,
         gatewayOrderId,
         gatewayPaymentId,
@@ -368,6 +372,107 @@ export class PaytmProvider implements PaymentProvider {
         valid: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
+    }
+  }
+
+  /**
+   * Refund a captured payment (full or partial).
+   *
+   * Paytm refund API: POST /refund/apiRefund
+   * Requires the gateway transaction id (TXNID), the original order id, a
+   * unique refund reference (REFID), and the amount. Follows the same flat
+   * checksum convention used by the rest of this provider.
+   *
+   * STATUS: REAL - Production-ready Paytm refund integration
+   */
+  async refundPayment(
+    request: RefundPaymentRequest,
+  ): Promise<RefundPaymentResponse> {
+    if (!request.gatewayPaymentId) {
+      throw new BadRequestException(
+        'Paytm transaction ID is required to issue a refund',
+      );
+    }
+
+    // Unique refund reference. Paytm dedupes refunds by REFID, which also makes
+    // retries idempotent on the gateway side.
+    const orderRef = request.notes?.gatewayOrderId || request.gatewayPaymentId;
+    const refId = `REFUND_${request.gatewayPaymentId}_${Date.now()}`;
+
+    try {
+      const refundParams: Record<string, string> = {
+        MID: this.config.merchantId,
+        TXNID: request.gatewayPaymentId,
+        ORDERID: orderRef,
+        REFID: refId,
+        TXNTYPE: 'REFUND',
+        REFUNDAMOUNT: request.amount.toFixed(2),
+      };
+
+      const checksum = this.generateChecksum(refundParams);
+
+      const refundResponse = await this.httpClient.post('/refund/apiRefund', {
+        ...refundParams,
+        CHECKSUMHASH: checksum,
+      });
+
+      const data = refundResponse.data;
+      const paytmStatus = data?.STATUS;
+
+      // Paytm returns TXN_SUCCESS once accepted, PENDING while processing.
+      // A non-success/non-pending response is a hard failure.
+      if (
+        !data ||
+        (paytmStatus !== 'TXN_SUCCESS' && paytmStatus !== 'PENDING')
+      ) {
+        throw new Error(
+          `Paytm refund failed: ${data?.RESPMSG || 'Unknown error'}`,
+        );
+      }
+
+      const status = this.mapRefundStatus(paytmStatus);
+
+      this.logger.log(
+        `Paytm refund created for txn ${request.gatewayPaymentId} ` +
+          `(refId: ${refId}, refundId: ${data.REFUNDID}, status: ${paytmStatus} -> ${status})`,
+      );
+
+      return {
+        refundId: data.REFUNDID || refId,
+        status,
+        amount: data.REFUNDAMOUNT
+          ? parseFloat(data.REFUNDAMOUNT)
+          : request.amount,
+      };
+    } catch (error: any) {
+      const errorMsg =
+        error?.response?.data?.RESPMSG ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Unknown error';
+
+      this.logger.error(
+        `Paytm refund failed for txn ${request.gatewayPaymentId}: ${errorMsg}`,
+        error?.response?.data || error,
+      );
+
+      throw new BadRequestException(`Paytm refund failed: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Map Paytm refund status to normalized status.
+   */
+  private mapRefundStatus(paytmStatus: string): RefundStatus {
+    switch (paytmStatus) {
+      case 'TXN_SUCCESS':
+        return 'PROCESSED';
+      case 'TXN_FAILURE':
+      case 'FAIL':
+        return 'FAILED';
+      case 'PENDING':
+      default:
+        return 'PENDING';
     }
   }
 

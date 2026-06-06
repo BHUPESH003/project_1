@@ -12,7 +12,7 @@
 
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Logger, Inject, forwardRef } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { DeliveryService } from '@/delivery/delivery.service';
 import { ModuleRef } from '@nestjs/core';
 
@@ -30,8 +30,8 @@ export interface AssignDeliveryJobData {
  * Processes jobs that assign delivery to orders.
  * Idempotent - safe to retry if delivery already assigned.
  */
-@Processor('order', {
-  concurrency: 5, // Process up to 5 jobs concurrently
+@Processor('delivery', {
+  concurrency: 5,
 })
 export class AssignDeliveryJob extends WorkerHost {
   private readonly logger = new Logger(AssignDeliveryJob.name);

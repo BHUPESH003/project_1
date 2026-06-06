@@ -157,6 +157,85 @@ export class DeliveryService {
   }
 
   /**
+   * Cancel an active delivery for an order.
+   *
+   * Called when an order is cancelled by the user (or otherwise aborted) after
+   * a delivery task has been created. Cancels the task with the provider via
+   * the adapter and marks the delivery record CANCELLED.
+   *
+   * Best-effort and non-throwing: a failure to cancel the provider task must
+   * not block the order cancellation (the order state is already committed).
+   * Returns true if a provider cancellation was issued, false if there was
+   * nothing to cancel.
+   *
+   * CRITICAL: Does NOT mutate order state.
+   *
+   * @param orderId - Order whose delivery should be cancelled
+   * @param reason - Optional reason passed to the provider and recorded
+   */
+  async cancelDelivery(orderId: string, reason?: string): Promise<boolean> {
+    const delivery = await this.deliveryRepository.findByOrderId(orderId);
+    if (!delivery) {
+      this.logger.log(`No delivery to cancel for order ${orderId}`);
+      return false;
+    }
+
+    // Only in-flight deliveries can be cancelled. Anything terminal
+    // (DELIVERED / FAILED / already CANCELLED) is left untouched.
+    // PENDING is included because that is the status set when a task is first
+    // assigned in this codebase.
+    const cancellableStatuses: DeliveryStatus[] = [
+      DeliveryStatus.PENDING,
+      DeliveryStatus.ASSIGNED,
+      DeliveryStatus.IN_TRANSIT,
+    ];
+    if (!cancellableStatuses.includes(delivery.status)) {
+      this.logger.log(
+        `Delivery ${delivery.id} for order ${orderId} is in status ${delivery.status} - no cancellation needed`,
+      );
+      return false;
+    }
+
+    if (!delivery.providerName || !delivery.providerTaskId) {
+      this.logger.warn(
+        `Delivery ${delivery.id} for order ${orderId} has no provider task - marking CANCELLED without provider call`,
+      );
+      await this.deliveryRepository.update(delivery.id, {
+        status: DeliveryStatus.CANCELLED,
+        failureReason: reason || 'Order cancelled',
+      });
+      return false;
+    }
+
+    try {
+      const adapter = this.adapterRegistry.getAdapter(delivery.providerName);
+      await adapter.cancelTask({
+        taskId: delivery.id,
+        providerTaskId: delivery.providerTaskId,
+        reason: reason || 'Order cancelled by user',
+      });
+
+      await this.deliveryRepository.update(delivery.id, {
+        status: DeliveryStatus.CANCELLED,
+        failureReason: reason || 'Order cancelled by user',
+      });
+
+      this.logger.log(
+        `Delivery cancelled for order ${orderId} (provider: ${delivery.providerName}, task: ${delivery.providerTaskId})`,
+      );
+      return true;
+    } catch (error) {
+      // Best-effort: log and swallow. The order is already cancelled; a dangling
+      // provider task can be reconciled by ops / the provider's own webhook.
+      this.logger.error(
+        `Failed to cancel delivery for order ${orderId} (provider: ${delivery.providerName}, task: ${delivery.providerTaskId}):`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
    * Get delivery quotes from all available providers
    *
    * Fetches quotes from all registered delivery adapters in parallel.

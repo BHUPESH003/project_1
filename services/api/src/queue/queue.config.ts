@@ -42,6 +42,47 @@ export const ORDER_QUEUE_CONFIG = {
 };
 
 /**
+ * Payment Queue Job Options
+ * For payment-related jobs (refund processing).
+ *
+ * Refunds live on a dedicated queue (not the order queue) so the refund worker
+ * is the sole consumer: BullMQ does not route by job name, so multiple
+ * processors sharing a queue are competing consumers that can pick up each
+ * other's jobs. Isolating refunds guarantees they are never silently consumed
+ * by the order timeout / delivery workers.
+ */
+export const PAYMENT_QUEUE_CONFIG = {
+  defaultJobOptions: {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 5, // Money movement: retry transient gateway failures generously
+    backoff: {
+      type: 'exponential',
+      delay: 5000, // Start with 5 seconds for refund jobs
+    },
+  } as JobsOptions,
+};
+
+/**
+ * Delivery Queue Job Options
+ * For delivery-related jobs (delivery assignment via provider adapters).
+ *
+ * Dedicated queue so AssignDeliveryJob is the sole consumer. The old shared
+ * `order` queue ran AssignDeliveryJob and OrderTimeoutJob as competing
+ * consumers — BullMQ workers have no job-name routing, so either job could
+ * silently swallow the other's work. This queue fixes that.
+ */
+export const DELIVERY_QUEUE_CONFIG = {
+  defaultJobOptions: {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 5, // Retry transient provider failures generously
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+  } as JobsOptions,
+};
+
+/**
  * Notification Queue Job Options
  * For notification jobs (push, SMS, email)
  */

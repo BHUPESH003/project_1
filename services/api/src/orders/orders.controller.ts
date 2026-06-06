@@ -30,6 +30,7 @@ import {
 import { SelectSellerDto } from './dto/select-seller.dto';
 import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
+import { CancelOrderDto } from './dto/cancel-order.dto';
 import { GetSellerOrdersDto } from './dto/get-seller-orders.dto';
 
 /**
@@ -138,8 +139,12 @@ export class OrdersController {
   ): Promise<CreateBatchOrdersResponseDto> {
     this.logger.log(`Incoming createBatch from user ${req.user.id}`);
     if (createBatchOrdersDto.orders?.length > 0) {
-      this.logger.log(`Order 0 Payload Keys: ${Object.keys(createBatchOrdersDto.orders[0].orderPayload || {})}`);
-      this.logger.log(`Order 0 Items Count: ${(createBatchOrdersDto.orders[0].orderPayload as any)?.items?.length || 0}`);
+      this.logger.log(
+        `Order 0 Payload Keys: ${Object.keys(createBatchOrdersDto.orders[0].orderPayload || {})}`,
+      );
+      this.logger.log(
+        `Order 0 Items Count: ${(createBatchOrdersDto.orders[0].orderPayload as any)?.items?.length || 0}`,
+      );
     }
     return this.ordersService.createBatch(req.user.id, createBatchOrdersDto);
   }
@@ -396,6 +401,43 @@ export class OrdersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.ordersService.confirmOrder(id, req.user.id, paymentDto);
+  }
+
+  /**
+   * POST /v1/orders/:id/cancel
+   * User cancels their own order (USER APP)
+   * Payload: { reason?: string }
+   * Transitions: <pre-PICKED_UP state> → USER_CANCELLED
+   *
+   * Triggers an automatic refund (if paid) and cancels any in-flight delivery.
+   */
+  @Post(':id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.USER, UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cancel order',
+    description:
+      "Cancels the user's own order. Allowed from any pre-PICKED_UP state. Auto-triggers a refund if the order was paid, cancels any in-flight delivery, and notifies the seller. Requires USER role and order ownership.",
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', example: 'order-123' })
+  @ApiResponse({ status: 200, description: 'Order cancelled successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Order is not in a cancellable state',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: "Cannot cancel another user's order",
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  cancelOrder(
+    @Param('id') id: string,
+    @Body() cancelDto: CancelOrderDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.cancelOrder(id, req.user.id, cancelDto.reason);
   }
 
   /**

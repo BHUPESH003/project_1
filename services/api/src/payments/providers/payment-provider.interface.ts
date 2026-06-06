@@ -50,10 +50,49 @@ export interface WebhookPayload {
 }
 
 /**
+ * Refund status as reported by the gateway.
+ * Normalized across providers so callers never depend on provider-specific values.
+ */
+export type RefundStatus = 'PENDING' | 'PROCESSED' | 'FAILED';
+
+/**
+ * Refund request
+ */
+export interface RefundPaymentRequest {
+  gatewayPaymentId: string;
+  amount: number; // In rupees — partial or full
+  reason?: string;
+  /**
+   * Optional metadata persisted with the refund (e.g., internal orderId).
+   * Used to correlate the refund back to an order when the gateway sends a
+   * refund webhook.
+   */
+  notes?: Record<string, string>;
+}
+
+/**
+ * Refund response
+ */
+export interface RefundPaymentResponse {
+  refundId: string;
+  status: RefundStatus;
+  amount: number; // In rupees
+}
+
+/**
+ * Webhook event type.
+ * Gateways send both payment-lifecycle and refund-lifecycle webhooks on the
+ * same endpoint, so the parsed result discriminates between them.
+ */
+export type WebhookEventType = 'payment' | 'refund';
+
+/**
  * Webhook verification result
  */
 export interface WebhookVerificationResult {
   valid: boolean;
+  /** Defaults to 'payment' when omitted (backwards compatible). */
+  eventType?: WebhookEventType;
   orderId?: string;
   gatewayOrderId?: string;
   gatewayPaymentId?: string;
@@ -61,6 +100,9 @@ export interface WebhookVerificationResult {
   status?: PaymentStatus;
   signature?: string;
   error?: string;
+  // Refund-specific fields (populated when eventType === 'refund')
+  refundId?: string;
+  refundStatus?: RefundStatus;
 }
 
 /**
@@ -126,4 +168,18 @@ export interface PaymentProvider {
     payload: WebhookPayload,
     signature?: string,
   ): Promise<WebhookVerificationResult>;
+
+  /**
+   * Refund a captured payment (full or partial).
+   * Called when an order is cancelled, rejected, or otherwise fails after the
+   * customer has already paid.
+   *
+   * CRITICAL:
+   * - Must NOT mutate order or payment state — the caller persists the result.
+   * - Refund webhooks (status updates) are handled via parseWebhook.
+   *
+   * @param request - Refund request (gateway payment id + amount in rupees)
+   * @returns Refund id and normalized status
+   */
+  refundPayment(request: RefundPaymentRequest): Promise<RefundPaymentResponse>;
 }

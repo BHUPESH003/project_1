@@ -13,10 +13,16 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ORDER_QUEUE_CONFIG, NOTIFICATION_QUEUE_CONFIG } from './queue.config';
+import {
+  ORDER_QUEUE_CONFIG,
+  NOTIFICATION_QUEUE_CONFIG,
+  PAYMENT_QUEUE_CONFIG,
+  DELIVERY_QUEUE_CONFIG,
+} from './queue.config';
 import { QueueService } from './queue.service';
 import { AssignDeliveryJob } from './jobs/order/assign-delivery.job';
 import { OrderTimeoutJob } from './jobs/order/order-timeout.job';
+import { ProcessRefundJob } from './jobs/order/process-refund.job';
 import { StateChangeNotificationJob } from './jobs/notification/state-change-notification.job';
 import { OrderStateMachineModule } from '@/orders/state-machine/order-state-machine.module';
 import { OrdersModule } from '@/orders/orders.module';
@@ -75,6 +81,21 @@ import { NotificationsModule } from '@/notifications/notifications.module';
       imports: [ConfigModule],
       useFactory: () => NOTIFICATION_QUEUE_CONFIG,
     }),
+    // Payment Queue - for payment-related jobs (refund processing)
+    // Dedicated queue so the refund worker is the sole consumer (see queue.config).
+    BullModule.registerQueueAsync({
+      name: 'payment',
+      imports: [ConfigModule],
+      useFactory: () => PAYMENT_QUEUE_CONFIG,
+    }),
+    // Delivery Queue - for delivery assignment jobs.
+    // Dedicated queue so AssignDeliveryJob is the sole consumer; previously
+    // shared the `order` queue with OrderTimeoutJob (competing consumer bug).
+    BullModule.registerQueueAsync({
+      name: 'delivery',
+      imports: [ConfigModule],
+      useFactory: () => DELIVERY_QUEUE_CONFIG,
+    }),
     // Import modules needed by job processors
     // Note: Using forwardRef to break circular dependency
     // OrderStateMachineModule → QueueModule → OrderStateMachineModule
@@ -89,6 +110,9 @@ import { NotificationsModule } from '@/notifications/notifications.module';
     // Note: AssignDeliveryJob uses ModuleRef to avoid circular dependency with DeliveryModule
     AssignDeliveryJob,
     OrderTimeoutJob,
+    // Note: ProcessRefundJob uses ModuleRef to lazy-load PaymentsService and
+    // avoid a circular dependency with PaymentsModule
+    ProcessRefundJob,
     StateChangeNotificationJob,
   ],
   exports: [BullModule, QueueService], // Export for use in other modules

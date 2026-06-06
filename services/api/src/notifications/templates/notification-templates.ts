@@ -91,6 +91,20 @@ export function getNotificationIntents(
       });
       break;
 
+    case OrderStatus.PREPARING:
+      // Notify user: Seller is preparing the order
+      intents.push({
+        type: 'PUSH',
+        userId,
+        title: 'Order Being Prepared',
+        body: `Your order #${orderId.substring(0, 8)} is being prepared. We'll notify you when it's ready.`,
+        data: {
+          orderId,
+          type: 'ORDER_PREPARING',
+        },
+      });
+      break;
+
     case OrderStatus.SELLER_REJECTED:
       // Notify user: Order rejected
       intents.push({
@@ -176,6 +190,25 @@ export function getNotificationIntents(
       });
       break;
 
+    case OrderStatus.USER_CANCELLED:
+      // Notify seller: Order was cancelled by the customer.
+      // NOTE: sellerId here is the Seller entity ID, not the seller's User ID.
+      // For MVP with stubbed FCM tokens this is fine; a future fix should pass
+      // the seller's userId so push tokens resolve correctly.
+      if (sellerId) {
+        intents.push({
+          type: 'PUSH',
+          userId: sellerId,
+          title: 'Order Cancelled',
+          body: `Order #${orderId.substring(0, 8)} was cancelled by the customer.`,
+          data: {
+            orderId,
+            type: 'ORDER_CANCELLED_BY_USER',
+          },
+        });
+      }
+      break;
+
     case OrderStatus.DELIVERY_FAILED:
       // Notify user: Delivery failed
       intents.push({
@@ -189,6 +222,19 @@ export function getNotificationIntents(
           action: 'contact_support',
         },
       });
+      // Notify seller too
+      if (sellerId) {
+        intents.push({
+          type: 'PUSH',
+          userId: sellerId,
+          title: 'Delivery Failed',
+          body: `Delivery for order #${orderId.substring(0, 8)} failed.`,
+          data: {
+            orderId,
+            type: 'DELIVERY_FAILED_SELLER',
+          },
+        });
+      }
       break;
 
     default:

@@ -16,6 +16,7 @@ import { Queue } from 'bullmq';
 import { OrderStatus } from '@repo/types';
 import { AssignDeliveryJobData } from './jobs/order/assign-delivery.job';
 import { OrderTimeoutJobData } from './jobs/order/order-timeout.job';
+import { ProcessRefundJobData } from './jobs/order/process-refund.job';
 import { StateChangeNotificationJobData } from './jobs/notification/state-change-notification.job';
 
 @Injectable()
@@ -25,6 +26,8 @@ export class QueueService {
   constructor(
     @InjectQueue('order') private readonly orderQueue: Queue,
     @InjectQueue('notification') private readonly notificationQueue: Queue,
+    @InjectQueue('payment') private readonly paymentQueue: Queue,
+    @InjectQueue('delivery') private readonly deliveryQueue: Queue,
   ) {}
 
   /**
@@ -45,9 +48,9 @@ export class QueueService {
       triggeredBy: triggeredBy || 'system',
     };
 
-    await this.orderQueue.add('assign-delivery', jobData, {
+    await this.deliveryQueue.add('assign-delivery', jobData, {
       jobId: `assign-delivery-${orderId}`, // Unique job ID for idempotency
-      removeOnComplete: true, // Remove completed jobs immediately
+      removeOnComplete: true,
     });
 
     this.logger.log(
@@ -85,6 +88,41 @@ export class QueueService {
 
     this.logger.log(
       `Enqueued timeout job for order ${orderId} (timeout: ${timeoutMinutes}min, scheduled for: ${new Date(Date.now() + timeoutMinutes * 60 * 1000).toISOString()})`,
+    );
+  }
+
+  /**
+   * Enqueue refund processing job
+   *
+   * Called by the Order State Machine when an order fails after payment
+   * (SELLER_REJECTED / USER_CANCELLED / DELIVERY_FAILED).
+   *
+   * Uses orderId in the job ID for idempotency: while a refund job for an order
+   * is queued, a duplicate enqueue is deduped by BullMQ; PaymentsService also
+   * guards against double-refunds at the data layer.
+   *
+   * @param orderId - Order ID to refund
+   * @param reason - Reason for the refund (stored on the gateway refund)
+   * @param triggeredBy - Who triggered the refund (for logging)
+   */
+  async enqueueRefund(
+    orderId: string,
+    reason: string,
+    triggeredBy?: string,
+  ): Promise<void> {
+    const jobData: ProcessRefundJobData = {
+      orderId,
+      reason,
+      triggeredBy: triggeredBy || 'system',
+    };
+
+    await this.paymentQueue.add('process-refund', jobData, {
+      jobId: `process-refund-${orderId}`, // Unique job ID for idempotency
+      removeOnComplete: true,
+    });
+
+    this.logger.log(
+      `Enqueued refund job for order ${orderId} (reason: ${reason}, triggered by: ${triggeredBy || 'system'})`,
     );
   }
 
