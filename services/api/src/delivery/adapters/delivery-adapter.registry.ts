@@ -75,4 +75,17 @@ export class DeliveryAdapterRegistry {
   getRegisteredProviders(): string[] {
     return Array.from(this.adapters.keys());
   }
+
+  /**
+   * Get all adapters in priority order for fallback: default adapter first,
+   * then remaining adapters in registration order.
+   */
+  getAdaptersByPriority(): DeliveryAdapter[] {
+    if (this.adapters.size === 0) return [];
+    const defaultAdapter = this.getDefaultAdapter();
+    const rest = Array.from(this.adapters.values()).filter(
+      (a) => a.getProviderName() !== defaultAdapter.getProviderName(),
+    );
+    return [defaultAdapter, ...rest];
+  }
 }

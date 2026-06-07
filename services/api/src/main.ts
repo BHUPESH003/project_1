@@ -76,37 +76,29 @@ async function bootstrap() {
   // Security
   app.use(helmet());
 
-  // CORS
-  // const corsEnabled = configService.get<boolean>('CORS_ENABLED', false);
-  // logger.log(`CORS_ENABLED: ${corsEnabled}`);
-  // if (corsEnabled) {
-  //   const corsOrigins = configService
-  //     .get<string>('CORS_ORIGINS', '*')
-  //     .split(',');
-  //   app.enableCors({
-  //     origin: corsOrigins,
-  //     credentials: true,
-  //   });
-  //   logger.log(`CORS enabled for origins: ${corsOrigins.join(', ')}`);
-  // } else {
-  //   logger.log('CORS disabled');
-  // }
-  app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      // Allows requests from:
-      // - file:// (origin === undefined)
-      // - any http/https origin
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      return callback(null, true);
-    },
-    credentials: true,
-  });
+  // CORS — restrict in production via CORS_ORIGINS env var; allow all in dev
+  const corsOrigins = configService.get<string>('CORS_ORIGINS', '');
+  if (corsOrigins) {
+    const allowedOrigins = corsOrigins.split(',').map((o) => o.trim());
+    app.enableCors({
+      origin: (
+        origin: string | undefined,
+        callback: (err: Error | null, allow?: boolean) => void,
+      ) => {
+        // Allow server-to-server calls (no origin) and listed origins
+        if (!origin || allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
+      credentials: true,
+    });
+    logger.log(`CORS restricted to: ${allowedOrigins.join(', ')}`);
+  } else {
+    // Development / local: allow everything
+    app.enableCors({ origin: true, credentials: true });
+    logger.log('CORS open (set CORS_ORIGINS to restrict in production)');
+  }
 
   // Global prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api');

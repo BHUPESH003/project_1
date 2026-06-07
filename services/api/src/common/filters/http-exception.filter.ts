@@ -7,17 +7,33 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { ApiResponse, errorResponse } from '@/common/dto/api-response.dto';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+/** Map Prisma error codes to HTTP status + user-facing messages */
+const PRISMA_ERROR_MAP: Record<string, { status: number; message: string }> = {
+  P2002: {
+    status: HttpStatus.CONFLICT,
+    message: 'A record with these details already exists',
+  },
+  P2025: { status: HttpStatus.NOT_FOUND, message: 'Record not found' },
+  P2003: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'Related record not found',
+  },
+  P2000: { status: HttpStatus.BAD_REQUEST, message: 'Input value is too long' },
+  P2016: { status: HttpStatus.BAD_REQUEST, message: 'Invalid query input' },
+};
+
 /**
- * HTTP Exception Filter
+ * Global Exception Filter
  *
- * Catches all exceptions and formats them in the standard API response format:
- * {
- *   "code": number,
- *   "data": null,
- *   "message": string
- * }
+ * Handles three error categories:
+ * 1. NestJS HttpExceptions — pass through with proper formatting
+ * 2. Prisma known errors — map to semantic HTTP status codes
+ * 3. Everything else — 500, no stack trace in production
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -28,15 +44,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let errorData: unknown = null;
 
     if (exception instanceof HttpException) {
+      status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
@@ -44,23 +57,38 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'object' &&
         exceptionResponse !== null
       ) {
-        const responseObj = exceptionResponse as {
+        const r = exceptionResponse as {
           message?: string | string[];
           error?: string;
-          [key: string]: unknown;
+          [k: string]: unknown;
         };
-        if (Array.isArray(responseObj.message)) {
-          message = responseObj.message.join(', ');
-        } else if (responseObj.message) {
-          message = responseObj.message;
-        } else if (responseObj.error) {
-          message = responseObj.error;
+        if (Array.isArray(r.message)) {
+          message = r.message.join(', ');
+        } else if (r.message) {
+          message = r.message;
+        } else if (r.error) {
+          message = r.error;
         }
-        // Include additional error details if present
-        errorData = responseObj;
+        errorData = r;
       }
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      const mapped = PRISMA_ERROR_MAP[exception.code];
+      if (mapped) {
+        status = mapped.status;
+        message = mapped.message;
+      } else {
+        status = HttpStatus.BAD_REQUEST;
+        message = 'Database operation failed';
+      }
+      // Expose Prisma error code in non-production for easier debugging
+      if (!isProduction)
+        errorData = { prismaCode: exception.code, meta: exception.meta };
+    } else if (exception instanceof Prisma.PrismaClientValidationError) {
+      status = HttpStatus.BAD_REQUEST;
+      message = 'Invalid data provided';
+      if (!isProduction) errorData = { detail: exception.message };
     } else if (exception instanceof Error) {
-      message = exception.message;
+      message = isProduction ? 'Internal server error' : exception.message;
     }
 
     const errorResponseData: ApiResponse<null> = errorResponse(
@@ -69,9 +97,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorData,
     );
 
+    // Always log full stack on the server; never expose it to clients in production
     this.logger.error(
-      `${request.method} ${request.url} - ${status} - ${message}`,
-      exception instanceof Error ? exception.stack : 'Unknown error',
+      `${request.method} ${request.url} — ${status} — ${message}`,
+      isProduction
+        ? undefined
+        : exception instanceof Error
+          ? exception.stack
+          : String(exception),
     );
 
     response.status(status).json(errorResponseData);

@@ -106,10 +106,12 @@ export class DeliveryService {
     const sellerLat = Number(seller.seller.latitude);
     const sellerLng = Number(seller.seller.longitude);
 
-    // Get default adapter (Uber Direct for MVP)
-    const adapter = this.adapterRegistry.getDefaultAdapter();
+    // Try adapters in priority order — fall back to the next on failure
+    const adapters = this.adapterRegistry.getAdaptersByPriority();
+    if (adapters.length === 0) {
+      throw new BadRequestException('No delivery providers available');
+    }
 
-    // Create delivery task via adapter
     const taskRequest: CreateTaskRequest = {
       orderId,
       pickup: {
@@ -124,7 +126,26 @@ export class DeliveryService {
       },
     };
 
-    const task = await adapter.createTask(taskRequest);
+    let task: Awaited<ReturnType<(typeof adapters)[0]['createTask']>> | null =
+      null;
+    let adapter = adapters[0];
+    for (const candidate of adapters) {
+      try {
+        task = await candidate.createTask(taskRequest);
+        adapter = candidate;
+        break;
+      } catch (err: any) {
+        this.logger.warn(
+          `Delivery provider ${candidate.getProviderName()} failed: ${err?.message}. Trying next provider.`,
+        );
+      }
+    }
+
+    if (!task) {
+      throw new BadRequestException(
+        `All delivery providers failed for order ${orderId}`,
+      );
+    }
 
     // Persist delivery record
     const delivery = await this.deliveryRepository.create({

@@ -83,6 +83,22 @@ export const DELIVERY_QUEUE_CONFIG = {
 };
 
 /**
+ * Cart Queue Job Options
+ * For cart maintenance jobs (abandoned cart cleanup).
+ * Daily cron — low retries, no urgency.
+ */
+export const CART_QUEUE_CONFIG = {
+  defaultJobOptions: {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 2,
+    backoff: {
+      type: 'exponential' as const,
+      delay: 60000, // 1 minute between retries for batch jobs
+    },
+  } as JobsOptions,
+};
+
+/**
  * Notification Queue Job Options
  * For notification jobs (push, SMS, email)
  */

@@ -308,10 +308,11 @@ export class OrdersService {
       await handler.processOrder(order.id, validation.normalizedPayload);
     }
 
-    // Enqueue order timeout job
-    // Job will check if order expires after timeout period
-    // Default timeout: 30 minutes (configurable)
-    const timeoutMinutes = 30; // TODO: Get from config or order metadata
+    // Enqueue order timeout job — seller must accept within this window after payment
+    const timeoutMinutes = this.configService.get<number>(
+      'ORDER_TIMEOUT_MINUTES',
+      30,
+    );
     await this.queueService.enqueueOrderTimeout(
       order.id,
       timeoutMinutes,

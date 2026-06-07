@@ -18,6 +18,7 @@ export interface SellerEntity {
   isTrending: boolean;
   isVerified: boolean;
   isSuspended: boolean;
+  googlePlaceId: string | null;
   pricePerPage: unknown;
   prepTimeMinutes: number;
   imagePath: string | null;
@@ -378,6 +379,7 @@ export class SellerRepository {
       isTrending: seller.isTrending ?? false,
       isVerified: seller.isVerified ?? false,
       isSuspended: seller.isSuspended ?? false,
+      googlePlaceId: seller.googlePlaceId ?? null,
       prepTimeMinutes: seller.prepTimeMinutes ?? 0,
       imagePath: seller.imagePath ?? null,
       rating: seller.rating != null ? Number(seller.rating) : null,

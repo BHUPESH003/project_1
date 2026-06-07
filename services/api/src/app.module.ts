@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -24,10 +24,13 @@ import { CartModule } from './cart/cart.module';
 import { ProductsModule } from './products/products.module';
 import { CacheModule } from './cache/cache.module';
 import { CheckoutModule } from './checkout/checkout.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { DiscoveryModule } from './discovery/discovery.module';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 @Module({
   imports: [
-    // Configuration - MUST be first (CacheModule and other modules depend on ConfigService)
+    // Configuration - MUST be first
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -36,13 +39,17 @@ import { CheckoutModule } from './checkout/checkout.module';
     CacheModule,
     // Prisma (Global module)
     PrismaModule,
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 60 seconds
-        limit: 10, // 10 requests per ttl
-      },
-    ]),
+    // Rate limiting — 100 req/60s for general use; OTP routes override to 10/60s in AuthModule
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: config.get<number>('THROTTLE_TTL_MS', 60000),
+          limit: config.get<number>('THROTTLE_LIMIT', 100),
+        },
+      ],
+    }),
     // Health check
     HealthModule,
     // Feature modules
@@ -64,8 +71,14 @@ import { CheckoutModule } from './checkout/checkout.module';
     CartModule,
     ProductsModule,
     CheckoutModule,
+    MessagingModule,
+    DiscoveryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

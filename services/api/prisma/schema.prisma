@@ -133,6 +133,7 @@ model User {
   cart            Cart? // One cart per user
   productWishlist UserProductWishlist[]
   productNotify   UserProductNotify[]
+  conversations   Conversation[]
 
   @@index([phone])
   @@index([role])
@@ -244,10 +245,11 @@ model Seller {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders      Order[]        @relation("SellerOrders")
-  favoritedBy UserFavorite[]
-  cartItems   CartItem[] // Items in user carts for this seller
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]        @relation("SellerOrders")
+  favoritedBy   UserFavorite[]
+  cartItems     CartItem[] // Items in user carts for this seller
+  conversations Conversation[]
 
   @@index([status]) // Critical: filter by ONLINE sellers
   @@index([latitude, longitude]) // Geospatial queries
@@ -830,6 +832,57 @@ model UserProductNotify {
   @@index([userId])
   @@index([productId])
   @@map("user_product_notify")
+}
+
+// ========================================
+// CONVERSATION MODEL (Phase 4: WhatsApp Relay)
+// ========================================
+// Tracks user ↔ seller messaging threads
+// Messages flow: user app → API → seller WhatsApp; seller WhatsApp → webhook → API → user push
+
+model Conversation {
+  id       String  @id @default(cuid())
+  userId   String
+  sellerId String
+  orderId  String? // Optional link to an order
+
+  status String @default("active") // active | closed | archived
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  seller   Seller    @relation(fields: [sellerId], references: [id])
+  messages Message[]
+
+  @@index([userId])
+  @@index([sellerId])
+  @@map("conversations")
+}
+
+// ========================================
+// MESSAGE MODEL (Phase 4: WhatsApp Relay)
+// ========================================
+// Individual messages within a conversation
+// senderType distinguishes user / seller / system messages
+
+model Message {
+  id             String  @id @default(cuid())
+  conversationId String
+  senderType     String // "user" | "seller" | "system"
+  senderId       String // userId or sellerId depending on senderType
+  content        String
+  contentType    String  @default("text") // text | image | file | template
+  mediaUrl       String? // S3 URL for media attachments (Phase 4.2)
+  whatsappMessageId String? // Meta message ID for delivery tracking
+  status         String  @default("sent") // sent | delivered | read | failed
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
 }
 
 // ========================================
