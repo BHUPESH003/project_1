@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { AdminAnalyticsService } from './analytics/admin-analytics.service';
 import { BannersService } from '@/banners/banners.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/guards';
 import { UserRole } from '@repo/types';
@@ -22,6 +23,10 @@ import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateBannerDto, UpdateBannerDto } from './dto/create-banner.dto';
 import { GetSellersDto } from './dto/get-sellers.dto';
 import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
+import { GetOrdersAnalyticsDto } from './analytics/dto/get-orders-analytics.dto';
+import { GetSellersAnalyticsDto } from './analytics/dto/get-sellers-analytics.dto';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 /**
  * Admin Controller - MVP Scope
@@ -48,6 +53,7 @@ import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    private readonly analyticsService: AdminAnalyticsService,
     private readonly bannersService: BannersService,
   ) {}
 
@@ -240,10 +246,63 @@ export class AdminController {
     return this.adminService.suspendSeller(id, req.user.id);
   }
 
-  // ❌ REMOVED: getDashboard() - Analytics not in MVP
-  // ❌ REMOVED: getUsers() - Not in API contract, too broad
-  // ❌ REMOVED: getStatistics() - Analytics not in MVP
-  // ❌ REMOVED: updateUser() - User management not admin responsibility in MVP
+  // ─── Phase 7.1: Analytics ─────────────────────────────────────────────────
+
+  @Get('analytics/overview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Platform overview — order counts, revenue, active sellers/users',
+  })
+  getAnalyticsOverview() {
+    return this.analyticsService.getOverview();
+  }
+
+  @Get('analytics/orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Order trends, AOV, cancellation rate, seller rejection rate',
+  })
+  getOrdersAnalytics(@Query() query: GetOrdersAnalyticsDto) {
+    return this.analyticsService.getOrdersAnalytics(query);
+  }
+
+  @Get('analytics/sellers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Top sellers by revenue, order count, fulfillment time, acceptance rate',
+  })
+  getSellersAnalytics(@Query() query: GetSellersAnalyticsDto) {
+    return this.analyticsService.getSellersAnalytics(query);
+  }
+
+  // ─── Phase 7.2: Category Management ──────────────────────────────────────
+
+  @Post('categories')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new category' })
+  createCategory(@Body() dto: CreateCategoryDto) {
+    return this.adminService.createCategory(dto);
+  }
+
+  @Patch('categories/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update category (name, status, icon, displayOrder)',
+  })
+  updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+    return this.adminService.updateCategory(id, dto);
+  }
 }
 
 /**

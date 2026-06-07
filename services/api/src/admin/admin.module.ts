@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminAuditService } from './admin-audit.service';
+import { AdminAnalyticsService } from './analytics/admin-analytics.service';
 import { AuthModule } from '@/auth/auth.module';
 import { OrdersModule } from '@/orders/orders.module';
 import { OrderStateMachineModule } from '@/orders/state-machine/order-state-machine.module';
@@ -23,7 +24,7 @@ import { BannersModule } from '@/banners/banners.module';
     BannersModule, // For admin banner CRUD
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminAuditService],
+  providers: [AdminService, AdminAuditService, AdminAnalyticsService],
   exports: [AdminService],
 })
 export class AdminModule {}

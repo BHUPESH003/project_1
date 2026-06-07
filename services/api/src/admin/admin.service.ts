@@ -14,6 +14,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { OrderStatus } from '@repo/types';
 import { isTerminalState } from '@/orders/state-machine/order-state-machine.types';
@@ -32,6 +33,8 @@ import { AdminAuditService, AdminActionType } from './admin-audit.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GetSellersDto } from './dto/get-sellers.dto';
 import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class AdminService {
@@ -567,5 +570,56 @@ export class AdminService {
       isSuspended: updated.isSuspended,
       status: updated.status,
     };
+  }
+
+  // ─── Phase 7.2: Category Management ─────────────────────────────────────
+
+  async createCategory(dto: CreateCategoryDto) {
+    const existing = await this.prismaService.prisma.category.findUnique({
+      where: { id: dto.id },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Category with id "${dto.id}" already exists`,
+      );
+    }
+
+    const category = await this.prismaService.prisma.category.create({
+      data: {
+        id: dto.id,
+        name: dto.name,
+        status: dto.status ?? 'COMING_SOON',
+        description: dto.description,
+        displayOrder: dto.displayOrder ?? 0,
+        iconPath: dto.iconPath,
+      },
+    });
+
+    this.logger.log(`Created category: ${category.id}`);
+    return category;
+  }
+
+  async updateCategory(id: string, dto: UpdateCategoryDto) {
+    const existing = await this.prismaService.prisma.category.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Category "${id}" not found`);
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.displayOrder !== undefined) data.displayOrder = dto.displayOrder;
+    if (dto.iconPath !== undefined) data.iconPath = dto.iconPath;
+
+    const updated = await this.prismaService.prisma.category.update({
+      where: { id },
+      data,
+    });
+
+    this.logger.log(`Updated category: ${id}`);
+    return updated;
   }
 }
