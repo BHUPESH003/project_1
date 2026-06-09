@@ -12,7 +12,6 @@
 
 import { Module, forwardRef, OnModuleInit, Logger } from '@nestjs/common';
 import { BullModule, InjectQueue } from '@nestjs/bullmq';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import {
   ORDER_QUEUE_CONFIG,
@@ -36,72 +35,25 @@ import { NotificationsModule } from '@/notifications/notifications.module';
 
 @Module({
   imports: [
-    // Redis connection for BullMQ
+    // Redis connection for BullMQ — reuse the shared REDIS_CLIENT to avoid
+    // opening extra connections (each BullMQ queue/worker creates its own
+    // connection by default, which exhausts managed Redis client limits).
     BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
-        const baseConfig = {
-          enableOfflineQueue: true,
-          enableReadyCheck: false,
-          maxRetriesPerRequest: null,
-          maxRetries: 3,
-          connectTimeout: 15000,
-          commandTimeout: 30000,
-          retryStrategy: (retries: number) => {
-            const delay = Math.min(
-              Math.pow(2, Math.min(retries, 5)) * 100,
-              5000,
-            );
-            if (retries % 5 === 0) {
-              console.warn(
-                `⚠️ Redis queue connection attempt ${retries}, retry in ${delay}ms`,
-              );
-            }
-            return delay;
-          },
-        };
-
-        return {
-          connection: {
-            host: configService.get<string>('REDIS_HOST', 'localhost'),
-            port: configService.get<number>('REDIS_PORT', 6379),
-            password: configService.get<string>('REDIS_PASSWORD'),
-            ...baseConfig,
-          },
-        };
-      },
-      inject: [ConfigService],
+      useFactory: (redisClient: any) => ({
+        connection: redisClient,
+      }),
+      inject: ['REDIS_CLIENT'],
     }),
     // Order Queue - delivery assignment, timeouts
-    BullModule.registerQueueAsync({
-      name: 'order',
-      imports: [ConfigModule],
-      useFactory: () => ORDER_QUEUE_CONFIG,
-    }),
+    BullModule.registerQueue({ name: 'order', ...ORDER_QUEUE_CONFIG }),
     // Notification Queue - push, SMS, email
-    BullModule.registerQueueAsync({
-      name: 'notification',
-      imports: [ConfigModule],
-      useFactory: () => NOTIFICATION_QUEUE_CONFIG,
-    }),
+    BullModule.registerQueue({ name: 'notification', ...NOTIFICATION_QUEUE_CONFIG }),
     // Payment Queue - refund processing (dedicated consumer)
-    BullModule.registerQueueAsync({
-      name: 'payment',
-      imports: [ConfigModule],
-      useFactory: () => PAYMENT_QUEUE_CONFIG,
-    }),
+    BullModule.registerQueue({ name: 'payment', ...PAYMENT_QUEUE_CONFIG }),
     // Delivery Queue - delivery assignment (dedicated consumer)
-    BullModule.registerQueueAsync({
-      name: 'delivery',
-      imports: [ConfigModule],
-      useFactory: () => DELIVERY_QUEUE_CONFIG,
-    }),
+    BullModule.registerQueue({ name: 'delivery', ...DELIVERY_QUEUE_CONFIG }),
     // Cart Queue - abandoned cart cleanup (daily cron)
-    BullModule.registerQueueAsync({
-      name: CART_QUEUE_NAME,
-      imports: [ConfigModule],
-      useFactory: () => CART_QUEUE_CONFIG,
-    }),
+    BullModule.registerQueue({ name: CART_QUEUE_NAME, ...CART_QUEUE_CONFIG }),
     // Module dependencies for job processors
     forwardRef(() => OrderStateMachineModule),
     NotificationsModule,
