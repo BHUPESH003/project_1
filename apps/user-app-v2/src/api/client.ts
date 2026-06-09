@@ -5,15 +5,19 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Config from 'react-native-config';
 
 // Storage keys — must match authStore
 const ACCESS_TOKEN_KEY = '@auth/access_token';
 const REFRESH_TOKEN_KEY = '@auth/refresh_token';
 
-// ⚠️  Change API_URL to your backend address.
-// For Android emulator: http://10.0.2.2:3000
-// For physical device:  http://<your-machine-ip>:3000
-const API_BASE_URL = 'http://10.0.2.2:3000';
+// API base URL should point to the API root, not just the host.
+// If API_URL does not already include `/api`, append it here to match Nest's global prefix.
+const rawApiUrl = Config.API_URL?.trim() || 'http://10.0.2.2:3000';
+// const rawApiUrl = 'https://b6ef-103-208-169-202.ngrok-free.app';
+const API_BASE_URL = rawApiUrl.replace(/\/+$/, '').endsWith('/api')
+  ? rawApiUrl.replace(/\/+$/, '')
+  : `${rawApiUrl.replace(/\/+$/, '')}/api`;
 
 let onSessionExpiredCallback: (() => void) | null = null;
 let isRefreshing = false;
@@ -33,18 +37,20 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 // --- Request interceptor: attach JWT ---
-apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+apiClient.interceptors.request.use(
+  async (config: InternalAxiosRequestConfig) => {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+);
 
 // --- Response interceptor: 401 → refresh → retry ---
 apiClient.interceptors.response.use(
   (res: AxiosResponse) => res,
-  async (error) => {
+  async error => {
     const original = error.config as AxiosRequestConfig & { _retry?: boolean };
 
     if (error.response?.status === 401 && !original._retry) {
@@ -52,8 +58,11 @@ apiClient.interceptors.response.use(
         // Queue requests while refresh in progress
         return new Promise<string>((resolve, reject) => {
           refreshQueue.push({ resolve, reject });
-        }).then((newToken) => {
-          original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
+        }).then(newToken => {
+          original.headers = {
+            ...original.headers,
+            Authorization: `Bearer ${newToken}`,
+          };
           return apiClient(original);
         });
       }
@@ -65,9 +74,12 @@ apiClient.interceptors.response.use(
         const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
-          refreshToken,
-        });
+        const { data } = await axios.post(
+          `${API_BASE_URL}/auth/refresh-token`,
+          {
+            refreshToken,
+          },
+        );
         const newToken: string = data.accessToken;
 
         await AsyncStorage.setItem(ACCESS_TOKEN_KEY, newToken);
@@ -75,13 +87,16 @@ apiClient.interceptors.response.use(
           await AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
         }
 
-        refreshQueue.forEach((q) => q.resolve(newToken));
+        refreshQueue.forEach(q => q.resolve(newToken));
         refreshQueue = [];
 
-        original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
+        original.headers = {
+          ...original.headers,
+          Authorization: `Bearer ${newToken}`,
+        };
         return apiClient(original);
       } catch {
-        refreshQueue.forEach((q) => q.reject(error));
+        refreshQueue.forEach(q => q.reject(error));
         refreshQueue = [];
         await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
         onSessionExpiredCallback?.();
