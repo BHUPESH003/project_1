@@ -2,11 +2,23 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import type { AuthResponse, RequestOtpResponse, User } from '@/api/types';
 
+type AuthRole = 'USER' | 'SELLER' | 'ADMIN';
+
 // POST /auth/request-otp
 export function useRequestOtp() {
   return useMutation({
-    mutationFn: async (phone: string) => {
-      const { data } = await apiClient.post<RequestOtpResponse>('/auth/request-otp', { phone });
+    mutationFn: async (
+      input: string | { phone: string; role?: AuthRole },
+    ) => {
+      const payload =
+        typeof input === 'string'
+          ? { phone: input, role: 'USER' as const }
+          : { phone: input.phone, role: input.role ?? ('USER' as const) };
+
+      const { data } = await apiClient.post<RequestOtpResponse>(
+        '/auth/request-otp',
+        payload,
+      );
       return data;
     },
   });
