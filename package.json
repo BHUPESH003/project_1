@@ -5,8 +5,5 @@
   "scripts": {
     "build": "pnpm -r run build",
     "clean": "pnpm -r run clean"
-  },
-  "dependencies": {
-    "@10kdevs/matha": "^0.1.9"
   }
 }

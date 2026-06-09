@@ -8,6 +8,7 @@ import { UsersModule } from '@/users/users.module';
 import { DeliveryModule } from '@/delivery/delivery.module';
 import { OrdersModule } from '@/orders/orders.module';
 import { AuthModule } from '@/auth/auth.module';
+import { JwtAuthGuard } from '@/common/guards';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { AuthModule } from '@/auth/auth.module';
     forwardRef(() => OrdersModule),
   ],
   controllers: [CheckoutController],
-  providers: [CheckoutService],
+  providers: [CheckoutService, JwtAuthGuard],
   exports: [CheckoutService],
 })
 export class CheckoutModule {}

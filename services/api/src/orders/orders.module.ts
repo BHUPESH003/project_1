@@ -11,6 +11,7 @@ import { DeliveryModule } from '@/delivery/delivery.module';
 import { QueueModule } from '@/queue/queue.module';
 import { UsersModule } from '@/users/users.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
     forwardRef(() => QueueModule), // For QueueService (circular dependency)
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, OrderRepository],
+  providers: [OrdersService, OrderRepository, JwtAuthGuard, RolesGuard],
   exports: [OrdersService, OrderRepository],
 })
 export class OrdersModule {}

@@ -4,12 +4,22 @@ import { SellersService } from './sellers.service';
 import { SellerRepository } from './repositories/seller.repository';
 import { AuthModule } from '@/auth/auth.module';
 import { FavoritesModule } from '@/favorites/favorites.module';
-import { OptionalJwtAuthGuard } from '@/common/guards';
+import {
+  JwtAuthGuard,
+  OptionalJwtAuthGuard,
+  RolesGuard,
+} from '@/common/guards';
 
 @Module({
   imports: [AuthModule, FavoritesModule],
   controllers: [SellersController],
-  providers: [SellersService, SellerRepository, OptionalJwtAuthGuard],
+  providers: [
+    SellersService,
+    SellerRepository,
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+    RolesGuard,
+  ],
   exports: [SellersService, SellerRepository],
 })
 export class SellersModule {}

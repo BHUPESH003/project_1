@@ -11,6 +11,7 @@ import { DeliveryModule } from '@/delivery/delivery.module';
 import { PaymentsModule } from '@/payments/payments.module';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { BannersModule } from '@/banners/banners.module';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 
 @Module({
   imports: [
@@ -24,7 +25,13 @@ import { BannersModule } from '@/banners/banners.module';
     BannersModule, // For admin banner CRUD
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminAuditService, AdminAnalyticsService],
+  providers: [
+    AdminService,
+    AdminAuditService,
+    AdminAnalyticsService,
+    JwtAuthGuard,
+    RolesGuard,
+  ],
   exports: [AdminService],
 })
 export class AdminModule {}
