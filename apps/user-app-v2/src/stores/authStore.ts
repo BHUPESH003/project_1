@@ -28,10 +28,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   sessionExpired:  false,
 
   async login({ accessToken, refreshToken, user }) {
-    await AsyncStorage.multiSet([
-      [ACCESS_TOKEN_KEY,  accessToken],
-      [REFRESH_TOKEN_KEY, refreshToken],
-      [USER_KEY, JSON.stringify(user)],
+    await Promise.all([
+      AsyncStorage.setItem(ACCESS_TOKEN_KEY, accessToken),
+      AsyncStorage.setItem(REFRESH_TOKEN_KEY, refreshToken),
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(user)),
     ]);
     set({
       token: accessToken,
@@ -43,16 +43,20 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   async logout() {
-    await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
+    await Promise.all([
+      AsyncStorage.removeItem(ACCESS_TOKEN_KEY),
+      AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
+      AsyncStorage.removeItem(USER_KEY),
+    ]);
     set({ token: null, refreshToken: null, user: null, isAuthenticated: false, sessionExpired: false });
   },
 
   async restoreSession() {
     try {
-      const [[, token], [, refresh], [, userJson]] = await AsyncStorage.multiGet([
-        ACCESS_TOKEN_KEY,
-        REFRESH_TOKEN_KEY,
-        USER_KEY,
+      const [token, refresh, userJson] = await Promise.all([
+        AsyncStorage.getItem(ACCESS_TOKEN_KEY),
+        AsyncStorage.getItem(REFRESH_TOKEN_KEY),
+        AsyncStorage.getItem(USER_KEY),
       ]);
       if (token && userJson) {
         set({

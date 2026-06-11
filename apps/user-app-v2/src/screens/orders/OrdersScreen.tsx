@@ -4,7 +4,6 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -66,16 +65,7 @@ export function OrdersScreen() {
   const nav    = useNavigation<Nav>();
 
   const { data: activeOrders, isLoading: loadingActive, refetch: refetchActive } = useActiveOrders();
-  const {
-    data: pastPages,
-    isLoading: loadingPast,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch: refetchPast,
-  } = usePastOrders();
-
-  const pastOrders: Order[] = pastPages?.pages.flatMap((p) => p.data) ?? [];
+  const { data: pastOrders = [], isLoading: loadingPast, refetch: refetchPast } = usePastOrders();
 
   const onRefresh = useCallback(() => {
     refetchActive();
@@ -153,16 +143,6 @@ export function OrdersScreen() {
             </View>
           ) : null
         }
-        ListFooterComponent={
-          isFetchingNextPage ? (
-            <ActivityIndicator
-              style={{ marginVertical: spacing.xl }}
-              color={colors.primary}
-            />
-          ) : null
-        }
-        onEndReached={() => hasNextPage && fetchNextPage()}
-        onEndReachedThreshold={0.4}
         removeClippedSubviews
         windowSize={5}
         maxToRenderPerBatch={8}

@@ -13,8 +13,8 @@ const REFRESH_TOKEN_KEY = '@auth/refresh_token';
 
 // API base URL should point to the API root, not just the host.
 // If API_URL does not already include `/api`, append it here to match Nest's global prefix.
-const rawApiUrl = Config.API_URL?.trim() || 'http://10.0.2.2:3000';
-// const rawApiUrl = 'https://b6ef-103-208-169-202.ngrok-free.app';
+// const rawApiUrl = Config.API_URL?.trim() || 'http://10.0.2.2:3000';
+const rawApiUrl = 'https://b44a-202-66-164-178.ngrok-free';
 const API_BASE_URL = rawApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? rawApiUrl.replace(/\/+$/, '')
   : `${rawApiUrl.replace(/\/+$/, '')}/api`;
@@ -47,13 +47,31 @@ apiClient.interceptors.request.use(
   },
 );
 
-// --- Response interceptor: 401 → refresh → retry ---
+// --- Response interceptor: unwrap TransformInterceptor envelope + 401 refresh ---
 apiClient.interceptors.response.use(
-  (res: AxiosResponse) => res,
+  (res: AxiosResponse) => {
+    // Backend wraps every response: { code, data, message }
+    // Unwrap so callers always receive the inner payload via r.data
+    if (
+      res.data !== null &&
+      typeof res.data === 'object' &&
+      'code' in res.data &&
+      'data' in res.data &&
+      'message' in res.data
+    ) {
+      return { ...res, data: res.data.data };
+    }
+    return res;
+  },
   async error => {
     const original = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !original._retry) {
+    // Auth endpoints return 401 for invalid credentials, not for expired tokens —
+    // never trigger the token-refresh flow for them.
+    const url = original?.url ?? '';
+    const isAuthEndpoint = url.includes('/auth/');
+
+    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         // Queue requests while refresh in progress
         return new Promise<string>((resolve, reject) => {
@@ -74,17 +92,20 @@ apiClient.interceptors.response.use(
         const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post(
+        const { data: raw } = await axios.post(
           `${API_BASE_URL}/auth/refresh-token`,
           {
             refreshToken,
           },
         );
-        const newToken: string = data.accessToken;
+        // Unwrap TransformInterceptor envelope if present
+        const payload =
+          raw?.code !== undefined && raw?.data !== undefined ? raw.data : raw;
+        const newToken: string = payload.accessToken;
 
         await AsyncStorage.setItem(ACCESS_TOKEN_KEY, newToken);
-        if (data.refreshToken) {
-          await AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+        if (payload.refreshToken) {
+          await AsyncStorage.setItem(REFRESH_TOKEN_KEY, payload.refreshToken);
         }
 
         refreshQueue.forEach(q => q.resolve(newToken));
@@ -113,7 +134,10 @@ apiClient.interceptors.response.use(
 // Helper: extract error message from any shape
 export function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    return err.response?.data?.message ?? err.message ?? 'Something went wrong';
+    const body = err.response?.data;
+    // Unwrap TransformInterceptor envelope: { code, data, message }
+    const message = body?.message ?? err.message ?? 'Something went wrong';
+    return message;
   }
   if (err instanceof Error) return err.message;
   return 'Something went wrong';

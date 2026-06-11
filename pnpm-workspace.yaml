@@ -3,3 +3,10 @@ packages:
   - services/*
   - packages/*
   - tooling/*
+  # user-app-v2 is a React Native app and is intentionally NOT a workspace member.
+  # RN's native build (Gradle ../node_modules paths) and Metro require a flat,
+  # app-local node_modules; pnpm's workspace hoisting + peer isolation otherwise
+  # split react-native-worklets into two copies and crash the app on worklet use.
+  # It installs standalone (see apps/user-app-v2/.npmrc: node-linker=hoisted) via
+  # `pnpm install --ignore-workspace` run inside apps/user-app-v2.
+  - "!apps/user-app-v2"

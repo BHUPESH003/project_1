@@ -1,17 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
-  Pressable,
   ActivityIndicator,
 } from 'react-native';
 import { useColors } from '@/theme';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { SellerCard, SellerCardSkeleton } from '@/components/cards/SellerCard';
-import { useSellers, type SellersSort } from '@/api/hooks/useSellers';
+import { useSellers } from '@/api/hooks/useSellers';
 import { useAddressStore } from '@/stores/addressStore';
 import type { Seller } from '@/api/types';
 
@@ -21,25 +20,17 @@ interface SellerListProps {
   contentPaddingBottom?: number;
 }
 
-const SORTS: { label: string; value: SellersSort }[] = [
-  { label: 'Nearest', value: 'distance' },
-  { label: 'Top rated', value: 'rating' },
-  { label: 'Newest', value: 'newest' },
-];
-
 export function SellerList({ categoryId, onSellerPress, contentPaddingBottom = 0 }: SellerListProps) {
   const colors = useColors();
   const address = useAddressStore((s) => s.selectedAddress);
-  const [sort, setSort] = useState<SellersSort>('distance');
 
   const params = useMemo(
     () => ({
       lat: address?.lat,
       lng: address?.lng,
-      sort,
-      categoryId,
+      category: categoryId,
     }),
-    [address?.lat, address?.lng, sort, categoryId],
+    [address?.lat, address?.lng, categoryId],
   );
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch, isRefetching } =
@@ -58,40 +49,11 @@ export function SellerList({ categoryId, onSellerPress, contentPaddingBottom = 0
 
   return (
     <View style={styles.wrap}>
-      {/* Section header + sort pills */}
+      {/* Section header */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Shops near you
         </Text>
-        <View style={styles.sortRow}>
-          {SORTS.map((s) => (
-            <Pressable
-              key={s.value}
-              style={[
-                styles.sortPill,
-                {
-                  backgroundColor:
-                    sort === s.value ? colors.primarySoft : colors.surface2,
-                  borderColor:
-                    sort === s.value ? colors.primarySoftBorder : colors.border,
-                },
-              ]}
-              onPress={() => setSort(s.value)}
-            >
-              <Text
-                style={[
-                  styles.sortText,
-                  {
-                    color:
-                      sort === s.value ? colors.primary : colors.text2,
-                  },
-                ]}
-              >
-                {s.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
       </View>
 
       {/* Loading skeletons */}
@@ -155,16 +117,8 @@ export function SellerList({ categoryId, onSellerPress, contentPaddingBottom = 0
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
-  sectionHeader: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+  sectionHeader: { paddingHorizontal: spacing.xl },
   sectionTitle: { fontSize: fontSize.titleLg, fontWeight: fontWeight.bold },
-  sortRow: { flexDirection: 'row', gap: spacing.sm },
-  sortPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  sortText: { fontSize: fontSize.caption, fontWeight: fontWeight.medium },
   skeletons: { paddingHorizontal: spacing.xl, gap: spacing.md },
   cardSpacing: { marginHorizontal: spacing.xl },
   empty: {

@@ -1,32 +1,47 @@
-import { useQuery, useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import type { Order, PaginatedOrders } from '@/api/types';
+import { mapOrder } from '@/api/mappers';
+import type { Order } from '@/api/types';
+
+const ACTIVE_STATUSES = new Set([
+  'CREATED',
+  'SELLER_SELECTED',
+  'CONFIRMED',
+  'PREPARING',
+  'READY_FOR_PICKUP',
+  'OUT_FOR_DELIVERY',
+]);
+
+function toOrders(raw: unknown): Order[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(mapOrder);
+}
 
 export function useActiveOrders() {
   return useQuery({
     queryKey: ['orders', 'active'],
     queryFn: () =>
-      apiClient.get<Order[]>('/orders?status=active').then((r) => r.data),
+      apiClient.get<any>('/orders').then((r) =>
+        toOrders(r.data).filter((o) => ACTIVE_STATUSES.has(o.status)),
+      ),
     refetchInterval: 30_000,
   });
 }
 
 export function usePastOrders() {
-  return useInfiniteQuery({
+  return useQuery({
     queryKey: ['orders', 'past'],
-    queryFn: ({ pageParam = 1 }) =>
-      apiClient
-        .get<PaginatedOrders>(`/orders?status=past&page=${pageParam}`)
-        .then((r) => r.data),
-    getNextPageParam: (last) => (last.hasNextPage ? last.page + 1 : undefined),
-    initialPageParam: 1,
+    queryFn: () =>
+      apiClient.get<any>('/orders').then((r) =>
+        toOrders(r.data).filter((o) => !ACTIVE_STATUSES.has(o.status)),
+      ),
   });
 }
 
 export function useOrder(id: string) {
   return useQuery({
     queryKey: ['order', id],
-    queryFn: () => apiClient.get<Order>(`/orders/${id}`).then((r) => r.data),
+    queryFn: () => apiClient.get<any>(`/orders/${id}`).then((r) => mapOrder(r.data)),
     enabled: !!id,
   });
 }

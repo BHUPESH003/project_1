@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
+import { mapFavorite, mapUser } from '@/api/mappers';
 import type {
   User,
   Seller,
@@ -10,8 +11,11 @@ import type {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateUserDto) =>
-      apiClient.patch<User>('/users/me', data).then((r) => r.data),
+    mutationFn: (data: UpdateUserDto) => {
+      // Backend does not accept fcmToken — strip it to avoid 400
+      const { fcmToken: _stripped, ...safe } = data as UpdateUserDto & { fcmToken?: string };
+      return apiClient.patch<any>('/users/me', safe).then((r) => mapUser(r.data));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   });
 }
@@ -37,10 +41,13 @@ export function useNotificationPreferences() {
 export function useUpdateNotificationPreferences() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<NotificationPreferences>) =>
-      apiClient
-        .patch<NotificationPreferences>('/users/me/notification-preferences', data)
-        .then((r) => r.data),
+    mutationFn: (data: Partial<NotificationPreferences>) => {
+      // Backend DTO does not include newSellers — strip to avoid 400
+      const { newSellers: _stripped, ...safe } = data as Partial<NotificationPreferences> & { newSellers?: boolean };
+      return apiClient
+        .patch<NotificationPreferences>('/users/me/notification-preferences', safe)
+        .then((r) => r.data);
+    },
     onSuccess: (data) => qc.setQueryData(['notification-prefs'], data),
   });
 }
@@ -48,7 +55,10 @@ export function useUpdateNotificationPreferences() {
 export function useFavorites() {
   return useQuery({
     queryKey: ['favorites'],
-    queryFn: () => apiClient.get<Seller[]>('/favorites').then((r) => r.data),
+    queryFn: () =>
+      apiClient
+        .get<any[]>('/favorites')
+        .then((r) => (Array.isArray(r.data) ? r.data.map(mapFavorite) : [])),
   });
 }
 

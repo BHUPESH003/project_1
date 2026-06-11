@@ -130,6 +130,7 @@ export function OtpScreen({ route, navigation }: Props) {
     async (code: string) => {
       try {
         const res = await verifyOtp.mutateAsync({ phone, otp: code });
+        console.log('OTP verified, logging in:', res);
         await login({
           accessToken: res.accessToken,
           refreshToken: res.refreshToken,

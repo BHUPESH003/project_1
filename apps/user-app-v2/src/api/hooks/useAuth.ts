@@ -7,9 +7,7 @@ type AuthRole = 'USER' | 'SELLER' | 'ADMIN';
 // POST /auth/request-otp
 export function useRequestOtp() {
   return useMutation({
-    mutationFn: async (
-      input: string | { phone: string; role?: AuthRole },
-    ) => {
+    mutationFn: async (input: string | { phone: string; role?: AuthRole }) => {
       const payload =
         typeof input === 'string'
           ? { phone: input, role: 'USER' as const }
@@ -28,7 +26,11 @@ export function useRequestOtp() {
 export function useVerifyOtp() {
   return useMutation({
     mutationFn: async ({ phone, otp }: { phone: string; otp: string }) => {
-      const { data } = await apiClient.post<AuthResponse>('/auth/verify-otp', { phone, otp });
+      const { data } = await apiClient.post<AuthResponse>('/auth/verify-otp', {
+        phone,
+        otp,
+      });
+      console.log('AuthResponse:', data);
       return data;
     },
   });

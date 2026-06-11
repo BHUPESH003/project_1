@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
+import { mapSearchResult } from '@/api/mappers';
 import type { SearchResult, AutocompleteResult } from '@/api/types';
 
 export function useSearch(query: string, lat?: number, lng?: number) {
@@ -10,8 +11,8 @@ export function useSearch(query: string, lat?: number, lng?: number) {
       if (lat !== undefined) params.lat = lat;
       if (lng !== undefined) params.lng = lng;
       return apiClient
-        .get<SearchResult>('/search', { params })
-        .then((r) => r.data);
+        .get<any>('/search', { params })
+        .then((r) => mapSearchResult(r.data ?? {}));
     },
     enabled: query.trim().length >= 2,
   });
@@ -25,7 +26,7 @@ export function useAutocomplete(query: string) {
         .get<AutocompleteResult[]>('/location/autocomplete', {
           params: { query },
         })
-        .then((r) => r.data),
+        .then((r) => (Array.isArray(r.data) ? r.data : [])),
     enabled: query.trim().length >= 2,
     staleTime: 30_000,
   });

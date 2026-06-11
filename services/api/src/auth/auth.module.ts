@@ -9,7 +9,6 @@ import { InfobipProvider } from './providers/infobip/infobip.provider';
 import { OtpService } from './services/otp.service';
 import { JwtService } from './services/jwt.service';
 import { OtpRepository } from './repositories/otp.repository';
-import { UserRepository } from '@/users/repositories/user.repository';
 import { UsersModule } from '@/users/users.module';
 import { JWT_CONFIG, getConfigValue } from '@/constants';
 

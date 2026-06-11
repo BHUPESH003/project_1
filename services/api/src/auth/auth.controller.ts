@@ -38,6 +38,7 @@ export class AuthController {
     description: 'Too many OTP requests. Please try again later.',
   })
   requestOtp(@Body() requestOtpDto: RequestOtpDto) {
+    console.log('Received request OTP:', requestOtpDto);
     return this.authService.requestOtp(requestOtpDto);
   }
 
