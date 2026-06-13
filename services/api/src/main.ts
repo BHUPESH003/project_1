@@ -158,7 +158,9 @@ async function bootstrap() {
 
   // Start server
   const port = configService.get<number>('PORT', 3000);
-  await app.listen(port);
+  // Bind to all interfaces so the Fly.io proxy (and any container runtime) can
+  // reach the server; the Node default can bind IPv6-only in some images.
+  await app.listen(port, '0.0.0.0');
 
   logger.log(
     `🚀 Application is running on: http://localhost:${port}/${apiPrefix}`,
