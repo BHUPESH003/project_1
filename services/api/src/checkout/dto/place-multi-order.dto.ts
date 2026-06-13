@@ -5,7 +5,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -13,7 +12,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class SellerOrderInputDto {
   @ApiProperty({ description: 'Seller ID to place order with' })
   @IsString()
-  @IsUUID()
   sellerId!: string;
 
   @ApiPropertyOptional({
@@ -53,7 +51,6 @@ export class PlaceMultiOrderDto {
     description: 'Delivery address ID to use for all orders in this batch',
   })
   @IsString()
-  @IsUUID()
   deliveryAddressId!: string;
 
   @ApiProperty({

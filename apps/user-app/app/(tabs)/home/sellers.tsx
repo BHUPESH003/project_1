@@ -36,12 +36,14 @@ const CATEGORY_TITLES: Record<string, string> = {
 };
 
 function mapSellerToCard(s: SellerListItem) {
+  // The /sellers list is camelCase; older builds were snake_case — accept both.
+  const distanceKm = s.distanceKm ?? s.distance_km;
   return {
-    id: s.seller_id,
-    name: s.shop_name,
-    pricePerUnit: String(s.price_breakdown?.per_page ?? 0),
-    distance: s.distance_km != null ? `${s.distance_km} km` : '—',
-    eta: `${s.prep_time_min ?? 0} min`,
+    id: s.id ?? s.seller_id ?? '',
+    name: s.shopName ?? s.shop_name ?? '',
+    pricePerUnit: String(s.pricePerPage ?? s.price_breakdown?.per_page ?? 0),
+    distance: distanceKm != null ? `${distanceKm} km` : '—',
+    eta: `${s.prepTimeMinutes ?? s.prep_time_min ?? 0} min`,
   };
 }
 

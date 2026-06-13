@@ -1,19 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsNumber, IsString } from 'class-validator';
 
 export class PlaceOrderDto {
   @ApiProperty({
     description: 'Seller ID for which order is being placed',
   })
   @IsString()
-  @IsUUID()
   sellerId!: string;
 
   @ApiProperty({
     description: 'Delivery address ID selected by user',
   })
   @IsString()
-  @IsUUID()
   deliveryAddressId!: string;
 
   @ApiProperty({

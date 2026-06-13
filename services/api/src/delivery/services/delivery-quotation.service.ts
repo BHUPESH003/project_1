@@ -280,20 +280,33 @@ export class DeliveryQuotationService {
    * Format multiple quotations into response
    */
   private formatResponse(quotations: any[]): AvailableDeliveryPartnersResponse {
-    const partners = quotations.map(
-      (q) =>
-        new DeliveryPartnerQuotation({
-          quotationId: q.id,
-          providerName: q.deliveryPartner.displayName,
-          providerId: q.deliveryPartner.providerName,
-          quotedFeeRupees: q.quotedFeeRupees.toNumber(),
-          estimatedMinutes: q.estimatedMinutes,
-          isAvailable: true,
-          priority: q.deliveryPartner.priority,
-          successRatePercent: q.deliveryPartner.successRate?.toNumber() || 95,
-          expiresAt: q.expiresAt,
-        }),
-    );
+    // `quotations` can be raw DB rows (cached path — has a `deliveryPartner`
+    // relation and Prisma Decimal fees) OR already-formatted
+    // DeliveryPartnerQuotation DTOs (live path — flat fields, numeric fees).
+    // Coerce both into the response shape.
+    const toNum = (v: any): number | undefined =>
+      v == null
+        ? undefined
+        : typeof v === 'number'
+          ? v
+          : typeof v?.toNumber === 'function'
+            ? v.toNumber()
+            : Number(v);
+
+    const partners = quotations.map((q) => {
+      const dp = q.deliveryPartner;
+      return new DeliveryPartnerQuotation({
+        quotationId: q.quotationId ?? q.id,
+        providerName: dp?.displayName ?? q.providerName,
+        providerId: dp?.providerName ?? q.providerId,
+        quotedFeeRupees: toNum(q.quotedFeeRupees) ?? 0,
+        estimatedMinutes: q.estimatedMinutes,
+        isAvailable: true,
+        priority: dp?.priority ?? q.priority ?? 0,
+        successRatePercent: toNum(dp?.successRate) ?? q.successRatePercent ?? 95,
+        expiresAt: q.expiresAt,
+      });
+    });
 
     const cheapest = [...partners].sort(
       (a, b) => a.quotedFeeRupees - b.quotedFeeRupees,

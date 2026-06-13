@@ -376,7 +376,7 @@ export class SellersController {
       rating: 4.9,
       discountThreshold: 50,
       discountPercent: 10.0,
-      distance_km: 0.5,
+      distanceKm: 0.5,
       categories: [{ id: 'printing', name: 'Printing' }],
     },
   })

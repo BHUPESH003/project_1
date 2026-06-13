@@ -20,7 +20,7 @@ export class SearchService {
   async search(q: string, limit = 20) {
     const term = q?.trim();
     if (!term || term.length < 2) {
-      return { shops: [], products: [], query: term || '' };
+      return { sellers: [], products: [], query: term || '' };
     }
 
     const [sellers, products] = await Promise.all([
@@ -74,13 +74,13 @@ export class SearchService {
       s3Region: region ?? undefined,
     };
 
-    const shops = sellers.map((s) => ({
-      seller_id: s.id,
-      shop_name: s.shopName,
+    const sellerList = sellers.map((s) => ({
+      id: s.id,
+      shopName: s.shopName,
       address: s.address,
       status: s.status,
       rating: s.rating != null ? Number(s.rating) : null,
-      image_url: buildAssetUrl(s.imagePath, opt),
+      imageUrl: buildAssetUrl(s.imagePath, opt),
       categories: s.categories.map((sc) => ({
         id: sc.category.id,
         name: sc.category.name,
@@ -88,19 +88,19 @@ export class SearchService {
     }));
 
     const productList = products.map((p) => ({
-      product_id: p.id,
+      id: p.id,
       name: p.name,
       description: p.description,
       category: p.category,
       price: Number(p.price),
       image: p.image,
-      seller_id: p.sellerId,
-      shop_name: p.seller.shopName,
+      sellerId: p.sellerId,
+      shopName: p.seller.shopName,
     }));
 
     return {
       query: term,
-      shops,
+      sellers: sellerList,
       products: productList,
     };
   }

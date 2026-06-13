@@ -28,4 +28,12 @@ export class LocationController {
   getAutocomplete(@Query('query') query: string) {
     return this.locationService.getAutocomplete(query);
   }
+
+  @Get('place-details')
+  @ApiOperation({ summary: 'Resolve a place_id to coordinates' })
+  @ApiQuery({ name: 'placeId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Coordinates for the place' })
+  getPlaceDetails(@Query('placeId') placeId: string) {
+    return this.locationService.getPlaceDetails(placeId);
+  }
 }

@@ -72,17 +72,15 @@ export class SellersService {
 
     const list = sellers.map((seller) => {
       const result: Record<string, unknown> = {
-        seller_id: seller.id,
-        shop_name: seller.shopName,
+        id: seller.id,
+        shopName: seller.shopName,
         address: seller.address,
         description: seller.description ?? null,
-        price_breakdown: {
-          per_page: seller.pricePerPage ? Number(seller.pricePerPage) : 0,
-        },
-        prep_time_min: seller.prepTimeMinutes,
+        pricePerPage: seller.pricePerPage ? Number(seller.pricePerPage) : 0,
+        prepTimeMinutes: seller.prepTimeMinutes,
         status: seller.status,
-        rating: seller.rating,
-        image_url: buildAssetUrl(seller.imagePath, {
+        rating: seller.rating != null ? Number(seller.rating) : null,
+        imageUrl: buildAssetUrl(seller.imagePath, {
           s3PublicBaseUrl: baseUrl ?? undefined,
           s3Bucket: bucket ?? undefined,
           s3Region: region ?? undefined,
@@ -91,15 +89,15 @@ export class SellersService {
           id: sc.category.id,
           name: sc.category.name,
         })),
-        is_favorited: userId != null ? favoriteIds.has(seller.id) : undefined,
+        isFavorite: userId != null ? favoriteIds.has(seller.id) : undefined,
       };
       if ('distanceKm' in seller) {
         const dist = (seller as any).distanceKm;
-        result.distance_km = Math.round(dist * 100) / 100;
-        result.estimated_delivery_time_mins =
+        result.distanceKm = Math.round(dist * 100) / 100;
+        result.estimatedDeliveryTimeMins =
           seller.prepTimeMinutes + Math.ceil(dist * 5);
       } else {
-        result.estimated_delivery_time_mins = seller.prepTimeMinutes;
+        result.estimatedDeliveryTimeMins = seller.prepTimeMinutes;
       }
       return result;
     });
@@ -165,7 +163,7 @@ export class SellersService {
       const sellerLat = Number(seller.latitude);
       const sellerLng = Number(seller.longitude);
       const distance = this.calculateDistance(lat, lng, sellerLat, sellerLng);
-      result.distance_km = Math.round(distance * 100) / 100;
+      result.distanceKm = Math.round(distance * 100) / 100;
     }
 
     return result;

@@ -283,7 +283,9 @@ export class CheckoutService {
 
     const itemsPayload = itemsForSeller.map((it) => ({
       productId: it.productId,
+      name: it.product?.name ?? (it.payload as any)?.productName ?? 'Item',
       quantity: it.quantity,
+      price: Number(it.product?.price ?? it.priceAtAdd ?? 0),
       cartItemId: it.id,
       payload: it.payload,
     }));
@@ -368,7 +370,9 @@ export class CheckoutService {
       const orderPayload = {
         items: sellerItems.map((it) => ({
           productId: it.productId,
+          name: it.product?.name ?? (it.payload as any)?.productName ?? 'Item',
           quantity: it.quantity,
+          price: Number(it.product?.price ?? it.priceAtAdd ?? 0),
           cartItemId: it.id,
           payload: it.payload,
         })),

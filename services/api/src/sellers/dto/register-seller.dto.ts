@@ -3,7 +3,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -57,7 +56,7 @@ export class RegisterSellerDto {
     type: [String],
   })
   @IsArray()
-  @IsUUID('4', { each: true })
+  @IsString({ each: true })
   categoryIds!: string[];
 
   @ApiPropertyOptional({

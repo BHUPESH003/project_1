@@ -158,7 +158,7 @@ export class CartService {
   ) {
     const product = await this.prisma.prisma.product.findUnique({
       where: { id: data.productId },
-      select: { id: true, sellerId: true, inStock: true },
+      select: { id: true, sellerId: true, inStock: true, price: true },
     });
     if (!product) throw new NotFoundException('Product not found');
 
@@ -194,6 +194,8 @@ export class CartService {
         productId: product.id,
         quantity,
         payload: payload,
+        // Snapshot the product price at add-time (priceAtAdd defaults to 0 otherwise).
+        priceAtAdd: product.price,
       },
     });
   }

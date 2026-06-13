@@ -7,13 +7,20 @@ import client from './client';
 import { unwrap } from './unwrap';
 
 export interface SellerListItem {
-  seller_id: string;
-  shop_name: string;
-  address: string;
-  price_breakdown: { per_page: number };
-  prep_time_min: number;
-  status: string;
+  // Current (camelCase) shape from GET /sellers.
+  id?: string;
+  shopName?: string;
+  pricePerPage?: number;
+  prepTimeMinutes?: number;
+  distanceKm?: number;
+  // Legacy snake_case shape (older API builds); kept optional for back-compat.
+  seller_id?: string;
+  shop_name?: string;
+  price_breakdown?: { per_page: number };
+  prep_time_min?: number;
   distance_km?: number;
+  address: string;
+  status: string;
 }
 
 export interface SellerCategoryTag {
@@ -117,14 +124,14 @@ export const sellersApi = {
       shopName: String(seller.shopName ?? seller.shop_name ?? 'Unknown Shop'),
       address: String(seller.address ?? ''),
       description: typeof seller.description === 'string' ? seller.description : null,
-      distance: Number(seller.distance ?? seller.distance_km ?? 0),
+      distance: Number(seller.distance ?? seller.distanceKm ?? seller.distance_km ?? 0),
       rating: Number(seller.rating ?? 0),
       imageUrl: (() => {
         const img = seller.imageUrl ?? seller.image_url;
         return img !== null && img !== undefined && typeof img === 'string' ? img : null;
       })(),
       isOpen: Boolean(seller.isOpen ?? (seller.status ? String(seller.status).toUpperCase() === 'ONLINE' : true)),
-      isFavorited: Boolean(seller.isFavorited ?? false),
+      isFavorited: Boolean(seller.isFavorited ?? seller.isFavorite ?? false),
       prepTimeMinutes: Number(seller.prepTimeMinutes ?? seller.prep_time_min ?? 15),
       categories: Array.isArray(seller.categories)
         ? (seller.categories as Array<{ id?: string; name?: string }>).map((c) => ({ id: String(c.id ?? ''), name: String(c.name ?? '') }))

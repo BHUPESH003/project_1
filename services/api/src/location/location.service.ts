@@ -77,6 +77,8 @@ export class LocationService {
     placeId: string;
     mainText: string;
     secondaryText: string;
+    latitude?: number;
+    longitude?: number;
   }>> {
     const useGoogle = this.configService.get<string>(
       'GOOGLE_GEO_API_KEY', // Changed to match common naming
@@ -88,6 +90,8 @@ export class LocationService {
         );
         const data = await res.json();
         if (data.status === 'OK') {
+          // Google autocomplete predictions do NOT include coordinates — the
+          // client resolves them via getPlaceDetails(placeId) on selection.
           return data.predictions.map((p: any) => ({
             description: p.description,
             placeId: p.place_id,
@@ -100,13 +104,14 @@ export class LocationService {
       }
     }
 
-    // Mock response for common local areas
+    // Mock response for common local areas (coords included so selection works
+    // without a Google key in dev).
     const mocks = [
-      { mainText: 'Cyber City', secondaryText: 'DLF Phase 2, Gurugram' },
-      { mainText: 'Cyber Hub', secondaryText: 'DLF Phase 3, Gurugram' },
-      { mainText: 'Ambience Mall', secondaryText: 'NH-8, Gurugram' },
-      { mainText: 'Sector 29', secondaryText: 'Main Market, Gurugram' },
-      { mainText: 'M.G. Road', secondaryText: 'Iffco Chowk, Gurugram' },
+      { mainText: 'Cyber City', secondaryText: 'DLF Phase 2, Gurugram', latitude: 28.4948, longitude: 77.088 },
+      { mainText: 'Cyber Hub', secondaryText: 'DLF Phase 3, Gurugram', latitude: 28.4951, longitude: 77.0889 },
+      { mainText: 'Ambience Mall', secondaryText: 'NH-8, Gurugram', latitude: 28.5045, longitude: 77.0967 },
+      { mainText: 'Sector 29', secondaryText: 'Main Market, Gurugram', latitude: 28.467, longitude: 77.062 },
+      { mainText: 'M.G. Road', secondaryText: 'Iffco Chowk, Gurugram', latitude: 28.4793, longitude: 77.07 },
     ];
 
     return mocks
@@ -116,6 +121,40 @@ export class LocationService {
         placeId: `mock-id-${index}`,
         mainText: m.mainText,
         secondaryText: m.secondaryText,
+        latitude: m.latitude,
+        longitude: m.longitude,
       }));
+  }
+
+  /**
+   * Resolve a Google place_id to coordinates via the Place Details API.
+   * Autocomplete predictions carry no geometry, so the client calls this after
+   * the user selects a suggestion. Returns null if unresolved (caller handles).
+   */
+  async getPlaceDetails(placeId: string): Promise<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null> {
+    const useGoogle = this.configService.get<string>('GOOGLE_GEO_API_KEY');
+    if (useGoogle && !placeId.startsWith('mock-id-')) {
+      try {
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=geometry,formatted_address&key=${useGoogle}`,
+        );
+        const data = await res.json();
+        const loc = data?.result?.geometry?.location;
+        if (data.status === 'OK' && loc) {
+          return {
+            latitude: loc.lat,
+            longitude: loc.lng,
+            address: data.result.formatted_address ?? '',
+          };
+        }
+      } catch (e) {
+        this.logger.warn('Place details failed', e);
+      }
+    }
+    return null;
   }
 }

@@ -33,11 +33,11 @@ export function mapSeller(raw: any): Seller {
     coverImageUrl: raw.cover_image_url ?? raw.coverImageUrl ?? undefined,
     rating: raw.rating ?? 0,
     reviewCount: raw.review_count ?? raw.reviewCount ?? 0,
-    distance: raw.distance_km ?? raw.distance ?? undefined,
+    distance: raw.distanceKm ?? raw.distance_km ?? raw.distance ?? undefined,
     prepTime: raw.prep_time_min ?? raw.prepTimeMinutes ?? raw.prepTime ?? undefined,
     isOnline: raw.status === 'ONLINE' || raw.isOnline === true,
     isVerified: raw.is_verified ?? raw.isVerified ?? false,
-    isFavorited: raw.is_favorited ?? raw.isFavorited ?? false,
+    isFavorited: raw.is_favorited ?? raw.isFavorited ?? raw.isFavorite ?? false,
     categories: cats.map((c) => (typeof c === 'string' ? c : (c.name ?? ''))),
     startingPrice: priceRaw != null ? `₹${priceRaw}` : raw.startingPrice ?? undefined,
     address: raw.address != null
@@ -189,7 +189,7 @@ export function mapSearchResult(raw: any): SearchResult {
       categoryName: p.category ?? p.categoryName ?? undefined,
       inStock: p.inStock ?? true,
       sellerId: p.seller_id ?? p.sellerId ?? '',
-      sellerName: p.shop_name ?? p.sellerName ?? '',
+      sellerName: p.shop_name ?? p.shopName ?? p.sellerName ?? '',
     })),
   };
 }

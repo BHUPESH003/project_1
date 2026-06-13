@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GetCheckoutQueryDto {
@@ -6,7 +6,6 @@ export class GetCheckoutQueryDto {
     description: 'Seller ID for which checkout summary is requested',
   })
   @IsString()
-  @IsUUID()
   sellerId!: string;
 
   @ApiPropertyOptional({
@@ -14,6 +13,5 @@ export class GetCheckoutQueryDto {
   })
   @IsOptional()
   @IsString()
-  @IsUUID()
   deliveryAddressId?: string;
 }

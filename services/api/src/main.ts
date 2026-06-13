@@ -75,31 +75,33 @@ async function bootstrap() {
 
   // Security
   app.use(helmet());
+  const corsEnabled = configService.get<string>('CORS_ENALED');
 
-  // CORS — restrict in production via CORS_ORIGINS env var; allow all in dev
-  const corsOrigins = configService.get<string>('CORS_ORIGINS', '');
-  if (corsOrigins) {
-    const allowedOrigins = corsOrigins.split(',').map((o) => o.trim());
-    app.enableCors({
-      origin: (
-        origin: string | undefined,
-        callback: (err: Error | null, allow?: boolean) => void,
-      ) => {
-        // Allow server-to-server calls (no origin) and listed origins
-        if (!origin || allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-        return callback(new Error(`Origin ${origin} not allowed by CORS`));
-      },
-      credentials: true,
-    });
-    logger.log(`CORS restricted to: ${allowedOrigins.join(', ')}`);
-  } else {
-    // Development / local: allow everything
-    app.enableCors({ origin: true, credentials: true });
-    logger.log('CORS open (set CORS_ORIGINS to restrict in production)');
+  if (corsEnabled != 'true') {
+    // CORS — restrict in production via CORS_ORIGINS env var; allow all in dev
+    const corsOrigins = configService.get<string>('CORS_ORIGINS', '');
+    if (corsOrigins) {
+      const allowedOrigins = corsOrigins.split(',').map((o) => o.trim());
+      app.enableCors({
+        origin: (
+          origin: string | undefined,
+          callback: (err: Error | null, allow?: boolean) => void,
+        ) => {
+          // Allow server-to-server calls (no origin) and listed origins
+          if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+          return callback(new Error(`Origin ${origin} not allowed by CORS`));
+        },
+        credentials: true,
+      });
+      logger.log(`CORS restricted to: ${allowedOrigins.join(', ')}`);
+    } else {
+      // Development / local: allow everything
+      app.enableCors({ origin: true, credentials: true });
+      logger.log('CORS open (set CORS_ORIGINS to restrict in production)');
+    }
   }
-
   // Global prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api');
   app.setGlobalPrefix(apiPrefix);
