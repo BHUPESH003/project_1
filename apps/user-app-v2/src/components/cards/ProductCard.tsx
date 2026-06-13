@@ -33,8 +33,9 @@ function ProductCardComponent({ product, sellerId, sellerName, onPrintingPress, 
   const colors = useColors();
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
-  const getItemByProduct = useCartStore((s) => s.getItemByProduct);
-  const cartItem = getItemByProduct(product.id, sellerId);
+  const cartItem = useCartStore((s) =>
+    s.items.find((it) => it.productId === product.id && it.sellerId === sellerId),
+  );
   const qty = cartItem?.quantity ?? 0;
 
   const addScale = useSharedValue(1);

@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { mapSeller, mapSellerPage } from '@/api/mappers';
-import type { Seller, PaginatedSellers, ProductsByCategory } from '@/api/types';
+import type { Seller, PaginatedSellers, Product, ProductsByCategory } from '@/api/types';
 
 export interface SellersParams {
   lat?: number;
@@ -48,10 +48,38 @@ export function useSeller(id: string) {
 export function useSellerProducts(id: string) {
   return useQuery({
     queryKey: ['seller', id, 'products'],
-    queryFn: () =>
-      apiClient
-        .get<ProductsByCategory[]>(`/sellers/${id}/products`)
-        .then((r) => (Array.isArray(r.data) ? r.data : [])),
+    queryFn: async (): Promise<ProductsByCategory[]> => {
+      const res = await apiClient.get<any>(`/sellers/${id}/products`);
+      // Backend returns { items: [...], pagination: {...} }
+      // Axios interceptor already unwraps the { code, data, message } envelope
+      const raw = res.data;
+      const items: any[] = raw?.items ?? (Array.isArray(raw) ? raw : []);
+
+      // Group flat product list by the product's `category` string field
+      const groupMap = new Map<string, Product[]>();
+      for (const p of items) {
+        const catKey: string = p.category ?? 'Other';
+        if (!groupMap.has(catKey)) groupMap.set(catKey, []);
+        groupMap.get(catKey)!.push({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          price: p.price,
+          mrp: p.mrp ?? undefined,
+          imageUrl: p.image ?? p.imageUrl ?? undefined,
+          isPrinting: false, // resolved at screen level from seller.categories
+          isBestSeller: p.isBestSeller ?? false,
+          categoryId: catKey,
+          categoryName: catKey,
+          inStock: p.inStock ?? true,
+        });
+      }
+      return Array.from(groupMap.entries()).map(([cat, products]) => ({
+        categoryId: cat,
+        categoryName: cat,
+        products,
+      }));
+    },
     enabled: Boolean(id),
   });
 }

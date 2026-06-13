@@ -117,6 +117,8 @@ export interface Banner {
   subtitle?: string;
   imageUrl?: string;
   badge?: string;
+  ctaText?: string;
+  ctaLink?: string;
   targetUrl?: string;
   bgColor?: string;
 }

@@ -37,7 +37,11 @@ const DEFAULT_BANNERS: Banner[] = [
   },
 ];
 
-export function BannerCarousel() {
+interface BannerCarouselProps {
+  onBannerPress?: (ctaLink?: string) => void;
+}
+
+export function BannerCarousel({ onBannerPress }: BannerCarouselProps) {
   const colors = useColors();
   const { data, isLoading } = useBanners();
   const listRef = useRef<FlatList<Banner>>(null);
@@ -73,7 +77,11 @@ export function BannerCarousel() {
   const renderBanner = useCallback(({ item }: ListRenderItemInfo<Banner>) => {
     const bgColor = item.bgColor ?? '#0b8a93';
     return (
-      <Pressable style={styles.card}>
+      <Pressable
+        style={styles.card}
+        onPress={() => onBannerPress?.(item.ctaLink)}
+        android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+      >
         <LinearGradient
           colors={[bgColor, adjustColor(bgColor, -30)]}
           start={{ x: 0, y: 0 }}

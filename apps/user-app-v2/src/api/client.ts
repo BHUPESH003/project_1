@@ -11,10 +11,11 @@ import Config from 'react-native-config';
 const ACCESS_TOKEN_KEY = '@auth/access_token';
 const REFRESH_TOKEN_KEY = '@auth/refresh_token';
 
-// API base URL should point to the API root, not just the host.
-// If API_URL does not already include `/api`, append it here to match Nest's global prefix.
-// const rawApiUrl = Config.API_URL?.trim() || 'http://10.0.2.2:3000';
-const rawApiUrl = 'https://b44a-202-66-164-178.ngrok-free';
+// API base URL — reads from .env via react-native-config.
+// Android emulator default: 10.0.2.2 maps to host machine's localhost.
+// Physical device: set API_URL to your machine's LAN IP (e.g. http://192.168.1.x:3000).
+const rawApiUrl =
+  Config.API_URL?.trim() || 'https://1c9b-202-66-166-71.ngrok-free.app';
 const API_BASE_URL = rawApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? rawApiUrl.replace(/\/+$/, '')
   : `${rawApiUrl.replace(/\/+$/, '')}/api`;

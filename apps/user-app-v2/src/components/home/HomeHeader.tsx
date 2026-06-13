@@ -7,9 +7,11 @@ import { useAddressStore } from '@/stores/addressStore';
 
 interface HomeHeaderProps {
   onAddressTap: () => void;
+  onFavoritesTap?: () => void;
+  onNotificationsTap?: () => void;
 }
 
-export function HomeHeader({ onAddressTap }: HomeHeaderProps) {
+export function HomeHeader({ onAddressTap, onFavoritesTap, onNotificationsTap }: HomeHeaderProps) {
   const colors = useColors();
   const address = useAddressStore((s) => s.selectedAddress);
 
@@ -38,12 +40,14 @@ export function HomeHeader({ onAddressTap }: HomeHeaderProps) {
       <View style={styles.actions}>
         <Pressable
           style={[styles.iconBtn, { backgroundColor: colors.surface2 }]}
+          onPress={onFavoritesTap}
           hitSlop={4}
         >
           <Text style={styles.icon}>♡</Text>
         </Pressable>
         <Pressable
           style={[styles.iconBtn, { backgroundColor: colors.surface2 }]}
+          onPress={onNotificationsTap}
           hitSlop={4}
         >
           <Text style={styles.icon}>🔔</Text>

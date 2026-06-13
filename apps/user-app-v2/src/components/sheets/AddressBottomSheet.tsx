@@ -13,7 +13,8 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import BottomSheet, {
+import {
+  BottomSheetModal,
   BottomSheetView,
   BottomSheetTextInput,
   BottomSheetScrollView,
@@ -57,7 +58,7 @@ export const AddressBottomSheet = forwardRef<AddressBottomSheetRef, Props>(
     const { theme } = useTheme();
     const isDark = theme.resolvedMode === 'dark';
 
-    const sheetRef = useRef<BottomSheet>(null);
+    const sheetRef = useRef<BottomSheetModal>(null);
     const snapPoints = ['92%'];
 
     const setAddress = useAddressStore((s) => s.setAddress);
@@ -70,8 +71,8 @@ export const AddressBottomSheet = forwardRef<AddressBottomSheetRef, Props>(
       useAutocomplete(query);
 
     useImperativeHandle(ref, () => ({
-      open: () => sheetRef.current?.expand(),
-      close: () => sheetRef.current?.close(),
+      open: () => sheetRef.current?.present(),
+      close: () => sheetRef.current?.dismiss(),
     }));
 
     useEffect(() => {
@@ -92,7 +93,7 @@ export const AddressBottomSheet = forwardRef<AddressBottomSheetRef, Props>(
 
     async function handleSelectAddress(address: SelectedAddress) {
       await setAddress(address);
-      sheetRef.current?.close();
+      sheetRef.current?.dismiss();
       setQuery('');
       onAddressSelected?.(address);
     }
@@ -145,9 +146,9 @@ export const AddressBottomSheet = forwardRef<AddressBottomSheetRef, Props>(
     const showRecent = !showAutocomplete && recentAddresses.length > 0;
 
     return (
-      <BottomSheet
+      <BottomSheetModal
         ref={sheetRef}
-        index={-1}
+        index={0}
         snapPoints={snapPoints}
         enablePanDownToClose
         backdropComponent={renderBackdrop}
@@ -282,7 +283,7 @@ export const AddressBottomSheet = forwardRef<AddressBottomSheetRef, Props>(
             </View>
           )}
         </BottomSheetScrollView>
-      </BottomSheet>
+      </BottomSheetModal>
     );
   },
 );

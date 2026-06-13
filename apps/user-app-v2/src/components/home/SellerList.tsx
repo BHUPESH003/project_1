@@ -33,7 +33,7 @@ export function SellerList({ categoryId, onSellerPress, contentPaddingBottom = 0
     [address?.lat, address?.lng, categoryId],
   );
 
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch, isRefetching } =
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
     useSellers(params);
 
   const sellers = useMemo(
@@ -93,10 +93,8 @@ export function SellerList({ categoryId, onSellerPress, contentPaddingBottom = 0
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.4}
           scrollEnabled={false}
-          onRefresh={refetch}
-          refreshing={isRefetching}
           contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
-          removeClippedSubviews
+          removeClippedSubviews={false}
           windowSize={5}
           maxToRenderPerBatch={8}
           initialNumToRender={5}

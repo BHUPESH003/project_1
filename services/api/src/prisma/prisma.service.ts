@@ -16,14 +16,23 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   public readonly prisma: PrismaClient;
 
   constructor(private configService: ConfigService) {
-    const connectionString = this.configService.get<string>('DATABASE_URL');
+    // Use direct URL for driver adapter — Neon recommends direct (non-pooler) connection
+    // when using @prisma/adapter-pg, since pg.Pool already handles pooling.
+    // The pooler URL is for the old query-engine approach (without driver adapters).
+    const connectionString =
+      this.configService.get<string>('DATABASE_DIRECT_URL') ??
+      this.configService.get<string>('DATABASE_URL');
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is not set');
+      throw new Error(
+        'DATABASE_DIRECT_URL or DATABASE_URL environment variable is not set',
+      );
     }
 
-    // Nest already gives us a singleton service instance, so a process-level
-    // global cache only increases the chance of reusing a stale pool in watch mode.
-    this.pool = new Pool({ connectionString });
+    this.pool = new Pool({
+      connectionString,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+    });
 
     const adapter = new PrismaPg(this.pool);
     this.prisma = new PrismaClient({

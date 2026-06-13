@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,29 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Cart'>;
 export function CartScreen({ navigation }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const groups = useCartStore((s) => s.getSellerGroups());
+  const cartItems = useCartStore((s) => s.items);
   const totalPrice = useCartStore((s) => s.getTotalPrice());
   const totalCount = useCartStore((s) => s.getTotalCount());
+  const groups = useMemo(() => {
+    const map = new Map<string, SellerGroup>();
+    for (const item of cartItems) {
+      const existing = map.get(item.sellerId);
+      if (existing) {
+        existing.items.push(item);
+        existing.total += item.price * item.quantity;
+        existing.count += item.quantity;
+      } else {
+        map.set(item.sellerId, {
+          sellerId: item.sellerId,
+          sellerName: item.sellerName,
+          items: [item],
+          total: item.price * item.quantity,
+          count: item.quantity,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [cartItems]);
 
   if (totalCount === 0) {
     return (

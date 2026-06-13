@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -42,8 +42,15 @@ export function SellerDetailScreen({ route, navigation }: Props) {
   const [descExpanded, setDescExpanded] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
-  const sellerItems = useCartStore((s) => s.getSellerItems(sellerId));
-  const sellerTotal = useCartStore((s) => s.getSellerTotal(sellerId));
+  const cartItems = useCartStore((s) => s.items);
+  const sellerItems = useMemo(
+    () => cartItems.filter((it) => it.sellerId === sellerId),
+    [cartItems, sellerId],
+  );
+  const sellerTotal = useMemo(
+    () => sellerItems.reduce((sum, it) => sum + it.price * it.quantity, 0),
+    [sellerItems],
+  );
 
   // Parallax: hero translates at 0.5x scroll speed
   const heroTranslate = scrollY.interpolate({
@@ -67,6 +74,12 @@ export function SellerDetailScreen({ route, navigation }: Props) {
   }
 
   const isLoading = sellerLoading || productsLoading;
+
+  // True when the seller offers printing services — used to enable the
+  // PrintingConfig flow on products (file upload + print options).
+  const isPrintingSeller = seller?.categories.some((c) =>
+    c.toLowerCase().includes('print'),
+  ) ?? false;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -122,7 +135,10 @@ export function SellerDetailScreen({ route, navigation }: Props) {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: sellerItems.length > 0 ? 100 : insets.bottom + 40,
+          // Leave space for: sticky cart bar (56px) + tab bar (~80px) + safe area
+          paddingBottom: sellerItems.length > 0
+            ? 72 + Math.max(insets.bottom, 8) + 64
+            : 72 + Math.max(insets.bottom, 8) + 16,
         }}
       >
         {/* Hero */}
@@ -324,7 +340,7 @@ export function SellerDetailScreen({ route, navigation }: Props) {
                       sellerId={sellerId}
                       sellerName={seller?.name ?? sellerName ?? ''}
                       onPrintingPress={
-                        product.isPrinting
+                        isPrintingSeller
                           ? () =>
                               navigation.navigate('PrintingConfig', {
                                 productId: product.id,
@@ -381,7 +397,9 @@ export function SellerDetailScreen({ route, navigation }: Props) {
             styles.stickyCart,
             {
               backgroundColor: colors.surfaceInverse,
-              paddingBottom: insets.bottom || spacing.lg,
+              // 72 = tab bar content height, Math.max(insets.bottom, 8) = safe area
+              bottom: 72 + Math.max(insets.bottom, 8),
+              paddingBottom: spacing.md,
             },
           ]}
         >
@@ -574,7 +592,6 @@ const styles = StyleSheet.create({
   // Sticky cart bar
   stickyCart: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     paddingTop: spacing.md,

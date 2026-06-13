@@ -6,12 +6,15 @@ import {
   StyleSheet,
   Animated,
   Platform,
+  Pressable,
 } from 'react-native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useColors } from '@/theme';
 import { spacing, radius } from '@/theme/spacing';
 import { fontSize, fontWeight } from '@/theme/typography';
+import { useCartStore } from '@/stores/cartStore';
 
 // Outline icon paths via SVG strings — rendered as Text for zero-dependency
 const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
@@ -74,6 +77,25 @@ function TabItem({ label, active, onPress }: TabItemProps) {
   );
 }
 
+function CartBadge() {
+  const colors = useColors();
+  const totalCount = useCartStore((s) => s.getTotalCount());
+  const nav = useNavigation<any>();
+
+  if (totalCount === 0) return null;
+
+  return (
+    <Pressable
+      onPress={() => nav.navigate('Home', { screen: 'Cart' })}
+      style={[styles.cartBadge, { backgroundColor: colors.primary }]}
+      hitSlop={8}
+    >
+      <Text style={styles.cartBadgeText}>{totalCount > 99 ? '99+' : totalCount}</Text>
+      <Text style={styles.cartBadgeIcon}>🛒</Text>
+    </Pressable>
+  );
+}
+
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -111,6 +133,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           );
         })}
       </View>
+      <CartBadge />
     </View>
   );
 }
@@ -154,4 +177,26 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     letterSpacing: 0.3,
   },
+  cartBadge: {
+    position: 'absolute',
+    top: -12,
+    right: spacing.xl + 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  cartBadgeText: {
+    color: '#fff',
+    fontSize: fontSize.caption,
+    fontWeight: fontWeight.bold,
+  },
+  cartBadgeIcon: { fontSize: 13 },
 });

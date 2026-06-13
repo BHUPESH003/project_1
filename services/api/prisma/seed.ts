@@ -91,29 +91,42 @@ async function main() {
           title: '50% off on your first print order',
           subtitle: 'Use code PRINT50 at checkout',
           imagePath:
-            'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1563986768494-4dee2763ff0f?auto=format&fit=crop&w=1200&q=80',
           ctaText: 'Shop Now',
+          ctaLink: 'printing',
           displayOrder: 1,
           isActive: true,
         },
         {
           badge: 'NEW',
-          title: 'Hardware materials delivered locally',
-          subtitle: 'Get tools and supplies in 30 mins',
+          title: 'Hardware delivered in 30 mins',
+          subtitle: 'Tools, plumbing & electrical supplies',
           imagePath:
-            'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1618220179857-7c76a6b50e6d?auto=format&fit=crop&w=1200&q=80',
           ctaText: 'Explore',
+          ctaLink: 'hardware',
           displayOrder: 2,
           isActive: true,
         },
         {
           badge: 'SPORTS',
           title: 'Gear up for the season',
-          subtitle: 'Top quality equipment',
+          subtitle: 'Cricket, gym & outdoor equipment',
           imagePath:
-            'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80',
           ctaText: 'Buy Now',
+          ctaLink: 'sports',
           displayOrder: 3,
+          isActive: true,
+        },
+        {
+          badge: 'TRENDING',
+          title: 'Top-rated local shops near you',
+          subtitle: 'Verified sellers, fast delivery',
+          imagePath:
+            'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=80',
+          ctaText: 'Discover',
+          displayOrder: 4,
           isActive: true,
         },
       ],
@@ -132,6 +145,18 @@ async function main() {
         phone: '+911234567890',
         role: UserRole.USER,
         name: 'Test User',
+        email: 'testuser@example.com',
+      },
+    });
+
+    await prisma.user.upsert({
+      where: { phone: '+910000000000' },
+      update: {},
+      create: {
+        phone: '+910000000000',
+        role: UserRole.ADMIN,
+        name: 'Admin User',
+        email: 'admin@example.com',
       },
     });
 
@@ -221,10 +246,13 @@ async function main() {
         latitude: '28.6139',
         longitude: '77.2090',
         pricePerPage: '2.0',
+        discountThreshold: 50,
+        discountPercent: '10.00',
         prepTimeMinutes: 30,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+          'https://images.unsplash.com/photo-1563986768494-4dee2763ff0f?auto=format&fit=crop&w=600&q=80',
         rating: 4.5,
+        isVerified: true,
       },
       {
         phone: '+919999999999',
@@ -233,11 +261,14 @@ async function main() {
         latitude: '28.9038',
         longitude: '77.1198',
         pricePerPage: '2.5',
+        discountThreshold: 100,
+        discountPercent: '15.00',
         prepTimeMinutes: 20,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=600&q=80',
+        rating: 4.8,
         isTrending: true,
+        isVerified: true,
       },
       {
         phone: '+919111111111',
@@ -248,8 +279,8 @@ async function main() {
         pricePerPage: '1.8',
         prepTimeMinutes: 25,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=600&q=80',
+        rating: 4.3,
       },
       {
         phone: '+919222222222',
@@ -260,8 +291,9 @@ async function main() {
         pricePerPage: '3.5',
         prepTimeMinutes: 35,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=600&q=80',
+        rating: 4.6,
+        isVerified: true,
       },
       {
         phone: '+919333333333',
@@ -270,10 +302,12 @@ async function main() {
         latitude: '28.6328',
         longitude: '77.1899',
         pricePerPage: '2.2',
+        discountThreshold: 75,
+        discountPercent: '8.00',
         prepTimeMinutes: 20,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1612198273689-b92fc0c8c88b?auto=format&fit=crop&w=600&q=80',
+        rating: 4.4,
       },
       {
         phone: '+919444444444',
@@ -284,8 +318,8 @@ async function main() {
         pricePerPage: '2.8',
         prepTimeMinutes: 28,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1511376777868-611b54f68947?auto=format&fit=crop&w=600&q=80',
+        rating: 4.2,
       },
     ];
 
@@ -299,8 +333,9 @@ async function main() {
         longitude: '77.2235',
         prepTimeMinutes: 15,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+          'https://images.unsplash.com/photo-1585518419759-15bc0e834e6b?auto=format&fit=crop&w=600&q=80',
         rating: 4.5,
+        isVerified: true,
       },
       {
         phone: '+919666666666',
@@ -310,9 +345,10 @@ async function main() {
         longitude: '77.1847',
         prepTimeMinutes: 20,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=600&q=80',
+        rating: 4.7,
         isTrending: true,
+        isVerified: true,
       },
       {
         phone: '+919777777777',
@@ -322,8 +358,8 @@ async function main() {
         longitude: '77.0474',
         prepTimeMinutes: 18,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1618220179857-7c76a6b50e6d?auto=format&fit=crop&w=600&q=80',
+        rating: 4.4,
       },
       {
         phone: '+919888888888',
@@ -333,8 +369,8 @@ async function main() {
         longitude: '77.5559',
         prepTimeMinutes: 25,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=600&q=80',
+        rating: 4.3,
       },
       {
         phone: '+919100000001',
@@ -344,9 +380,10 @@ async function main() {
         longitude: '77.1025',
         prepTimeMinutes: 22,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
+        rating: 4.6,
         isTrending: true,
+        isVerified: true,
       },
       {
         phone: '+919100000002',
@@ -356,8 +393,8 @@ async function main() {
         longitude: '77.3178',
         prepTimeMinutes: 30,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=600&q=80',
+        rating: 4.1,
       },
     ];
 
@@ -371,9 +408,10 @@ async function main() {
         longitude: '77.1195',
         prepTimeMinutes: 20,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=600&q=80',
+        rating: 4.6,
         isTrending: true,
+        isVerified: true,
       },
       {
         phone: '+919200000002',
@@ -383,8 +421,9 @@ async function main() {
         longitude: '77.3219',
         prepTimeMinutes: 25,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
+          'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=600&q=80',
         rating: 4.5,
+        isVerified: true,
       },
       {
         phone: '+919200000003',
@@ -394,9 +433,10 @@ async function main() {
         longitude: '77.1489',
         prepTimeMinutes: 15,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1546519638405-a9f9f16d7248?auto=format&fit=crop&w=600&q=80',
+        rating: 4.7,
         isTrending: true,
+        isVerified: true,
       },
       {
         phone: '+919200000004',
@@ -406,8 +446,8 @@ async function main() {
         longitude: '77.0266',
         prepTimeMinutes: 30,
         imagePath:
-          'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80',
-        rating: 4.5,
+          'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=600&q=80',
+        rating: 4.4,
       },
     ];
 
@@ -487,6 +527,7 @@ async function main() {
       price: string;
       mrp?: string;
       image: string;
+      isBestSeller?: boolean;
     }) => {
       if (!product.sellerId) return;
       await prisma.product.upsert({
@@ -500,12 +541,14 @@ async function main() {
           mrp: product.mrp ? new Prisma.Decimal(product.mrp) : null,
           image: product.image,
           inStock: true,
+          isBestSeller: product.isBestSeller ?? false,
         },
         create: {
           ...product,
           price: new Prisma.Decimal(product.price),
           mrp: product.mrp ? new Prisma.Decimal(product.mrp) : null,
           inStock: true,
+          isBestSeller: product.isBestSeller ?? false,
         },
       });
     };
@@ -524,6 +567,7 @@ async function main() {
         mrp: '1.00',
         image:
           'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=400&q=80',
+        isBestSeller: true,
       },
       {
         phone: '+919876543210',
