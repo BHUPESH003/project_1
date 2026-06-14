@@ -17,8 +17,10 @@ primary_region = "bom"        # Mumbai — co-locate with your Postgres/Redis & 
   NODE_ENV = "production"
   PORT = "3000"
   API_PREFIX = "api"
-  CORS_ENALED = "true"        # NOTE: the var is misspelled in the codebase (main.ts)
-  # CORS_ORIGINS = "https://your-web-app.fly.dev"  # set to lock down CORS in prod
+  # CORS in main.ts is INVERTED + misspelled: it's applied only when CORS_ENALED
+  # is NOT "true". Do NOT set CORS_ENALED=true (that disables CORS). Instead set
+  # CORS_ORIGINS to a comma-separated allowlist (empty = allow all).
+  CORS_ORIGINS = "https://your-web-app.fly.dev"
 
 [http_service]
   internal_port = 3000

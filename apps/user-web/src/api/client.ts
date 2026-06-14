@@ -12,8 +12,14 @@ export interface ApiEnvelope<T> {
   message: string
 }
 
+// In dev, baseURL is the relative '/api' so the Vite dev-server proxy
+// (vite.config.ts → server.proxy, target VITE_API_URL) handles it without CORS.
+// In production there is no proxy, so we must hit the backend directly using
+// VITE_API_URL (the backend ORIGIN, e.g. https://api.example.com — no /api suffix).
+// VITE_* vars are inlined at BUILD time, so this must be set in Vercel before building.
+const apiOrigin = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 const raw: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.PROD ? `${apiOrigin}/api` : '/api',
   timeout: 20000,
 })
 

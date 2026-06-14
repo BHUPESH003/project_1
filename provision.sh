@@ -108,9 +108,11 @@ ssh -i "$KEY" "$EC2" bash -s -- \
 NODE_ENV=production
 PORT=3000
 API_PREFIX=api
-# NOTE: var name is misspelled in main.ts on purpose-match it exactly:
-CORS_ENALED=true
-# CORS_ORIGINS=https://your-web-app.example.com
+# CORS (main.ts logic is INVERTED + the var is misspelled): CORS is applied only
+# when CORS_ENALED is NOT "true". So to allow your web origin, do NOT set
+# CORS_ENALED=true; instead set CORS_ORIGINS to a comma-separated allowlist
+# (leave CORS_ORIGINS empty to allow all origins).
+CORS_ORIGINS=https://your-web-app.example.com
 
 # Database (RDS recommended; or local: postgresql://api_user:...@localhost:5432/api_db)
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public
