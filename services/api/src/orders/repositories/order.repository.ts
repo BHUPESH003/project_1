@@ -51,6 +51,8 @@ export interface OrderEntity {
     id: string;
     url: string;
     type: string;
+    originalName: string | null;
+    pageCount: number | null;
   }>;
   stateHistory?: Array<{
     id: string;
@@ -231,6 +233,7 @@ export class OrderRepository {
             storageUrl: true,
             mimeType: true,
             originalName: true,
+            pageCount: true,
           },
         },
         stateHistory: {
@@ -393,6 +396,7 @@ export class OrderRepository {
             storageUrl: true,
             mimeType: true,
             originalName: true,
+            pageCount: true,
           },
         },
       },
@@ -463,6 +467,8 @@ export class OrderRepository {
           id: f.id,
           url: f.storageUrl,
           type: f.mimeType,
+          originalName: f.originalName ?? null,
+          pageCount: f.pageCount ?? null,
         })) || [],
       stateHistory: order.stateHistory?.map((h: any) => ({
         ...h,

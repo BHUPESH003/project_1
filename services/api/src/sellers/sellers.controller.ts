@@ -33,6 +33,8 @@ import { GetSellerQueryDto } from './dto/get-seller.dto';
 import { SellerProductsQueryDto } from './dto/seller-products-query.dto';
 import { RegisterSellerDto } from './dto/register-seller.dto';
 import { UpdateSellerDto } from './dto/update-seller.dto';
+import { GetEarningsDto, EarningsPeriod } from './dto/get-earnings.dto';
+import { CreatePayoutDto } from './dto/create-payout.dto';
 import { CreateProductDto } from '@/products/dto/create-product.dto';
 import { UpdateProductDto } from '@/products/dto/update-product.dto';
 
@@ -331,6 +333,58 @@ export class SellersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.sellersService.deleteProduct(req.user.id, productId);
+  }
+
+  // ─── Phase 3.3: Seller Earnings & Payouts ───────────────────────────────
+
+  /**
+   * GET /v1/sellers/me/earnings?period=today|week|month|all
+   * Earnings summary for the authenticated seller.
+   */
+  @Get('me/earnings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get earnings summary for own shop' })
+  @ApiQuery({ name: 'period', required: false, enum: EarningsPeriod })
+  @ApiResponse({ status: 200, description: 'Earnings summary returned' })
+  getEarnings(
+    @Query() query: GetEarningsDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.getEarnings(req.user.id, query);
+  }
+
+  /**
+   * GET /v1/sellers/me/payouts
+   * Withdrawal request history.
+   */
+  @Get('me/payouts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List own withdrawal requests' })
+  @ApiResponse({ status: 200, description: 'Payout requests returned' })
+  listPayouts(@Request() req: { user: { id: string } }) {
+    return this.sellersService.listPayouts(req.user.id);
+  }
+
+  /**
+   * POST /v1/sellers/me/payouts
+   * Create a withdrawal request (validated against available balance).
+   */
+  @Post('me/payouts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Request a withdrawal' })
+  @ApiResponse({ status: 201, description: 'Withdrawal request created' })
+  @ApiResponse({ status: 400, description: 'Amount exceeds available balance' })
+  createPayout(
+    @Body() dto: CreatePayoutDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.sellersService.createPayout(req.user.id, dto);
   }
 
   /**

@@ -98,24 +98,41 @@ export class AuthService {
       role: UserRole;
     };
   }> {
-    // Verify OTP code
-    const isValid = await this.otpService.verifyOtp(dto.phone, dto.otp);
+    // Verify OTP code — returns the verified OTP record (incl. requested role) or null
+    const otp = await this.otpService.verifyOtp(dto.phone, dto.otp);
 
-    if (!isValid) {
+    if (!otp) {
       throw new UnauthorizedException('Invalid or expired OTP code');
     }
+
+    // The role requested at /auth/request-otp is stored on the OTP record.
+    // Honour it so sellers/admins land in the right role. Never downgrade an
+    // existing privileged account back to USER (e.g. an ADMIN logging in via a
+    // USER-role OTP keeps ADMIN).
+    const requestedRole = otp.role ?? UserRole.USER;
 
     // Find or create user via repository
     let user = await this.userRepository.findByPhone(dto.phone);
 
     if (!user) {
-      // Create new user (role will be determined from the OTP request, but for now use USER)
+      // New user: created with the role they requested an OTP for.
       user = await this.userRepository.create({
         phone: dto.phone,
-        role: UserRole.USER, // Default role, can be updated based on business logic
+        role: requestedRole,
         name: null, // Name can be set later
       });
-      this.logger.log(`New user created: ${user.id} (${dto.phone})`);
+      this.logger.log(
+        `New user created: ${user.id} (${dto.phone}) as ${user.role}`,
+      );
+    } else if (
+      requestedRole !== UserRole.USER &&
+      user.role !== requestedRole &&
+      user.role === UserRole.USER
+    ) {
+      // Existing plain USER upgrading to SELLER/ADMIN (e.g. a customer who now
+      // wants to sell). Only ever upgrade away from USER — never downgrade.
+      user = await this.userRepository.update(user.id, { role: requestedRole });
+      this.logger.log(`User ${user.id} role upgraded to ${user.role}`);
     }
 
     // Generate JWT token pair (access + refresh)

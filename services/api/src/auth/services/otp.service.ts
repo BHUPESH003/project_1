@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { UserRole } from '@repo/types';
 import { OTP_CONFIG } from '@/constants';
-import { OtpRepository } from '../repositories/otp.repository';
+import { OtpRepository, OtpEntity } from '../repositories/otp.repository';
 
 /**
  * OTP Service
@@ -46,9 +46,9 @@ export class OtpService {
    * Verify OTP code for phone number
    * @param phone - Phone number in E.164 format
    * @param code - OTP code to verify
-   * @returns true if valid, false otherwise
+   * @returns the verified OTP record (incl. the requested role) if valid, null otherwise
    */
-  async verifyOtp(phone: string, code: string): Promise<boolean> {
+  async verifyOtp(phone: string, code: string): Promise<OtpEntity | null> {
     // Find valid OTP via repository
     const otp = await this.otpRepository.findValidOtp(phone, code);
 
@@ -57,7 +57,7 @@ export class OtpService {
       await this.otpRepository.incrementAttempts(phone, code);
 
       this.logger.warn(`Invalid or expired OTP attempt for ${phone}`);
-      return false;
+      return null;
     }
 
     // Mark OTP as verified via repository
@@ -65,7 +65,7 @@ export class OtpService {
 
     this.logger.log(`OTP verified successfully for ${phone}`);
 
-    return true;
+    return otp;
   }
 
   /**

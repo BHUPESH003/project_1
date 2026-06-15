@@ -13,6 +13,8 @@ import { SetStatusDto } from './dto/set-status.dto';
 import { FindAvailableSellersDto } from './dto/find-available-sellers.dto';
 import { RegisterSellerDto } from './dto/register-seller.dto';
 import { UpdateSellerDto } from './dto/update-seller.dto';
+import { GetEarningsDto, EarningsPeriod } from './dto/get-earnings.dto';
+import { CreatePayoutDto } from './dto/create-payout.dto';
 import { CreateProductDto } from '@/products/dto/create-product.dto';
 import { UpdateProductDto } from '@/products/dto/update-product.dto';
 import { SellerRepository } from './repositories/seller.repository';
@@ -458,6 +460,184 @@ export class SellersService {
             ? Number(revenue._sum.totalAmount)
             : 0,
       },
+    };
+  }
+
+  // ─── Earnings & Payouts ─────────────────────────────────────────────────
+
+  /** Start date for an earnings period, or null for "all time". */
+  private periodStart(period?: EarningsPeriod): Date | null {
+    const now = new Date();
+    switch (period) {
+      case EarningsPeriod.TODAY: {
+        const d = new Date(now);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
+      case EarningsPeriod.WEEK: {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 7);
+        return d;
+      }
+      case EarningsPeriod.MONTH: {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - 1);
+        return d;
+      }
+      default:
+        return null;
+    }
+  }
+
+  /** Lifetime delivered revenue for a seller (used for available balance). */
+  private async lifetimeRevenue(sellerId: string): Promise<number> {
+    const agg = await this.prismaService.prisma.order.aggregate({
+      where: { sellerId, status: 'DELIVERED' },
+      _sum: { totalAmount: true },
+    });
+    return agg._sum.totalAmount != null ? Number(agg._sum.totalAmount) : 0;
+  }
+
+  /** Sum of payout requests that aren't rejected (reserve against balance). */
+  private async reservedPayouts(sellerId: string): Promise<number> {
+    const agg = await this.prismaService.prisma.payoutRequest.aggregate({
+      where: { sellerId, status: { not: 'REJECTED' } },
+      _sum: { amount: true },
+    });
+    return agg._sum.amount != null ? Number(agg._sum.amount) : 0;
+  }
+
+  /**
+   * Earnings summary for the authenticated seller, scoped to a period.
+   * Revenue is recognised from DELIVERED orders.
+   */
+  async getEarnings(userId: string, query: GetEarningsDto) {
+    const seller = await this.sellerRepository.findByUserId(userId);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+
+    const start = this.periodStart(query.period);
+    const where: Prisma.OrderWhereInput = {
+      sellerId: seller.id,
+      status: 'DELIVERED',
+      ...(start ? { completedAt: { gte: start } } : {}),
+    };
+
+    const orders = await this.prismaService.prisma.order.findMany({
+      where,
+      select: {
+        id: true,
+        totalAmount: true,
+        orderPayload: true,
+        completedAt: true,
+        createdAt: true,
+      },
+      orderBy: { completedAt: 'desc' },
+    });
+
+    const total = orders.reduce(
+      (sum, o) => sum + (o.totalAmount != null ? Number(o.totalAmount) : 0),
+      0,
+    );
+    const orderCount = orders.length;
+
+    const [lifetime, reserved] = await Promise.all([
+      this.lifetimeRevenue(seller.id),
+      this.reservedPayouts(seller.id),
+    ]);
+
+    return {
+      period: query.period ?? EarningsPeriod.ALL,
+      total,
+      orderCount,
+      averageOrderValue: orderCount > 0 ? total / orderCount : 0,
+      availableBalance: Math.max(0, lifetime - reserved),
+      lifetimeRevenue: lifetime,
+      orders: orders.map((o) => ({
+        orderId: o.id,
+        amount: o.totalAmount != null ? Number(o.totalAmount) : 0,
+        itemsSummary: this.summarizePayload(o.orderPayload),
+        date: o.completedAt ?? o.createdAt,
+      })),
+    };
+  }
+
+  /** Short human summary of an order payload for list rows. */
+  private summarizePayload(payload: unknown): string {
+    const p = payload as { items?: Array<{ name?: string; quantity?: number }> };
+    const items = p?.items ?? [];
+    if (items.length === 0) return 'Order';
+    const first = items[0];
+    const name = first?.name ?? 'Item';
+    if (items.length === 1) {
+      return first?.quantity ? `${first.quantity} × ${name}` : name;
+    }
+    return `${name} + ${items.length - 1} more`;
+  }
+
+  /** List the seller's withdrawal (payout) requests, newest first. */
+  async listPayouts(userId: string) {
+    const seller = await this.sellerRepository.findByUserId(userId);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+
+    const payouts = await this.prismaService.prisma.payoutRequest.findMany({
+      where: { sellerId: seller.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return payouts.map((p) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      status: p.status,
+      bankDetails: p.bankDetails,
+      note: p.note,
+      processedAt: p.processedAt,
+      createdAt: p.createdAt,
+    }));
+  }
+
+  /** Create a withdrawal request, validated against the available balance. */
+  async createPayout(userId: string, dto: CreatePayoutDto) {
+    const seller = await this.sellerRepository.findByUserId(userId);
+    if (!seller) throw new NotFoundException('Seller profile not found');
+
+    if (seller.isSuspended) {
+      throw new ForbiddenException(
+        'Suspended sellers cannot request withdrawals',
+      );
+    }
+
+    const [lifetime, reserved] = await Promise.all([
+      this.lifetimeRevenue(seller.id),
+      this.reservedPayouts(seller.id),
+    ]);
+    const available = Math.max(0, lifetime - reserved);
+
+    if (dto.amount > available) {
+      throw new BadRequestException(
+        `Requested amount exceeds available balance (₹${available.toFixed(2)})`,
+      );
+    }
+
+    const payout = await this.prismaService.prisma.payoutRequest.create({
+      data: {
+        sellerId: seller.id,
+        amount: new Prisma.Decimal(dto.amount),
+        status: 'PENDING',
+        bankDetails: dto.bankDetails
+          ? (dto.bankDetails as unknown as Prisma.InputJsonValue)
+          : undefined,
+      },
+    });
+
+    this.logger.log(
+      `Payout requested: ${payout.id} (₹${dto.amount}) by seller ${seller.id}`,
+    );
+
+    return {
+      id: payout.id,
+      amount: Number(payout.amount),
+      status: payout.status,
+      createdAt: payout.createdAt,
     };
   }
 

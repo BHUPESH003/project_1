@@ -245,16 +245,48 @@ model Seller {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders        Order[]        @relation("SellerOrders")
-  favoritedBy   UserFavorite[]
-  cartItems     CartItem[] // Items in user carts for this seller
-  conversations Conversation[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders         Order[]         @relation("SellerOrders")
+  favoritedBy    UserFavorite[]
+  cartItems      CartItem[] // Items in user carts for this seller
+  conversations  Conversation[]
+  payoutRequests PayoutRequest[]
 
   @@index([status]) // Critical: filter by ONLINE sellers
   @@index([latitude, longitude]) // Geospatial queries
   @@index([userId])
   @@map("sellers")
+}
+
+// ========================================
+// PAYOUT REQUEST MODEL
+// ========================================
+// Seller withdrawal requests. Processed manually by an admin (no payment rail
+// in MVP) — requests are created PENDING and an admin marks them
+// PROCESSING/COMPLETED/REJECTED via the admin console (future).
+
+model PayoutRequest {
+  id       String @id @default(cuid())
+  seller   Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId String
+
+  amount Decimal @db.Decimal(10, 2)
+  // PENDING | PROCESSING | COMPLETED | REJECTED
+  status String  @default("PENDING")
+
+  // { accountHolder, accountNumber, ifscCode }
+  bankDetails Json?
+
+  note        String? // Admin note (e.g. rejection reason)
+  processedAt DateTime?
+  processedBy String? // Admin user id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sellerId])
+  @@index([status])
+  @@map("payout_requests")
 }
 
 // ========================================
@@ -867,15 +899,15 @@ model Conversation {
 // senderType distinguishes user / seller / system messages
 
 model Message {
-  id             String  @id @default(cuid())
-  conversationId String
-  senderType     String // "user" | "seller" | "system"
-  senderId       String // userId or sellerId depending on senderType
-  content        String
-  contentType    String  @default("text") // text | image | file | template
-  mediaUrl       String? // S3 URL for media attachments (Phase 4.2)
+  id                String  @id @default(cuid())
+  conversationId    String
+  senderType        String // "user" | "seller" | "system"
+  senderId          String // userId or sellerId depending on senderType
+  content           String
+  contentType       String  @default("text") // text | image | file | template
+  mediaUrl          String? // S3 URL for media attachments (Phase 4.2)
   whatsappMessageId String? // Meta message ID for delivery tracking
-  status         String  @default("sent") // sent | delivered | read | failed
+  status            String  @default("sent") // sent | delivered | read | failed
 
   createdAt DateTime @default(now())
 

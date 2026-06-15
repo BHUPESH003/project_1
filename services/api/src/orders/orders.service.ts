@@ -587,6 +587,11 @@ export class OrdersService {
       order_id: order.id,
       status: order.status,
       items: items,
+      // Full category-agnostic payload so the seller console can render printing
+      // config (pages, copies, color, paper size, notes) and any other specifics.
+      orderPayload: order.orderPayload,
+      // Attached files (printing jobs) so sellers can open and prepare them.
+      files: order.files ?? [],
       seller: order.seller
         ? {
             id: order.seller.id,
@@ -594,6 +599,12 @@ export class OrdersService {
             address: order.seller.address,
           }
         : null,
+      // Drop location for fulfilment context (seller sees the delivery area).
+      drop: {
+        address: order.dropAddress ?? null,
+        latitude: order.dropLatitude ?? null,
+        longitude: order.dropLongitude ?? null,
+      },
       delivery:
         order.status === OrderStatus.READY_FOR_PICKUP ||
         order.status === OrderStatus.PICKED_UP ||
