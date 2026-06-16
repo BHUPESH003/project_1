@@ -19,6 +19,7 @@ import { useRegisterSeller, useUpdateSeller, useSellerProfile } from '@/api/hook
 import { uploadImage, ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE } from '@/api/hooks/useFiles'
 import { getErrorMessage } from '@/api/client'
 import { toast } from '@/stores/toastStore'
+import type { AutocompleteResult } from '@/types/api'
 
 const PREP_OPTIONS = [5, 10, 15, 30, 60]
 
@@ -88,11 +89,17 @@ export function RegistrationPage() {
     }
   }
 
-  async function selectPrediction(placeId: string, description: string) {
-    setAddress(description)
+  async function selectPrediction(prediction: AutocompleteResult) {
+    setAddress(prediction.description)
     setQuery('')
+    // Dev/mock predictions already carry coordinates — use them directly.
+    // Google predictions don't, so resolve them via the place-details lookup.
+    if (prediction.latitude != null && prediction.longitude != null) {
+      setCoords({ lat: prediction.latitude, lng: prediction.longitude })
+      return
+    }
     try {
-      const details = await fetchPlaceDetails(placeId)
+      const details = await fetchPlaceDetails(prediction.placeId)
       if (details) setCoords({ lat: details.latitude, lng: details.longitude })
     } catch {
       /* keep address text even if geocode fails */
@@ -244,7 +251,7 @@ export function RegistrationPage() {
                   {predictions.map((p) => (
                     <button
                       key={p.placeId}
-                      onClick={() => selectPrediction(p.placeId, p.description)}
+                      onClick={() => selectPrediction(p)}
                       className="flex w-full items-start gap-2.5 border-b border-border-faint px-3.5 py-3 text-left last:border-0 hover:bg-surface-2"
                     >
                       <MapPin size={17} className="mt-0.5 shrink-0 text-text-3" />

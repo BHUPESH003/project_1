@@ -16,6 +16,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { OrderStatus } from '@repo/types';
 import { isTerminalState } from '@/orders/state-machine/order-state-machine.types';
 import { GetOrdersDto } from './dto/get-orders.dto';
@@ -35,6 +36,9 @@ import { GetSellersDto } from './dto/get-sellers.dto';
 import { UpdateAdminSellerDto } from './dto/update-admin-seller.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { GetPayoutsDto } from './dto/get-payouts.dto';
+import { ProcessPayoutDto } from './dto/process-payout.dto';
+import { RejectPayoutDto } from './dto/reject-payout.dto';
 
 @Injectable()
 export class AdminService {
@@ -158,6 +162,103 @@ export class AdminService {
         total,
         total_pages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * Get a single order with full detail for the admin order-detail screen.
+   * Returns the same snake_case shape as getOrders() plus state history,
+   * payment, delivery and files.
+   */
+  async getOrderById(orderId: string) {
+    const order = await this.prismaService.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        user: { select: { id: true, phone: true, name: true } },
+        seller: {
+          select: { id: true, shopName: true, address: true },
+        },
+        category: { select: { id: true, name: true } },
+        payment: true,
+        delivery: true,
+        files: true,
+        stateHistory: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    return {
+      order_id: order.id,
+      status: order.status,
+      order_payload: order.orderPayload,
+      user: {
+        id: order.user.id,
+        phone: order.user.phone,
+        name: order.user.name,
+      },
+      seller: order.seller
+        ? {
+            id: order.seller.id,
+            shop_name: order.seller.shopName,
+            address: order.seller.address,
+          }
+        : null,
+      category: { id: order.category.id, name: order.category.name },
+      item_cost: order.itemCost ? Number(order.itemCost) : null,
+      delivery_fee: order.deliveryFee ? Number(order.deliveryFee) : null,
+      total_amount: order.totalAmount ? Number(order.totalAmount) : null,
+      drop_address: order.dropAddress,
+      failure_reason: order.failureReason,
+      created_at: order.createdAt,
+      updated_at: order.updatedAt,
+      completed_at: order.completedAt,
+      payment: order.payment
+        ? {
+            id: order.payment.id,
+            amount: Number(order.payment.amount),
+            method: order.payment.method,
+            status: order.payment.status,
+            gateway_name: order.payment.gatewayName,
+            gateway_payment_id: order.payment.gatewayPaymentId,
+            refund_amount: order.payment.refundAmount
+              ? Number(order.payment.refundAmount)
+              : null,
+            refund_status: order.payment.refundStatus,
+            refunded_at: order.payment.refundedAt,
+            paid_at: order.payment.paidAt,
+          }
+        : null,
+      delivery: order.delivery
+        ? {
+            id: order.delivery.id,
+            provider_name: order.delivery.providerName,
+            provider_task_id: order.delivery.providerTaskId,
+            provider_tracking_url: order.delivery.providerTrackingUrl,
+            status: order.delivery.status,
+            partner_name: order.delivery.partnerName,
+            partner_phone: order.delivery.partnerPhone,
+            failure_reason: order.delivery.failureReason,
+          }
+        : null,
+      files: order.files.map((f) => ({
+        id: f.id,
+        original_name: f.originalName,
+        mime_type: f.mimeType,
+        size_bytes: f.sizeBytes,
+        storage_url: f.storageUrl,
+        page_count: f.pageCount,
+      })),
+      state_history: order.stateHistory.map((h) => ({
+        id: h.id,
+        from_status: h.fromStatus,
+        to_status: h.toStatus,
+        triggered_by: h.triggeredBy,
+        reason: h.reason,
+        created_at: h.createdAt,
+      })),
     };
   }
 
@@ -517,7 +618,7 @@ export class AdminService {
 
     await this.auditService.logAction(
       adminId,
-      AdminActionType.REASSIGN_SELLER,
+      AdminActionType.UPDATE_SELLER,
       id,
       `Admin updated seller profile`,
       { changes: updateData },
@@ -536,13 +637,33 @@ export class AdminService {
 
     await this.auditService.logAction(
       adminId,
-      AdminActionType.REASSIGN_SELLER,
+      AdminActionType.VERIFY_SELLER,
       id,
       `Seller verified`,
       {},
     );
 
     this.logger.log(`Admin ${adminId} verified seller ${id}`);
+    return { id: updated.id, isVerified: updated.isVerified };
+  }
+
+  async unverifySeller(id: string, adminId: string) {
+    const seller = await this.sellerRepository.findById(id, false);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    const updated = await this.sellerRepository.update(id, {
+      isVerified: false,
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.UNVERIFY_SELLER,
+      id,
+      `Seller unverified`,
+      {},
+    );
+
+    this.logger.log(`Admin ${adminId} unverified seller ${id}`);
     return { id: updated.id, isVerified: updated.isVerified };
   }
 
@@ -558,13 +679,37 @@ export class AdminService {
 
     await this.auditService.logAction(
       adminId,
-      AdminActionType.REASSIGN_SELLER,
+      AdminActionType.SUSPEND_SELLER,
       id,
       `Seller suspended`,
       {},
     );
 
     this.logger.log(`Admin ${adminId} suspended seller ${id}`);
+    return {
+      id: updated.id,
+      isSuspended: updated.isSuspended,
+      status: updated.status,
+    };
+  }
+
+  async unsuspendSeller(id: string, adminId: string) {
+    const seller = await this.sellerRepository.findById(id, false);
+    if (!seller) throw new NotFoundException(`Seller ${id} not found`);
+
+    const updated = await this.sellerRepository.update(id, {
+      isSuspended: false,
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.UNSUSPEND_SELLER,
+      id,
+      `Seller unsuspended`,
+      {},
+    );
+
+    this.logger.log(`Admin ${adminId} unsuspended seller ${id}`);
     return {
       id: updated.id,
       isSuspended: updated.isSuspended,
@@ -621,5 +766,124 @@ export class AdminService {
 
     this.logger.log(`Updated category: ${id}`);
     return updated;
+  }
+
+  // ─── Admin Payout Management ────────────────────────────────────────────
+  // Sellers raise withdrawal requests (POST /sellers/me/payouts); admins
+  // review and settle them manually here.
+
+  async getPayouts(query: GetPayoutsDto) {
+    const { status, page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PayoutRequestWhereInput = {};
+    if (status) where.status = status;
+
+    const [payouts, total] = await Promise.all([
+      this.prismaService.prisma.payoutRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          seller: { select: { id: true, shopName: true } },
+        },
+      }),
+      this.prismaService.prisma.payoutRequest.count({ where }),
+    ]);
+
+    return {
+      data: payouts.map((p) => ({
+        id: p.id,
+        seller: { id: p.seller.id, shopName: p.seller.shopName },
+        amount: Number(p.amount),
+        status: p.status,
+        bankDetails: p.bankDetails,
+        note: p.note,
+        processedAt: p.processedAt,
+        processedBy: p.processedBy,
+        createdAt: p.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async processPayout(id: string, dto: ProcessPayoutDto, adminId: string) {
+    const payout = await this.prismaService.prisma.payoutRequest.findUnique({
+      where: { id },
+    });
+    if (!payout) throw new NotFoundException(`Payout ${id} not found`);
+    if (payout.status === 'COMPLETED' || payout.status === 'REJECTED') {
+      throw new BadRequestException(
+        `Payout ${id} is already ${payout.status}`,
+      );
+    }
+
+    const updated = await this.prismaService.prisma.payoutRequest.update({
+      where: { id },
+      data: {
+        status: 'COMPLETED',
+        note: dto.note ?? payout.note,
+        processedAt: new Date(),
+        processedBy: adminId,
+      },
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.PROCESS_PAYOUT,
+      id,
+      `Payout processed`,
+      { amount: Number(updated.amount), sellerId: updated.sellerId },
+    );
+
+    this.logger.log(`Admin ${adminId} processed payout ${id}`);
+    return {
+      id: updated.id,
+      status: updated.status,
+      processedAt: updated.processedAt,
+    };
+  }
+
+  async rejectPayout(id: string, dto: RejectPayoutDto, adminId: string) {
+    const payout = await this.prismaService.prisma.payoutRequest.findUnique({
+      where: { id },
+    });
+    if (!payout) throw new NotFoundException(`Payout ${id} not found`);
+    if (payout.status === 'COMPLETED' || payout.status === 'REJECTED') {
+      throw new BadRequestException(
+        `Payout ${id} is already ${payout.status}`,
+      );
+    }
+
+    const updated = await this.prismaService.prisma.payoutRequest.update({
+      where: { id },
+      data: {
+        status: 'REJECTED',
+        note: dto.reason,
+        processedAt: new Date(),
+        processedBy: adminId,
+      },
+    });
+
+    await this.auditService.logAction(
+      adminId,
+      AdminActionType.REJECT_PAYOUT,
+      id,
+      dto.reason,
+      { amount: Number(updated.amount), sellerId: updated.sellerId },
+    );
+
+    this.logger.log(`Admin ${adminId} rejected payout ${id}`);
+    return {
+      id: updated.id,
+      status: updated.status,
+      processedAt: updated.processedAt,
+    };
   }
 }

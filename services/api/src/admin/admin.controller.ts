@@ -27,6 +27,9 @@ import { GetOrdersAnalyticsDto } from './analytics/dto/get-orders-analytics.dto'
 import { GetSellersAnalyticsDto } from './analytics/dto/get-sellers-analytics.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { GetPayoutsDto } from './dto/get-payouts.dto';
+import { ProcessPayoutDto } from './dto/process-payout.dto';
+import { RejectPayoutDto } from './dto/reject-payout.dto';
 
 /**
  * Admin Controller - MVP Scope
@@ -71,6 +74,20 @@ export class AdminController {
     @Request() req: { user: { id: string } },
   ) {
     return this.adminService.getOrders(query, req.user.id);
+  }
+
+  /**
+   * GET /v1/admin/orders/:id
+   * Full order detail for the admin order-detail screen
+   * Requires ADMIN role
+   */
+  @Get('orders/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get full order detail' })
+  getOrderById(@Param('id') id: string) {
+    return this.adminService.getOrderById(id);
   }
 
   /**
@@ -232,6 +249,18 @@ export class AdminController {
     return this.adminService.verifySeller(id, req.user.id);
   }
 
+  @Post('sellers/:id/unverify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove seller verification' })
+  unverifySeller(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.unverifySeller(id, req.user.id);
+  }
+
   @Post('sellers/:id/suspend')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -244,6 +273,18 @@ export class AdminController {
     @Request() req: { user: { id: string } },
   ) {
     return this.adminService.suspendSeller(id, req.user.id);
+  }
+
+  @Post('sellers/:id/unsuspend')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lift seller suspension' })
+  unsuspendSeller(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.unsuspendSeller(id, req.user.id);
   }
 
   // ─── Phase 7.1: Analytics ─────────────────────────────────────────────────
@@ -302,6 +343,43 @@ export class AdminController {
   })
   updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.adminService.updateCategory(id, dto);
+  }
+
+  // ─── Admin Payout Management ─────────────────────────────────────────────
+
+  @Get('payouts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List seller payout (withdrawal) requests' })
+  getPayouts(@Query() query: GetPayoutsDto) {
+    return this.adminService.getPayouts(query);
+  }
+
+  @Post('payouts/:id/process')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark a payout request as processed (completed)' })
+  processPayout(
+    @Param('id') id: string,
+    @Body() dto: ProcessPayoutDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.processPayout(id, dto, req.user.id);
+  }
+
+  @Post('payouts/:id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reject a payout request with a reason' })
+  rejectPayout(
+    @Param('id') id: string,
+    @Body() dto: RejectPayoutDto,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.adminService.rejectPayout(id, dto, req.user.id);
   }
 }
 

@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
-import { AxiosError } from 'axios'
 import { SellerStatus } from '@repo/types'
 import { useAuthStore } from '@/stores/authStore'
 import { useSellerProfile } from '@/api/hooks/useSeller'
@@ -12,7 +11,7 @@ import { SellerAlertProvider } from '@/components/orders/SellerAlertProvider'
  * Gate + layout for the approved seller area. Routing rules (mirrors the
  * master prompt):
  *   not authed            → /login
- *   no seller profile (404) → /register
+ *   no seller profile (null) → /register
  *   isSuspended           → /suspended
  *   !isVerified           → /pending
  *   otherwise             → render shell (dashboard / products / shop)
@@ -20,14 +19,17 @@ import { SellerAlertProvider } from '@/components/orders/SellerAlertProvider'
 export function AppShell() {
   const navigate = useNavigate()
   const isAuthed = useAuthStore((s) => s.isAuthenticated)
-  const { data: seller, isLoading, error } = useSellerProfile()
+  const { data: seller, isLoading } = useSellerProfile()
 
   useEffect(() => {
     if (!isAuthed) {
       navigate('/login', { replace: true })
       return
     }
-    if (error instanceof AxiosError && error.response?.status === 404) {
+    if (isLoading) return
+    // `null` = authenticated but no shop registered yet (expected onboarding
+    // state, returned as a normal 200 — not an error).
+    if (seller === null) {
       navigate('/register', { replace: true })
       return
     }
@@ -38,7 +40,7 @@ export function AppShell() {
     if (seller && !seller.isVerified) {
       navigate('/pending', { replace: true })
     }
-  }, [isAuthed, seller, error, navigate])
+  }, [isAuthed, seller, isLoading, navigate])
 
   if (!isAuthed) return null
 

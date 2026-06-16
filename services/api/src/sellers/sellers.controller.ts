@@ -137,75 +137,6 @@ export class SellersController {
     return this.sellersService.findTrendingSellers(query, req.user?.id);
   }
 
-  /**
-   * GET /v1/sellers/:id/products
-   * Get all products for a specific seller
-   * Public endpoint
-   */
-
-  @Get(':id/products/diff')
-  @ApiOperation({ summary: 'Get partial catalog updates based on timestamp' })
-  async getProductsDiff(
-    @Param('id') id: string,
-    @Query('since') sinceStr: string,
-    @Headers('x-user-id') userId?: string,
-  ) {
-    const sinceDate = new Date(sinceStr);
-    if (isNaN(sinceDate.getTime())) {
-      throw new Error('Invalid since timestamp');
-    }
-
-    // Pass differential info down to fetch products updated/created after Date
-    const diffResults = await this.sellersService.getSellerProductsDifferential(
-      id,
-      sinceDate,
-    );
-
-    return {
-      success: true,
-      message: 'Differential loaded successfully',
-      data: diffResults,
-      differential_sync: true,
-    };
-  }
-
-  @Get(':id/products')
-  @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({
-    summary: 'Get seller products',
-    description:
-      'Seller catalog products with pagination and filter chips. Send Bearer token to get wishlist/notify flags.',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Seller ID',
-    example: 'clh9qh3j90001q6qz6z8z8z8z',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Products retrieved successfully',
-    example: [
-      {
-        id: 'prod-123',
-        sellerId: 'clh9qh3j90001q6qz6z8z8z8z',
-        name: 'B&W Document Print',
-        description: 'Standard 80gsm A4 paper',
-        category: 'Printing Services',
-        price: 0.5,
-        image: 'https://images.unsplash.com/...',
-        inStock: true,
-      },
-    ],
-  })
-  @ApiResponse({ status: 404, description: 'Seller not found' })
-  getSellerProducts(
-    @Param('id') id: string,
-    @Query() query: SellerProductsQueryDto,
-    @Request() req: { user?: { id: string } },
-  ) {
-    return this.sellersService.getSellerProducts(id, query, req.user?.id);
-  }
-
   // ─── Phase 3.1: Seller Self-Registration ────────────────────────────────
 
   /**
@@ -239,7 +170,11 @@ export class SellersController {
   @Roles(UserRole.SELLER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get own seller profile with order stats' })
-  @ApiResponse({ status: 200, description: 'Seller profile returned' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Seller profile, or null when the user has not registered a shop yet (onboarding state, not an error)',
+  })
   getMyProfile(@Request() req: { user: { id: string } }) {
     return this.sellersService.getMyProfile(req.user.id);
   }
@@ -385,6 +320,61 @@ export class SellersController {
     @Request() req: { user: { id: string } },
   ) {
     return this.sellersService.createPayout(req.user.id, dto);
+  }
+
+  /**
+   * GET /v1/sellers/:id/products
+   * Get all products for a specific seller (public).
+   *
+   * NOTE: declared AFTER the `me/*` routes so `/sellers/me/products` resolves to
+   * the authenticated seller-catalog handler instead of matching `:id` = "me".
+   */
+  @Get(':id/products/diff')
+  @ApiOperation({ summary: 'Get partial catalog updates based on timestamp' })
+  async getProductsDiff(
+    @Param('id') id: string,
+    @Query('since') sinceStr: string,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    const sinceDate = new Date(sinceStr);
+    if (isNaN(sinceDate.getTime())) {
+      throw new Error('Invalid since timestamp');
+    }
+
+    // Pass differential info down to fetch products updated/created after Date
+    const diffResults = await this.sellersService.getSellerProductsDifferential(
+      id,
+      sinceDate,
+    );
+
+    return {
+      success: true,
+      message: 'Differential loaded successfully',
+      data: diffResults,
+      differential_sync: true,
+    };
+  }
+
+  @Get(':id/products')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get seller products',
+    description:
+      'Seller catalog products with pagination and filter chips. Send Bearer token to get wishlist/notify flags.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Seller ID',
+    example: 'clh9qh3j90001q6qz6z8z8z8z',
+  })
+  @ApiResponse({ status: 200, description: 'Products retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Seller not found' })
+  getSellerProducts(
+    @Param('id') id: string,
+    @Query() query: SellerProductsQueryDto,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.getSellerProducts(id, query, req.user?.id);
   }
 
   /**

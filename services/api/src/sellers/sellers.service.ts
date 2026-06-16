@@ -412,8 +412,12 @@ export class SellersService {
   }
 
   async getMyProfile(userId: string) {
+    // A user authenticates (and may be upgraded to the SELLER role) BEFORE they
+    // create a shop, so "no profile yet" is an expected state during onboarding
+    // — not an error. Return null (200) so the seller app can route the user to
+    // registration without treating it as a failed request.
     const seller = await this.sellerRepository.findByUserId(userId, true);
-    if (!seller) throw new NotFoundException('Seller profile not found');
+    if (!seller) return null;
 
     const [totalOrders, completedOrders, revenue] = await Promise.all([
       this.prismaService.prisma.order.count({ where: { sellerId: seller.id } }),

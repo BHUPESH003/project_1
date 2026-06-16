@@ -11,14 +11,15 @@ import type {
 
 /**
  * GET /sellers/me — the authenticated seller's profile (incl. isVerified,
- * isSuspended, status, stats). Returns null-ish via a 404 when no profile
- * exists yet; callers treat the error as "needs registration".
+ * isSuspended, status, stats). Resolves to `null` (a normal 200 response) when
+ * the user hasn't registered a shop yet; callers treat null as "needs
+ * registration" rather than handling it as a request failure.
  */
 export function useSellerProfile(options?: { pollMs?: number; enabled?: boolean }) {
   const isAuthed = useAuthStore((s) => s.isAuthenticated)
   return useQuery({
     queryKey: qk.sellerProfile,
-    queryFn: () => apiGet<SellerProfile>('/sellers/me'),
+    queryFn: () => apiGet<SellerProfile | null>('/sellers/me'),
     enabled: (options?.enabled ?? true) && isAuthed,
     refetchInterval: options?.pollMs,
     retry: false,
