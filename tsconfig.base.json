@@ -5,10 +5,6 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "@project/types": ["packages/types/src"]
-    }
+    "forceConsistentCasingInFileNames": true
   }
 }
