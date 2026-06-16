@@ -32,6 +32,24 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       connectionString,
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
+      // Neon serverless suspends idle compute and silently drops the TCP
+      // socket. Without these the pg.Pool hands out dead connections after an
+      // idle period → Prisma fails with an empty "Invalid invocation" error.
+      // TCP keepalive keeps the socket warm and surfaces drops promptly.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      // Recycle every connection after 5 min regardless of activity so none
+      // lingers long enough to be killed server-side while still pooled.
+      maxLifetimeSeconds: 300,
+    });
+
+    // A client can error while idle in the pool (e.g. Neon drops it). pg emits
+    // this on the Pool; if left unhandled Node crashes the process. Logging it
+    // lets pg evict the dead client so the next checkout gets a fresh one.
+    this.pool.on('error', (error) => {
+      this.logger.warn(
+        `Idle Postgres client error (evicted): ${error.message}`,
+      );
     });
 
     const adapter = new PrismaPg(this.pool);

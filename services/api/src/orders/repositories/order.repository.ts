@@ -104,13 +104,22 @@ export class OrderRepository {
 
   private isTransientReadError(error: unknown): boolean {
     const candidate = error as { code?: string; message?: string } | undefined;
+    const message = candidate?.message ?? '';
 
     return (
       candidate?.code === 'ETIMEDOUT' ||
       candidate?.code === 'ECONNRESET' ||
       candidate?.code === 'ECONNREFUSED' ||
-      candidate?.message?.includes('ETIMEDOUT') === true ||
-      candidate?.message?.includes("Can't reach database server") === true
+      candidate?.code === 'EPIPE' ||
+      message.includes('ETIMEDOUT') ||
+      message.includes('ECONNRESET') ||
+      message.includes("Can't reach database server") ||
+      message.includes('Connection terminated') ||
+      message.includes('connection closed') ||
+      // When Neon drops the pooled socket, the pg adapter surfaces an
+      // "Invalid `prisma.*` invocation" error with an empty body. Treat
+      // these connection-layer failures as transient and retry.
+      /Invalid `prisma\.[\w.]+\(\)` invocation:\s*$/.test(message.trim())
     );
   }
 
@@ -121,7 +130,7 @@ export class OrderRepository {
   private async findUniqueWithRetry(
     args: Prisma.OrderFindUniqueArgs,
     id: string,
-    maxAttempts = 3,
+    maxAttempts = 4,
   ) {
     let attempt = 1;
 
@@ -136,7 +145,9 @@ export class OrderRepository {
         this.logger.warn(
           `Transient order read failure for ${id} (attempt ${attempt}/${maxAttempts}), retrying...`,
         );
-        await this.sleep(150 * attempt);
+        // Exponential-ish backoff (0.4s, 0.8s, 1.6s) so the retries outlast a
+        // Neon serverless cold start (~2-3s) instead of giving up in ~450ms.
+        await this.sleep(400 * 2 ** (attempt - 1));
         attempt += 1;
       }
     }
