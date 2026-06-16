@@ -8,9 +8,7 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": false,
-    "composite": true,
-    "ignoreDeprecations": "6.0"
+    "composite": true
   },
   "include": ["src"]
 }
-  
