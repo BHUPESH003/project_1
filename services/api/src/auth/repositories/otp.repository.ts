@@ -73,6 +73,19 @@ export class OtpRepository {
   }
 
   /**
+   * Find the most recent OTP record for a phone, regardless of code/verified
+   * state. Used by the OTP-bypass flow to recover the role requested at
+   * /auth/request-otp without matching on the actual code.
+   */
+  async findLatestByPhone(phone: string): Promise<OtpEntity | null> {
+    const otp = await this.prismaService.prisma.otp.findFirst({
+      where: { phone },
+      orderBy: { createdAt: 'desc' },
+    });
+    return otp ? this.mapToEntity(otp) : null;
+  }
+
+  /**
    * Mark OTP as verified
    */
   async markAsVerified(id: string): Promise<OtpEntity> {

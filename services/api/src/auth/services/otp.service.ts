@@ -69,6 +69,15 @@ export class OtpService {
   }
 
   /**
+   * Get the most recent OTP record for a phone without verifying a code.
+   * Used by the OTP-bypass flow to recover the role requested at
+   * /auth/request-otp. Returns null if no OTP was ever requested.
+   */
+  async getLatestOtp(phone: string): Promise<OtpEntity | null> {
+    return this.otpRepository.findLatestByPhone(phone);
+  }
+
+  /**
    * Clean up expired OTPs (can be called periodically)
    */
   async cleanupExpiredOtps(): Promise<void> {

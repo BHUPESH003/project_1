@@ -35,6 +35,22 @@ export class AuthService {
   ) {}
 
   /**
+   * Fixed OTP code accepted when the bypass flag is enabled.
+   */
+  private static readonly BYPASS_OTP_CODE = '123456';
+
+  /**
+   * Whether the global OTP bypass is enabled (useful if the OTP provider is
+   * expired or for dev/QA). Controlled by the BYPASS_OTP env var.
+   */
+  private isOtpBypassEnabled(): boolean {
+    return (
+      this.configService.get<boolean>('BYPASS_OTP', false) ||
+      this.configService.get<string>('BYPASS_OTP') === 'true'
+    );
+  }
+
+  /**
    * Request OTP for phone number
    * @param dto - RequestOtpDto containing phone and role
    * @returns Success response (will be wrapped by TransformInterceptor)
@@ -44,11 +60,7 @@ export class AuthService {
     const code = await this.otpService.generateOtp(dto.phone, dto.role);
 
     // Check for global OTP bypass (useful if service is expired or for dev)
-    const bypassOtp =
-      this.configService.get<boolean>('BYPASS_OTP', false) ||
-      this.configService.get<string>('BYPASS_OTP') === 'true';
-
-    if (bypassOtp) {
+    if (this.isOtpBypassEnabled()) {
       this.logger.warn(
         `[BYPASS] OTP for ${dto.phone}: ${code}. Skipping OTP provider send.`,
       );
@@ -98,10 +110,19 @@ export class AuthService {
       role: UserRole;
     };
   }> {
-    // Verify OTP code — returns the verified OTP record (incl. requested role) or null
-    const otp = await this.otpService.verifyOtp(dto.phone, dto.otp);
+    // When the global bypass is enabled, accept the fixed bypass code without
+    // matching the real OTP. We still read the latest OTP record (if any) to
+    // recover the role requested at /auth/request-otp.
+    const isBypass =
+      this.isOtpBypassEnabled() && dto.otp === AuthService.BYPASS_OTP_CODE;
 
-    if (!otp) {
+    const otp = isBypass
+      ? await this.otpService.getLatestOtp(dto.phone)
+      : await this.otpService.verifyOtp(dto.phone, dto.otp);
+
+    if (isBypass) {
+      this.logger.warn(`[BYPASS] OTP verification bypassed for ${dto.phone}`);
+    } else if (!otp) {
       throw new UnauthorizedException('Invalid or expired OTP code');
     }
 
@@ -109,7 +130,7 @@ export class AuthService {
     // Honour it so sellers/admins land in the right role. Never downgrade an
     // existing privileged account back to USER (e.g. an ADMIN logging in via a
     // USER-role OTP keeps ADMIN).
-    const requestedRole = otp.role ?? UserRole.USER;
+    const requestedRole = otp?.role ?? UserRole.USER;
 
     // Find or create user via repository
     let user = await this.userRepository.findByPhone(dto.phone);
