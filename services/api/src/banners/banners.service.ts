@@ -12,13 +12,13 @@ export class BannersService {
     private readonly config: ConfigService,
   ) {}
 
-  private getBaseUrl(): string | null {
-    const base = this.config.get<string>('S3_PUBLIC_BASE_URL');
-    if (base) return base;
-    const bucket = this.config.get<string>('S3_BUCKET_NAME');
-    const region = this.config.get<string>('AWS_REGION');
-    if (bucket && region) return `https://${bucket}.s3.${region}.amazonaws.com`;
-    return null;
+  /** Options for buildAssetUrl, sourced from S3 config. */
+  private assetUrlOptions() {
+    return {
+      s3PublicBaseUrl: this.config.get<string>('S3_PUBLIC_BASE_URL'),
+      s3Bucket: this.config.get<string>('S3_BUCKET_NAME'),
+      s3Region: this.config.get<string>('AWS_REGION'),
+    };
   }
 
   /** Public: list active banners for carousel (by displayOrder) */
@@ -36,15 +36,13 @@ export class BannersService {
       },
       orderBy: { displayOrder: 'asc' },
     });
-    const base = this.getBaseUrl();
+    const opts = this.assetUrlOptions();
     return list.map((b) => ({
       id: b.id,
       badge: b.badge,
       title: b.title,
       subtitle: b.subtitle,
-      imageUrl: base
-        ? `${base}/${b.imagePath.replace(/^\//, '')}`
-        : b.imagePath,
+      imageUrl: buildAssetUrl(b.imagePath, opts) ?? b.imagePath,
       ctaText: b.ctaText,
       ctaLink: b.ctaLink,
       displayOrder: b.displayOrder,
@@ -56,12 +54,10 @@ export class BannersService {
     const list = await this.prisma.prisma.banner.findMany({
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
     });
-    const base = this.getBaseUrl();
+    const opts = this.assetUrlOptions();
     return list.map((b) => ({
       ...b,
-      imageUrl: base
-        ? `${base}/${b.imagePath.replace(/^\//, '')}`
-        : b.imagePath,
+      imageUrl: buildAssetUrl(b.imagePath, opts) ?? b.imagePath,
     }));
   }
 
@@ -69,12 +65,10 @@ export class BannersService {
   async findOne(id: string) {
     const b = await this.prisma.prisma.banner.findUnique({ where: { id } });
     if (!b) throw new NotFoundException('Banner not found');
-    const base = this.getBaseUrl();
     return {
       ...b,
-      imageUrl: base
-        ? `${base}/${b.imagePath.replace(/^\//, '')}`
-        : b.imagePath,
+      imageUrl:
+        buildAssetUrl(b.imagePath, this.assetUrlOptions()) ?? b.imagePath,
     };
   }
 
