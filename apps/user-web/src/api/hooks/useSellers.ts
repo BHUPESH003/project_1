@@ -23,7 +23,7 @@ function mapSeller(raw: Record<string, unknown>): Seller {
     estimatedDeliveryTimeMins:
       raw.estimatedDeliveryTimeMins ?? raw.estimated_delivery_time_mins ?? undefined,
     distanceKm: raw.distanceKm ?? raw.distance_km,
-    pricePerPage: raw.pricePerPage ?? raw.price_breakdown?.per_page ?? null,
+    pricePerPage: raw.pricePerPage ?? (raw.price_breakdown as Record<string, unknown> | undefined)?.per_page ?? null,
     isFavorite: raw.isFavorite ?? raw.is_favorited,
   } as Seller
 }

@@ -342,7 +342,7 @@ export function ProductDetailPage() {
         >
           <ArrowLeft size={20} />
         </button>
-        {navigator.share && (
+        {typeof navigator.share === 'function' && (
           <button
             onClick={handleShare}
             className="glass grid h-10 w-10 place-items-center rounded-full text-text shadow-md"
@@ -354,7 +354,7 @@ export function ProductDetailPage() {
       </div>
 
       {/* Hero image / gallery */}
-      <ImageGallery primary={img} extras={extraImages} />
+      <ImageGallery primary={img ?? null} extras={extraImages} />
 
       {/* Product info */}
       <div className="px-5 pt-4 space-y-4">
@@ -363,7 +363,7 @@ export function ProductDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           {meta?.veg !== undefined && <VegDot veg={!!meta.veg} />}
           {product.isBestSeller && <Badge tone="warning">Best Seller</Badge>}
-          {meta?.badge && <Badge tone="info">{meta.badge}</Badge>}
+          {meta?.badge && <Badge tone="primary">{meta.badge}</Badge>}
           {!product.inStock && (
             <Badge tone="danger">Out of Stock</Badge>
           )}

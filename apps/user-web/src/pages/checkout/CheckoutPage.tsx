@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, MapPin, ChevronDown, Lock, Info, Truck, Store } from 'lucide-react'
-import { useMultiCheckout, usePlaceMultiOrder, createPaymentIntent, verifyPayment } from '@/api/hooks/useCheckout'
+import { useMultiCheckout, usePlaceMultiOrder, createMultiPaymentIntent, verifyMultiPayment } from '@/api/hooks/useCheckout'
 import { useCreateAddress } from '@/api/hooks/useUser'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -97,12 +97,9 @@ export function CheckoutPage() {
 
       if (!orderIds.length) throw new Error('No orders were created')
 
-      // Pay each order sequentially via Razorpay (delivery paid separately).
-      for (const orderId of orderIds) {
-        const intent = await createPaymentIntent(orderId)
-        const rzp = await openRazorpay(intent)
-        await verifyPayment(orderId, rzp)
-      }
+      const intent = await createMultiPaymentIntent(orderIds)
+      const rzp = await openRazorpay(intent)
+      await verifyMultiPayment(orderIds, rzp)
 
       navigate('/payment/success', { state: { orderIds, amount: productTotal }, replace: true })
     } catch (e) {

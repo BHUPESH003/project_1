@@ -35,26 +35,27 @@ function normalizeCheckout(res: unknown): MultiCheckoutSummary {
   const sellers = ((data?.sellers ?? []) as Record<string, unknown>[]).map((s) => ({
     ...s,
     deliveryOptions: ((s.deliveryOptions ?? []) as Record<string, unknown>[]).map((o) => {
-      const v = o.vehicleOptions?.[0]
+      const v = (o.vehicleOptions as unknown[] | undefined)?.[0] as Record<string, unknown> | undefined
+      const oRaw = o.raw as Record<string, unknown> | undefined
       return {
         quotationId: o.quotationId,
         deliveryPartnerId: o.providerId ?? o.deliveryPartnerId,
         providerName: o.providerId ?? o.providerName,
         displayName: o.providerName ?? o.displayName ?? o.providerId,
-        feeRupees: v?.deliveryFeeRupees ?? o.feeRupees ?? o.raw?.quotedFeeRupees ?? 0,
-        estimatedMinutes: v?.estimatedMinutes ?? o.estimatedMinutes ?? o.raw?.estimatedMinutes ?? 0,
+        feeRupees: v?.deliveryFeeRupees ?? o.feeRupees ?? oRaw?.quotedFeeRupees ?? 0,
+        estimatedMinutes: v?.estimatedMinutes ?? o.estimatedMinutes ?? oRaw?.estimatedMinutes ?? 0,
         vehicleType: v?.vehicleType ?? o.vehicleType ?? 'standard',
       }
     }),
     recommendations: s.recommendations
       ? {
-          cheapest: recId(s.recommendations.cheapest),
-          fastest: recId(s.recommendations.fastest),
-          recommended: recId(s.recommendations.recommended),
+          cheapest: recId((s.recommendations as Record<string, unknown>).cheapest),
+          fastest: recId((s.recommendations as Record<string, unknown>).fastest),
+          recommended: recId((s.recommendations as Record<string, unknown>).recommended),
         }
       : undefined,
   }))
-  return { ...res, sellers } as MultiCheckoutSummary
+  return { ...(data ?? {}), sellers } as MultiCheckoutSummary
 }
 
 /** GET /checkout/multi?deliveryAddressId — per-seller summaries + delivery options. */
@@ -97,8 +98,11 @@ export async function createMultiPaymentIntent(
     payDeliveryFee,
   })
   const paymentData =
-    res?.payment_intent?.paymentData ?? res?.paymentData ?? res?.payment_intent ?? res
-  if (!paymentData?.keyId) {
+    (res?.payment_intent as Record<string, unknown> | undefined)?.paymentData ??
+    res?.paymentData ??
+    res?.payment_intent ??
+    res
+  if (!(paymentData as Record<string, unknown> | undefined)?.keyId) {
     throw new Error('Payment could not be initialised (no gateway key)')
   }
   return { paymentData } as PaymentIntent
