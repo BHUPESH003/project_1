@@ -83,6 +83,33 @@ export interface AutocompleteResult {
   longitude?: number
 }
 
+/* ---- Subcategories (product category strings grouped per seller-category) ---- */
+export interface Subcategory {
+  name: string
+  count: number
+}
+
+/* ---- Product Browse (all sellers, sorted newest) ---- */
+export interface BrowseProduct {
+  id: ID
+  name: string
+  description: string | null
+  category: string
+  unit: string | null
+  price: number
+  mrp: number | null
+  image: string | null
+  inStock: boolean
+  isBestSeller: boolean
+  createdAt: string
+  seller: {
+    id: ID
+    shopName: string
+    rating: number | null
+    isOnline: boolean
+  }
+}
+
 /* ---- Categories ---- */
 export interface Category {
   id: ID
@@ -134,6 +161,8 @@ export interface Seller {
   categories?: SellerCategoryRef[]
   /** Computed by API when lat/lng provided */
   distanceKm?: number
+  /** Computed by API: prepTime + travel estimate (mins), present in list responses */
+  estimatedDeliveryTimeMins?: number
   /** Computed by API: lowest product / starting price */
   startingPrice?: Numeric | null
   isFavorite?: boolean
@@ -148,6 +177,36 @@ export interface SellersQuery {
   limit?: number
   offset?: number
   sort?: 'nearest' | 'rating' | 'newest'
+  hasOffers?: boolean
+  minRating?: number
+}
+
+/**
+ * Flexible per-product attribute bag stored as JSON in the DB.
+ * Every key is optional — the ProductDetailPage renders sections only when
+ * the relevant key is present. Unknown keys fall back to a generic table.
+ */
+export interface ProductMetadata {
+  /** Renders a green (veg) or red (non-veg) dot indicator */
+  veg?: boolean
+  /** Bullet list shown in "Product Highlights" section */
+  highlights?: string[]
+  /** Custom badge text beyond "Best Seller" (e.g. "Chef's Choice") */
+  badge?: string
+  /** Key-value pairs rendered as a 2-col "Specifications" table */
+  specs?: Record<string, string | number>
+  /** Longer rich-text description (plain text; shown in "Description" tab) */
+  longDescription?: string
+  /** Extra product image URLs for gallery carousel */
+  images?: string[]
+  /** Fine-grained grouping within a category (used for sub-nav) */
+  subCategory?: string
+  /** Variants like size/flavour/colour — shown as selector chips */
+  variants?: Array<{ id: string; name: string; priceDelta?: number; inStock?: boolean }>
+  /** Key-value nutritional info rendered as a "Nutrition" table */
+  nutrition?: Record<string, string>
+  /** Catch-all — any other seller-defined key is rendered in "More Details" */
+  [key: string]: unknown
 }
 
 export interface Product {
@@ -159,10 +218,14 @@ export interface Product {
   unit: string | null
   price: Numeric
   mrp: Numeric | null
+  discountPercent?: number | null
   image: string | null
   imageUrl?: string | null
   inStock: boolean
   isBestSeller: boolean
+  metadata?: ProductMetadata | null
+  isWishlisted?: boolean
+  notifyRequested?: boolean
 }
 
 /* ---- Files ---- */
@@ -321,6 +384,7 @@ export interface Order {
   itemCost: Numeric | null
   deliveryFee: Numeric | null
   totalAmount: Numeric | null
+  deliveryFeePaid?: boolean | null
   dropAddress?: string | null
   failureReason?: string | null
   createdAt: string

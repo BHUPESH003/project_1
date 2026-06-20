@@ -55,6 +55,24 @@ export function useCreateAddress() {
   })
 }
 
+/** PATCH /users/me/addresses/:id — update receiver info or address line on an existing saved address. */
+export function useUpdateAddress() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...patch
+    }: {
+      id: string
+      label?: string
+      addressLine?: string
+      receiverName?: string | null
+      receiverPhone?: string | null
+    }) => apiPatch<UserAddress>(`/users/me/addresses/${id}`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.addresses }),
+  })
+}
+
 /** DELETE /users/me/addresses/:id */
 export function useDeleteAddress() {
   const qc = useQueryClient()

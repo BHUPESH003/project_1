@@ -86,6 +86,22 @@ export class SellersController {
     required: false,
     description: 'Offset for pagination',
   })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['nearest', 'rating', 'newest'],
+    description: 'Sort order (default nearest)',
+  })
+  @ApiQuery({
+    name: 'hasOffers',
+    required: false,
+    description: 'Only sellers with an active discount',
+  })
+  @ApiQuery({
+    name: 'minRating',
+    required: false,
+    description: 'Only sellers rated >= this value (0–5)',
+  })
   @ApiResponse({ status: 200, description: 'List of sellers with pagination' })
   findAvailableSellers(
     @Query() query: FindAvailableSellersDto,
@@ -353,6 +369,24 @@ export class SellersController {
       data: diffResults,
       differential_sync: true,
     };
+  }
+
+  @Get(':id/products/:productId')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get a single product from a seller catalog',
+    description: 'Returns full product detail including metadata for dynamic rendering. Send Bearer token for wishlist/notify flags.',
+  })
+  @ApiParam({ name: 'id', description: 'Seller ID' })
+  @ApiParam({ name: 'productId', description: 'Product ID' })
+  @ApiResponse({ status: 200, description: 'Product detail returned' })
+  @ApiResponse({ status: 404, description: 'Seller or product not found' })
+  getSellerProduct(
+    @Param('id') id: string,
+    @Param('productId') productId: string,
+    @Request() req: { user?: { id: string } },
+  ) {
+    return this.sellersService.getSellerProduct(id, productId, req.user?.id);
   }
 
   @Get(':id/products')

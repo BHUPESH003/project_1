@@ -5,7 +5,11 @@ import { persist } from 'zustand/middleware'
 export interface SelectedAddress {
   id?: string
   label: string
+  /** Full delivery address: flat/building/street. Required before placing an order. */
   addressLine: string
+  /** Set after the user confirms full details at order time. */
+  receiverName?: string | null
+  receiverPhone?: string | null
   latitude: number
   longitude: number
 }

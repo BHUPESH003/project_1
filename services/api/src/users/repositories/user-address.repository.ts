@@ -58,6 +58,32 @@ export class UserAddressRepository {
     return this.map(a);
   }
 
+  async update(
+    id: string,
+    userId: string,
+    data: {
+      label?: string;
+      addressLine?: string;
+      receiverName?: string | null;
+      receiverPhone?: string | null;
+    },
+  ): Promise<UserAddressEntity | null> {
+    const existing = await this.prisma.prisma.userAddress.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) return null;
+    const a = await this.prisma.prisma.userAddress.update({
+      where: { id },
+      data: {
+        ...(data.label !== undefined && { label: data.label }),
+        ...(data.addressLine !== undefined && { addressLine: data.addressLine }),
+        ...(data.receiverName !== undefined && { receiverName: data.receiverName }),
+        ...(data.receiverPhone !== undefined && { receiverPhone: data.receiverPhone }),
+      },
+    });
+    return this.map(a);
+  }
+
   async delete(id: string, userId: string): Promise<boolean> {
     const result = await this.prisma.prisma.userAddress.deleteMany({
       where: { id, userId },

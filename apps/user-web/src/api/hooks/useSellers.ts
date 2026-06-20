@@ -12,7 +12,7 @@ const PAGE_SIZE = 10
  * so `seller.id` is defined — otherwise SellerCard links to /sellers/undefined.
  * Tolerant of both shapes so it survives a future backend cleanup.
  */
-function mapSeller(raw: Record<string, any>): Seller {
+function mapSeller(raw: Record<string, unknown>): Seller {
   return {
     ...raw,
     id: raw.id ?? raw.seller_id,
@@ -20,6 +20,8 @@ function mapSeller(raw: Record<string, any>): Seller {
     imageUrl: raw.imageUrl ?? raw.image_url ?? null,
     imagePath: raw.imagePath ?? null,
     prepTimeMinutes: raw.prepTimeMinutes ?? raw.prep_time_min ?? null,
+    estimatedDeliveryTimeMins:
+      raw.estimatedDeliveryTimeMins ?? raw.estimated_delivery_time_mins ?? undefined,
     distanceKm: raw.distanceKm ?? raw.distance_km,
     pricePerPage: raw.pricePerPage ?? raw.price_breakdown?.per_page ?? null,
     isFavorite: raw.isFavorite ?? raw.is_favorited,
@@ -28,26 +30,40 @@ function mapSeller(raw: Record<string, any>): Seller {
 
 /** The API may return a bare array or `{ sellers, total }`; normalise both. */
 function normalizeSellers(res: unknown): Seller[] {
-  let rows: Record<string, any>[] = []
-  if (Array.isArray(res)) rows = res
-  else if (res && typeof res === 'object' && 'sellers' in res) rows = (res as any).sellers ?? []
-  else if (res && typeof res === 'object' && 'items' in res) rows = (res as any).items ?? []
+  let rows: Record<string, unknown>[] = []
+  if (Array.isArray(res)) rows = res as Record<string, unknown>[]
+  else if (res && typeof res === 'object' && 'sellers' in res)
+    rows = ((res as { sellers?: Record<string, unknown>[] }).sellers) ?? []
+  else if (res && typeof res === 'object' && 'items' in res)
+    rows = ((res as { items?: Record<string, unknown>[] }).items) ?? []
   return rows.map(mapSeller)
 }
 
-/** GET /sellers — paginated, location-gated, infinite scroll. */
 /**
- * GET /sellers. The backend DTO only accepts category/lat/lng/maxDistanceKm/
- * limit/offset (and rejects anything else via forbidNonWhitelisted), so the
- * `sort` pill is applied client-side — never sent to the API.
+ * GET /sellers — paginated, location-gated, infinite scroll.
+ *
+ * Sorting and filtering are backend-supported: `sort` (nearest|rating|newest),
+ * `hasOffers` and `minRating` are sent to the API so they apply across all
+ * pages, not just the loaded ones. `hasOffers` is sent only when true so the
+ * default request stays clean.
  */
-export function useAvailableSellers(params: Omit<SellersQuery, 'limit' | 'offset' | 'sort'>) {
-  const { category, lat, lng, maxDistanceKm } = params
+export function useAvailableSellers(params: Omit<SellersQuery, 'limit' | 'offset'>) {
+  const { category, lat, lng, maxDistanceKm, sort, hasOffers, minRating } = params
   return useInfiniteQuery({
-    queryKey: qk.sellers({ category, lat, lng, maxDistanceKm }),
+    queryKey: qk.sellers({ category, lat, lng, maxDistanceKm, sort, hasOffers, minRating }),
     queryFn: async ({ pageParam = 0 }) => {
       const res = await apiGet<unknown>('/sellers', {
-        params: { category, lat, lng, maxDistanceKm, limit: PAGE_SIZE, offset: pageParam },
+        params: {
+          category,
+          lat,
+          lng,
+          maxDistanceKm,
+          sort,
+          hasOffers: hasOffers || undefined,
+          minRating,
+          limit: PAGE_SIZE,
+          offset: pageParam,
+        },
       })
       return normalizeSellers(res)
     },
@@ -83,6 +99,16 @@ export function useSeller(id: string | undefined, lat?: number, lng?: number) {
     queryKey: qk.seller(id ?? '', { lat, lng }),
     queryFn: () => apiGet<Seller>(`/sellers/${id}`, { params: { lat, lng } }),
     enabled: !!id,
+    staleTime: 30_000,
+  })
+}
+
+/** GET /sellers/:sellerId/products/:productId — full product detail with metadata */
+export function useProduct(sellerId: string | undefined, productId: string | undefined) {
+  return useQuery({
+    queryKey: ['sellers', sellerId, 'products', productId],
+    queryFn: () => apiGet<Product>(`/sellers/${sellerId}/products/${productId}`),
+    enabled: !!sellerId && !!productId,
     staleTime: 30_000,
   })
 }

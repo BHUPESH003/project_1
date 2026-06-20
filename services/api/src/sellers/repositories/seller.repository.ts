@@ -165,7 +165,9 @@ export class SellerRepository {
     limit?: number;
     offset?: number;
     isTrending?: boolean;
-    orderBy?: 'distance' | 'newest';
+    hasOffers?: boolean;
+    minRating?: number;
+    orderBy?: 'distance' | 'newest' | 'rating';
   }): Promise<{ sellers: SellerEntity[]; total: number }> {
     const where: {
       status: SellerStatus;
@@ -175,6 +177,8 @@ export class SellerRepository {
           categoryId: string;
         };
       };
+      discountPercent?: { gt: number };
+      rating?: { gte: number };
     } = {
       status: SellerStatus.ONLINE,
     };
@@ -191,8 +195,26 @@ export class SellerRepository {
       where.isTrending = filters.isTrending;
     }
 
+    // Offers filter: only sellers with a positive discount.
+    if (filters?.hasOffers) {
+      where.discountPercent = { gt: 0 };
+    }
+
+    // Minimum rating filter.
+    if (filters?.minRating != null) {
+      where.rating = { gte: filters.minRating };
+    }
+
     const limit = Math.min(Math.max(filters?.limit ?? 20, 1), 100);
     const offset = Math.max(filters?.offset ?? 0, 0);
+
+    // DB-level ordering. "rating" sorts in SQL; "newest"/"distance" both come
+    // back newest-first from SQL and "distance" is re-sorted in memory below
+    // once each seller's distance is computed.
+    const dbOrderBy =
+      filters?.orderBy === 'rating'
+        ? { rating: 'desc' as const }
+        : { createdAt: 'desc' as const };
 
     const [sellers, total] = await Promise.all([
       this.prismaService.prisma.seller.findMany({
@@ -217,9 +239,7 @@ export class SellerRepository {
             },
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: dbOrderBy,
         skip: offset,
         take: limit,
       }),
@@ -248,7 +268,9 @@ export class SellerRepository {
         })
         .filter((s) => (s as any).distanceKm <= maxKm);
 
-      if (filters?.orderBy !== 'newest') {
+      // Only re-sort by proximity for the default/"distance" order — "newest"
+      // and "rating" keep their SQL ordering.
+      if (filters?.orderBy !== 'newest' && filters?.orderBy !== 'rating') {
         result.sort((a, b) => (a as any).distanceKm - (b as any).distanceKm);
       }
     }

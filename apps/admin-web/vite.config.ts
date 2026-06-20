@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      dedupe: ["react", "react-dom"],
     },
     server: {
       // Admin console runs on 5175 (user-web 5173, seller-web 5174) so all three
@@ -32,6 +33,7 @@ export default defineConfig(({ mode }) => {
     // exports resolve in the browser at dev time.
     optimizeDeps: {
       include: ["@repo/types"],
+      exclude: ["@repo/icons"],
     },
     build: {
       commonjsOptions: {

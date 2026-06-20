@@ -1,19 +1,12 @@
 import { OrderStatus } from '@repo/types'
-import type { LucideIcon } from 'lucide-react'
-import {
-  Printer,
-  Gift,
-  Package,
-  ShoppingBasket,
-  Wrench,
-  Store,
-} from 'lucide-react'
+import type { IconName } from '@repo/icons'
 
 /** Central React Query keys. */
 export const qk = {
   me: ['me'] as const,
   addresses: ['addresses'] as const,
   categories: ['categories'] as const,
+  subcategories: (categoryId: string) => ['subcategories', categoryId] as const,
   banners: ['banners'] as const,
   sellers: (params: unknown) => ['sellers', params] as const,
   trending: ['sellers', 'trending'] as const,
@@ -21,6 +14,7 @@ export const qk = {
   seller: (id: string, params?: unknown) => ['seller', id, params] as const,
   sellerProducts: (id: string, params?: unknown) => ['seller', id, 'products', params] as const,
   search: (q: string) => ['search', q] as const,
+  productBrowse: (params: unknown) => ['product-browse', params] as const,
   favorites: ['favorites'] as const,
   cart: ['cart'] as const,
   checkout: (addressId: string) => ['checkout', 'multi', addressId] as const,
@@ -29,19 +23,29 @@ export const qk = {
   autocomplete: (q: string) => ['autocomplete', q] as const,
 }
 
-/** Category id → icon. Falls back to Store. */
-export const categoryIcons: Record<string, LucideIcon> = {
-  printing: Printer,
-  gifts: Gift,
-  gift: Gift,
-  stationery: Package,
-  grocery: ShoppingBasket,
-  groceries: ShoppingBasket,
-  repairs: Wrench,
-  repair: Wrench,
+/** Category id → hyperlocal icon name. Falls back to storefront. */
+export const categoryIcons: Record<string, IconName> = {
+  // Short / lowercase IDs
+  printing: 'printer',
+  hardware: 'wrench',
+  stationery: 'package',
+  sports: 'lightning',
+  tennis: 'lightning',
+  swimming: 'lightning',
+  cycling: 'lightning',
+  marketing: 'tag',
+  gifts: 'gift',
+  gift: 'gift',
+  grocery: 'basket',
+  groceries: 'basket',
+  repairs: 'wrench',
+  repair: 'wrench',
+  // Multi-word IDs that come from the backend (lowercased for matching)
+  'printing services': 'printer',
+  'marketing materials': 'tag',
 }
-export function categoryIcon(id: string): LucideIcon {
-  return categoryIcons[id.toLowerCase()] ?? Store
+export function categoryIcon(id: string): IconName {
+  return categoryIcons[id.toLowerCase()] ?? 'storefront'
 }
 
 /** Order status → display label. */

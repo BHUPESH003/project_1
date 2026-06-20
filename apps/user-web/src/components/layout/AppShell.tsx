@@ -4,8 +4,26 @@ import { Header } from './Header'
 import { BottomNav } from './BottomNav'
 import { FloatingCartBar } from './FloatingCartBar'
 import { AddressSheet } from '@/components/sheets/AddressSheet'
+import { SearchOverlay } from '@/components/sheets/SearchOverlay'
 import { useAuthStore } from '@/stores/authStore'
 import { useAddressStore } from '@/stores/addressStore'
+import { useCart } from '@/api/hooks/useCart'
+import { useMultiCheckout } from '@/api/hooks/useCheckout'
+
+/**
+ * Pre-fetches delivery quotes as soon as the user has items in their cart and a
+ * saved address. When they navigate to /cart, the data is already cached and they
+ * don't wait for the delivery partner API round-trip.
+ */
+function CheckoutPrefetcher() {
+  const address = useAddressStore((s) => s.selectedAddress)
+  const { data: cart } = useCart()
+  const hasItems = (cart?.items?.length ?? 0) > 0
+  // Subscribing to useMultiCheckout here (enabled when conditions met) shares the
+  // same React Query cache key as CartPage, so no duplicate requests are made.
+  useMultiCheckout(hasItems && address?.id ? address.id : undefined)
+  return null
+}
 
 export function AppShell() {
   const navigate = useNavigate()
@@ -20,6 +38,7 @@ export function AppShell() {
 
   // Address-first discovery: force selection on first launch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isAuthed && !address) setAddressOpen(true)
   }, [isAuthed, address])
 
@@ -34,6 +53,8 @@ export function AppShell() {
       <FloatingCartBar />
       <BottomNav />
       <AddressSheet open={addressOpen} onOpenChange={setAddressOpen} dismissible={!!address} />
+      <SearchOverlay />
+      <CheckoutPrefetcher />
     </div>
   )
 }

@@ -28,11 +28,13 @@ function extractOrderIds(res: unknown): string[] {
  * otherwise every fee renders as ₹0 and the Recommended/Cheapest/Fastest badges
  * never match.
  */
-function normalizeCheckout(res: any): MultiCheckoutSummary {
-  const recId = (r: any) => (r && typeof r === 'object' ? r.quotationId : r) as string | undefined
-  const sellers = (res?.sellers ?? []).map((s: any) => ({
+function normalizeCheckout(res: unknown): MultiCheckoutSummary {
+  const recId = (r: unknown) =>
+    (r && typeof r === 'object' ? (r as Record<string, unknown>).quotationId : r) as string | undefined
+  const data = res as Record<string, unknown> | null
+  const sellers = ((data?.sellers ?? []) as Record<string, unknown>[]).map((s) => ({
     ...s,
-    deliveryOptions: (s.deliveryOptions ?? []).map((o: any) => {
+    deliveryOptions: ((s.deliveryOptions ?? []) as Record<string, unknown>[]).map((o) => {
       const v = o.vehicleOptions?.[0]
       return {
         quotationId: o.quotationId,
@@ -73,25 +75,27 @@ export function usePlaceMultiOrder() {
       const res = await apiPost<unknown>('/checkout/place-order/multi', input)
       return extractOrderIds(res)
     },
+    // Cart is cleared by CartPage.pay() only after all payments are verified.
+    // Clearing it here (on order creation) would wipe the cart before the user pays.
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.cart })
       qc.invalidateQueries({ queryKey: qk.orders })
     },
   })
 }
 
 /**
- * POST /orders/:id/create-payment-intent?provider=razorpay
- * Backend returns `{ payment_id, order_id, amount, status, payment_intent: {
- * gatewayOrderId, paymentData: { keyId, orderId, amount(paise), currency,
- * prefill } } }`. openRazorpay() wants `{ paymentData }`, so extract it.
+ * POST /checkout/payment-intent — single consolidated payment intent for all orders.
+ * One Razorpay modal for a multi-seller cart instead of one per shop.
  */
-export async function createPaymentIntent(orderId: string): Promise<PaymentIntent> {
-  const res = await apiPost<Record<string, any>>(
-    `/orders/${orderId}/create-payment-intent`,
-    undefined,
-    { params: { provider: 'razorpay' } },
-  )
+export async function createMultiPaymentIntent(
+  orderIds: string[],
+  payDeliveryFee?: boolean[],
+): Promise<PaymentIntent> {
+  const res = await apiPost<Record<string, unknown>>('/checkout/payment-intent', {
+    orderIds,
+    provider: 'razorpay',
+    payDeliveryFee,
+  })
   const paymentData =
     res?.payment_intent?.paymentData ?? res?.paymentData ?? res?.payment_intent ?? res
   if (!paymentData?.keyId) {
@@ -100,11 +104,17 @@ export async function createPaymentIntent(orderId: string): Promise<PaymentInten
   return { paymentData } as PaymentIntent
 }
 
-/** POST /orders/:id/verify-payment */
-export function verifyPayment(orderId: string, result: RazorpayResult): Promise<unknown> {
-  return apiPost(`/orders/${orderId}/verify-payment`, {
+/** POST /checkout/verify-payment — settle all orders after a single Razorpay payment. */
+export function verifyMultiPayment(
+  orderIds: string[],
+  result: RazorpayResult,
+  payDeliveryFee?: boolean[],
+): Promise<unknown> {
+  return apiPost('/checkout/verify-payment', {
+    orderIds,
     razorpay_payment_id: result.razorpay_payment_id,
     razorpay_order_id: result.razorpay_order_id,
     razorpay_signature: result.razorpay_signature,
+    payDeliveryFee,
   })
 }

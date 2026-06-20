@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      dedupe: ["react", "react-dom"],
     },
     server: {
       // Seller console runs on 5174 (user-web uses 5173) so both can run together.
@@ -31,6 +32,7 @@ export default defineConfig(({ mode }) => {
     // exports resolve in the browser at dev time.
     optimizeDeps: {
       include: ["@repo/types"],
+      exclude: ["@repo/icons"],
     },
     build: {
       commonjsOptions: {

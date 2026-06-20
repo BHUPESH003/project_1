@@ -17,6 +17,7 @@ export function EditProfilePage() {
 
   useEffect(() => {
     if (me) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(me.name ?? '')
       setEmail(me.email ?? '')
     }
@@ -46,7 +47,7 @@ export function EditProfilePage() {
         <Field label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <div>
           <label className="mb-2 block text-subhead font-medium text-text-2">Phone number</label>
-          <div className="flex min-h-[50px] items-center rounded-md border-[1.5px] border-border bg-surface-2 px-3.5 text-body text-text-3 mono-num">
+          <div className="flex min-h-12.5 items-center rounded-md border-[1.5px] border-border bg-surface-2 px-3.5 text-body text-text-3 mono-num">
             {me?.phone ? formatPhone(me.phone) : ''}
           </div>
         </div>

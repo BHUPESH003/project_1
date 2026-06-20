@@ -20,6 +20,14 @@ export class CategoriesService {
   ) {}
 
   /**
+   * Return distinct product sub-categories for sellers in a given category.
+   * Powers the subcategory chip rail shown after category selection.
+   */
+  async findSubcategories(categoryId: string) {
+    return this.categoryRepository.findProductCategories(categoryId);
+  }
+
+  /**
    * Get all categories with their status and iconUrl (for Shop by Category).
    * Returns categories sorted by displayOrder
    */

@@ -31,6 +31,9 @@ importers:
       '@radix-ui/react-toast':
         specifier: ^1.2.16
         version: 1.2.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@repo/icons':
+        specifier: workspace:*
+        version: link:../../packages/icons
       '@repo/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -143,6 +146,9 @@ importers:
       '@radix-ui/react-toast':
         specifier: ^1.2.16
         version: 1.2.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@repo/icons':
+        specifier: workspace:*
+        version: link:../../packages/icons
       '@repo/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -382,6 +388,9 @@ importers:
       '@radix-ui/react-toast':
         specifier: ^1.2.16
         version: 1.2.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@repo/icons':
+        specifier: workspace:*
+        version: link:../../packages/icons
       '@repo/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -470,6 +479,12 @@ importers:
       vite:
         specifier: ^8.0.12
         version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0)
+
+  packages/icons:
+    dependencies:
+      react:
+        specifier: '>=18'
+        version: 19.2.7
 
   packages/types: {}
 

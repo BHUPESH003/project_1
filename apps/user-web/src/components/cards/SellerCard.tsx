@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Heart, Clock, Store } from 'lucide-react'
+import { Heart, Store } from 'lucide-react'
+import { Icon } from '@repo/icons'
 import { Rating } from '@/components/ui/Rating'
 import { useToggleFavorite } from '@/api/hooks/useFavorites'
 import { useAuthStore } from '@/stores/authStore'
@@ -24,7 +25,7 @@ export function SellerCard({ seller }: { seller: Seller }) {
       onClick={() => navigate(`/sellers/${seller.id}`)}
       className="block w-full overflow-hidden rounded-lg border border-border bg-surface text-left shadow-sm"
     >
-      <div className="relative h-[110px] w-full bg-surface-3">
+      <div className="relative h-27.5 w-full bg-surface-3">
         {cover ? (
           <img src={cover} alt={seller.shopName} className="h-full w-full object-cover" />
         ) : (
@@ -69,11 +70,12 @@ export function SellerCard({ seller }: { seller: Seller }) {
             <span className={cn('h-1.5 w-1.5 rounded-full', isOnline ? 'bg-success pulse-dot' : 'bg-text-3')} />
             {isOnline ? 'Open' : 'Closed'}
           </span>
-          {seller.prepTimeMinutes != null && (
+          {(seller.estimatedDeliveryTimeMins ?? seller.prepTimeMinutes) != null && (
             <>
               <span className="text-text-3">·</span>
               <span className="inline-flex items-center gap-1">
-                <Clock size={13} /> {minutes(seller.prepTimeMinutes)}
+                <Icon name="truck" size={13} />
+                {minutes(seller.estimatedDeliveryTimeMins ?? seller.prepTimeMinutes)}
               </span>
             </>
           )}
@@ -97,7 +99,7 @@ export function SellerCard({ seller }: { seller: Seller }) {
 export function SellerCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="skeleton h-[110px] w-full rounded-none" />
+      <div className="skeleton h-27.5 w-full rounded-none" />
       <div className="space-y-2 p-3.5">
         <div className="flex justify-between">
           <div className="skeleton h-4 w-32" />

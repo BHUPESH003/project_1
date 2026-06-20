@@ -108,69 +108,54 @@ export class OrdersService {
       enrichedPayload.items &&
       Array.isArray(enrichedPayload.items)
     ) {
-      const enrichedItems = [];
+      // Batch-fetch all products in one query instead of N sequential findUnique calls.
+      const productIds = (enrichedPayload.items as any[])
+        .map((it: any) => it.productId)
+        .filter(Boolean) as string[];
 
-      for (const item of enrichedPayload.items) {
-        try {
-          // Fetch product details by productId
-          if (!item.productId) {
-            throw new BadRequestException(`Item must have a productId`);
-          }
+      if (productIds.length === 0) {
+        throw new BadRequestException('All items must have a productId');
+      }
 
-          const product = await this.prismaService.prisma.product.findUnique({
-            where: { id: item.productId },
-          });
+      const products = await this.prismaService.prisma.product.findMany({
+        where: { id: { in: productIds } },
+      });
+      const productMap = new Map(products.map((p) => [p.id, p]));
 
-          if (!product) {
-            throw new NotFoundException(`Product ${item.productId} not found`);
-          }
+      const enrichedItems: any[] = [];
 
-          // Validate all products are from the same seller
-          if (!sellerId) {
-            sellerId = product.sellerId;
-          } else if (product.sellerId !== sellerId) {
-            throw new BadRequestException(
-              `All products must be from the same seller. Found products from different sellers.`,
-            );
-          }
-
-          // Calculate price and total
-          const price = Number(product.price);
-          const quantity = item.quantity || 1;
-          const totalPrice = price * quantity;
-
-          // Store seller ID from first item
-          if (!sellerId) {
-            sellerId = product.sellerId;
-          }
-
-          // Add to item cost
-          itemCost += totalPrice;
-
-          // Enrich item with product details
-          enrichedItems.push({
-            productId: item.productId,
-            name: product.name,
-            quantity,
-            price,
-            totalPrice,
-          });
-        } catch (error) {
-          if (
-            error instanceof BadRequestException ||
-            error instanceof NotFoundException
-          ) {
-            throw error;
-          }
-          this.logger.error(
-            `Error enriching item with productId ${item.productId}:`,
-            error,
-          );
+      for (const item of enrichedPayload.items as any[]) {
+        if (!item.productId) {
+          throw new BadRequestException(`Item must have a productId`);
+        }
+        const product = productMap.get(item.productId);
+        if (!product) {
+          throw new NotFoundException(`Product ${item.productId} not found`);
+        }
+        // Validate all products are from the same seller
+        if (!sellerId) {
+          sellerId = product.sellerId;
+        } else if (product.sellerId !== sellerId) {
           throw new BadRequestException(
-            `Could not fetch product details for ${item.productId}`,
+            `All products must be from the same seller. Found products from different sellers.`,
           );
         }
+        // Calculate price and total
+        const price = Number(product.price);
+        const quantity = item.quantity || 1;
+        const totalPrice = price * quantity;
+        // Add to item cost
+        itemCost += totalPrice;
+        // Enrich item with product details
+        enrichedItems.push({
+          productId: item.productId,
+          name: product.name,
+          quantity,
+          price,
+          totalPrice,
+        });
       }
+
       this.logger.log(
         `Enriched ${enrichedItems.length} items. Total Cost: ${itemCost}`,
       );
@@ -257,17 +242,29 @@ export class OrdersService {
       }
     }
 
-    // Update order with calculated values
+    // Update order with calculated values.
+    // Read deliveryFeeRupees from the ORIGINAL orderPayload (before the category
+    // handler normalizes it) because the handler strips the delivery field.
+    const deliveryFeeFromPayload =
+      ((createOrderDto.orderPayload as any)?.delivery?.deliveryFeeRupees as
+        | number
+        | undefined) ??
+      ((enrichedPayload as any)?.delivery?.deliveryFeeRupees as
+        | number
+        | undefined);
+
     if (
       sellerId ||
       itemCost > 0 ||
       dropLatitude ||
       dropLongitude ||
-      dropAddress
+      dropAddress ||
+      deliveryFeeFromPayload != null
     ) {
       await this.orderRepository.update(order.id, {
         sellerId: sellerId || undefined,
         itemCost: itemCost > 0 ? itemCost : undefined,
+        deliveryFee: deliveryFeeFromPayload ?? undefined,
         dropLatitude: dropLatitude || undefined,
         dropLongitude: dropLongitude || undefined,
         dropAddress: dropAddress || undefined,
@@ -612,13 +609,16 @@ export class OrdersService {
           ? {
               status: order.delivery?.status || 'pending',
               providerName: order.delivery?.providerName || null,
-              trackingUrl: order.delivery?.providerTrackingUrl || null,
+              partnerName: order.delivery?.partnerName || null,
+              partnerPhone: order.delivery?.partnerPhone || null,
+              providerTrackingUrl: order.delivery?.providerTrackingUrl || null,
             }
           : null,
       pricing: {
         itemCost: order.itemCost,
         deliveryFee: order.deliveryFee,
         totalAmount: order.totalAmount,
+        deliveryFeePaid: order.deliveryFeePaid,
       },
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
@@ -1527,5 +1527,149 @@ export class OrdersService {
    */
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
+  }
+
+  /**
+   * Create a single consolidated payment intent for multiple orders.
+   * Used by multi-seller cart checkout — one Razorpay modal for all shops.
+   */
+  async createMultiPaymentIntent(
+    userId: string,
+    orderIds: string[],
+    provider?: string,
+    payDeliveryFee?: boolean[],
+  ) {
+    if (!orderIds.length) {
+      throw new BadRequestException('At least one order ID is required');
+    }
+
+    const orders = await Promise.all(
+      orderIds.map((id) => this.orderRepository.findById(id, false)),
+    );
+
+    for (const order of orders) {
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.userId !== userId)
+        throw new BadRequestException('Order does not belong to user');
+      if (order.status !== OrderStatus.SELLER_SELECTED) {
+        throw new BadRequestException(
+          `Order ${order.id} must be in SELLER_SELECTED state, got ${order.status}`,
+        );
+      }
+    }
+
+    // Build per-order amounts. Delivery fee is only added when the user opted
+    // to pay it online (payDeliveryFee[i] !== false). Defaults to true when
+    // the array is absent or the index is undefined.
+    const orderPayments = await Promise.all(
+      orders.map(async (order, i) => {
+        const includeDelivery = payDeliveryFee == null || payDeliveryFee[i] !== false;
+        const itemCost = Number(order!.itemCost) || 0;
+        const deliveryFee = includeDelivery ? Number(order!.deliveryFee ?? 0) : 0;
+        const amount = itemCost + deliveryFee;
+
+        // Always persist the full totalAmount (itemCost + actual deliveryFee)
+        // so the order record reflects the true order value regardless of how
+        // the user chose to pay.
+        if (!order!.totalAmount) {
+          const fullAmount = itemCost + Number(order!.deliveryFee ?? 0);
+          await this.orderRepository.update(order!.id, { totalAmount: fullAmount });
+        }
+
+        return { orderId: order!.id, amount };
+      }),
+    );
+
+    const userContact = await this.getOrderUserContact(userId);
+
+    return this.paymentsService.createMultiPayment(
+      orderPayments,
+      userContact.phone,
+      userContact.name,
+      provider,
+    );
+  }
+
+  /**
+   * Verify a consolidated multi-order Razorpay payment and settle all orders.
+   * payDeliveryFee[i] indicates whether delivery was included in the Razorpay
+   * charge for orderIds[i]; defaults to true when not provided.
+   */
+  async verifyMultiPayment(
+    userId: string,
+    orderIds: string[],
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    payDeliveryFee?: boolean[],
+  ) {
+    const orders = await Promise.all(
+      orderIds.map((id) => this.orderRepository.findById(id, false)),
+    );
+    for (const order of orders) {
+      if (!order || order.userId !== userId) {
+        throw new BadRequestException('Invalid order');
+      }
+    }
+
+    const result = await this.paymentsService.verifyMultiOrderPayment(
+      orderIds,
+      razorpayPaymentId,
+      razorpayOrderId,
+    );
+
+    // Mark deliveryFeePaid per order based on what was actually charged.
+    await Promise.all(
+      orderIds.map((id, i) => {
+        const paid = payDeliveryFee == null || payDeliveryFee[i] !== false;
+        return this.orderRepository.update(id, { deliveryFeePaid: paid });
+      }),
+    );
+
+    return result;
+  }
+
+  /**
+   * Create a Razorpay payment intent for just the delivery fee of an existing
+   * order where the user previously chose to pay at door.
+   */
+  async createDeliveryFeeIntent(orderId: string, userId: string) {
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) throw new BadRequestException('Order does not belong to user');
+    if (order.deliveryFeePaid) throw new BadRequestException('Delivery fee already paid online');
+    const deliveryFee = Number(order.deliveryFee ?? 0);
+    if (deliveryFee <= 0) throw new BadRequestException('No delivery fee to pay');
+
+    const userContact = await this.getOrderUserContact(userId);
+    return this.paymentsService.createRawPaymentIntent(
+      orderId,
+      deliveryFee,
+      userContact.phone,
+      userContact.name,
+    );
+  }
+
+  /**
+   * Verify a delivery-fee-only Razorpay payment and mark deliveryFeePaid = true.
+   */
+  async verifyDeliveryFeePayment(
+    orderId: string,
+    userId: string,
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+  ) {
+    const order = await this.orderRepository.findById(orderId, false);
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) throw new BadRequestException('Order does not belong to user');
+    if (order.deliveryFeePaid) throw new BadRequestException('Delivery fee already paid online');
+
+    await this.paymentsService.verifyMultiOrderPayment(
+      [orderId],
+      razorpayPaymentId,
+      razorpayOrderId,
+    );
+
+    await this.orderRepository.update(orderId, { deliveryFeePaid: true });
+    return { success: true, deliveryFeePaid: true };
   }
 }

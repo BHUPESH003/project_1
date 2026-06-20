@@ -1,5 +1,13 @@
-import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsIn,
+  Min,
+  Max,
+} from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -79,4 +87,37 @@ export class FindAvailableSellersDto {
   @Min(0)
   @IsOptional()
   offset?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Sort order. "nearest" (default, by distance — requires lat/lng), "rating" (top rated first), "newest" (recently added first).',
+    enum: ['nearest', 'rating', 'newest'],
+    example: 'nearest',
+  })
+  @IsIn(['nearest', 'rating', 'newest'])
+  @IsOptional()
+  sort?: 'nearest' | 'rating' | 'newest';
+
+  @ApiPropertyOptional({
+    description: 'When true, only return sellers with an active discount/offer.',
+    example: true,
+  })
+  // Query params arrive as strings — coerce "true"/"false" to a real boolean.
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  @IsOptional()
+  hasOffers?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Only return sellers with a rating >= this value (0–5).',
+    example: 4,
+    minimum: 0,
+    maximum: 5,
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  minRating?: number;
 }

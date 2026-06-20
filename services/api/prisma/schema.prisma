@@ -362,6 +362,7 @@ model Product {
   image        String?
   inStock      Boolean  @default(true)
   isBestSeller Boolean  @default(false)
+  metadata     Json?    // Flexible attribute bag: veg, highlights, specs, variants, nutrition, etc.
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -402,9 +403,10 @@ model Order {
   status OrderStatus @default(CREATED)
 
   // Pricing breakdown (all in INR, stored as Decimal for accuracy)
-  itemCost    Decimal? @db.Decimal(10, 2)
-  deliveryFee Decimal? @db.Decimal(10, 2)
-  totalAmount Decimal? @db.Decimal(10, 2)
+  itemCost         Decimal? @db.Decimal(10, 2)
+  deliveryFee      Decimal? @db.Decimal(10, 2)
+  totalAmount      Decimal? @db.Decimal(10, 2)
+  deliveryFeePaid  Boolean  @default(false)
 
   // Delivery provider (Uber, Dunzo, Porter, etc.)
   deliveryProvider String?

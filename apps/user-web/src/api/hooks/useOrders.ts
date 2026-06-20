@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@/api/client'
 import { qk, isActiveOrder } from '@/lib/constants'
 import { useAuthStore } from '@/stores/authStore'
-import type { Order } from '@/api/types'
+import { openRazorpay } from '@/lib/razorpay'
+import type { Order, PaymentIntent } from '@/api/types'
 
 /**
  * The orders API returns `{ order_id, status, items[], seller{id,shopName,address},
@@ -23,6 +24,7 @@ function mapOrder(raw: any): Order {
     itemCost: raw?.itemCost ?? pricing.itemCost ?? null,
     deliveryFee: raw?.deliveryFee ?? pricing.deliveryFee ?? null,
     totalAmount: raw?.totalAmount ?? pricing.totalAmount ?? null,
+    deliveryFeePaid: raw?.deliveryFeePaid ?? pricing.deliveryFeePaid ?? null,
     dropAddress: raw?.dropAddress ?? raw?.drop_address ?? null,
     createdAt: raw?.createdAt ?? raw?.created_at,
     seller: raw?.seller ?? null,
@@ -76,6 +78,38 @@ export function useCancelOrder() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) => apiPost(`/orders/${id}/cancel`, { reason }),
     onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: qk.order(id) })
+      qc.invalidateQueries({ queryKey: qk.orders })
+    },
+  })
+}
+
+/**
+ * Opens Razorpay for the delivery fee of an order where the user originally
+ * chose "pay at door" but now wants to pay online.
+ */
+export function usePayDeliveryFee() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ orderId }: { orderId: string }) => {
+      const res = await apiPost<Record<string, unknown>>(`/orders/${orderId}/pay-delivery-fee`, {})
+      const paymentData =
+        (res?.payment_intent as Record<string, unknown>)?.paymentData ??
+        res?.paymentData ??
+        res?.payment_intent ??
+        res
+      if (!(paymentData as Record<string, unknown>)?.keyId) {
+        throw new Error('Payment could not be initialised (no gateway key)')
+      }
+      const intent: PaymentIntent = { paymentData: paymentData as PaymentIntent['paymentData'] }
+      const rzp = await openRazorpay(intent)
+      await apiPost(`/orders/${orderId}/verify-delivery-payment`, {
+        razorpay_payment_id: rzp.razorpay_payment_id,
+        razorpay_order_id: rzp.razorpay_order_id,
+        razorpay_signature: rzp.razorpay_signature,
+      })
+    },
+    onSuccess: (_d, { orderId }) => {
+      qc.invalidateQueries({ queryKey: qk.order(orderId) })
       qc.invalidateQueries({ queryKey: qk.orders })
     },
   })

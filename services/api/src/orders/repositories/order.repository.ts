@@ -27,6 +27,7 @@ export interface OrderEntity {
   dropLongitude: number | null;
   dropAddress: string | null;
   failureReason: string | null;
+  deliveryFeePaid: boolean;
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -67,6 +68,8 @@ export interface OrderEntity {
     status: string;
     providerName: string | null;
     providerTrackingUrl: string | null;
+    partnerName: string | null;
+    partnerPhone: string | null;
   } | null;
 }
 
@@ -94,6 +97,7 @@ export interface UpdateOrderData {
   dropAddress?: string;
   failureReason?: string;
   deliveryProvider?: string;
+  deliveryFeePaid?: boolean;
 }
 
 @Injectable()
@@ -264,6 +268,8 @@ export class OrderRepository {
             status: true,
             providerName: true,
             providerTrackingUrl: true,
+            partnerName: true,
+            partnerPhone: true,
           },
         },
       };
@@ -348,6 +354,9 @@ export class OrderRepository {
     }
     if (data.failureReason !== undefined) {
       updateData.failureReason = data.failureReason;
+    }
+    if (data.deliveryFeePaid !== undefined) {
+      (updateData as any).deliveryFeePaid = data.deliveryFeePaid;
     }
 
     const order = await this.prismaService.prisma.order.update({
@@ -467,6 +476,7 @@ export class OrderRepository {
       dropLongitude: order.dropLongitude ? Number(order.dropLongitude) : null,
       dropAddress: order.dropAddress,
       failureReason: order.failureReason,
+      deliveryFeePaid: order.deliveryFeePaid ?? false,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       completedAt: order.completedAt,

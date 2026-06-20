@@ -51,7 +51,7 @@ export function CheckoutPage() {
   const checkout = useMultiCheckout(address?.id)
   const placeOrder = usePlaceMultiOrder()
 
-  const sellers = checkout.data?.sellers ?? []
+  const sellers = useMemo(() => checkout.data?.sellers ?? [], [checkout.data])
   const allSelected = sellers.length > 0 && sellers.every((s) => selections[s.seller.id])
 
   const productTotal = useMemo(

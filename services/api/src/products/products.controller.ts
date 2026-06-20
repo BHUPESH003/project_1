@@ -29,6 +29,18 @@ import { UserRole } from '@repo/types';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
+  // Browse — must be before any :id param routes
+  @Get('browse')
+  @ApiOperation({ summary: 'Browse products by category/subcategory, sorted newest' })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'Seller category id' })
+  @ApiQuery({ name: 'sub', required: false, description: 'Product sub-category string' })
+  browse(
+    @Query('categoryId') categoryId?: string,
+    @Query('sub') sub?: string,
+  ) {
+    return this.productsService.browse({ categoryId, subCategory: sub });
+  }
+
   // Deals Hub
   @Get('deals')
   @UseGuards(OptionalJwtAuthGuard)

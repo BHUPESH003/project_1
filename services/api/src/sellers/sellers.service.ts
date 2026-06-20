@@ -46,11 +46,24 @@ export class SellersService {
   async findAvailableSellers(
     query: FindAvailableSellersDto,
     userId?: string,
-    options?: { isTrending?: boolean; orderBy?: 'distance' | 'newest' },
+    options?: {
+      isTrending?: boolean;
+      orderBy?: 'distance' | 'newest' | 'rating';
+    },
   ) {
     const hasLocation = query.lat != null && query.lng != null;
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
+
+    // A caller-supplied orderBy (trending/new endpoints) wins; otherwise map the
+    // `sort` query param. "nearest" → distance-based ordering.
+    const orderBy =
+      options?.orderBy ??
+      (query.sort === 'rating'
+        ? 'rating'
+        : query.sort === 'newest'
+          ? 'newest'
+          : 'distance');
 
     const { sellers, total } = await this.sellerRepository.findAvailable({
       categoryId: query.category === 'all' ? undefined : query.category,
@@ -60,7 +73,9 @@ export class SellersService {
       limit,
       offset,
       isTrending: options?.isTrending,
-      orderBy: options?.orderBy,
+      hasOffers: query.hasOffers,
+      minRating: query.minRating,
+      orderBy,
     });
 
     const favoriteIds =
@@ -246,6 +261,7 @@ export class SellersService {
           image: true,
           inStock: true,
           isBestSeller: true,
+          metadata: true,
           createdAt: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -298,6 +314,7 @@ export class SellersService {
         image: p.image,
         inStock: p.inStock,
         isBestSeller: p.isBestSeller,
+        metadata: p.metadata ?? null,
         isWishlisted: userId ? wishIds.has(p.id) : undefined,
         notifyRequested: userId ? notifyIds.has(p.id) : undefined,
       })),
@@ -333,6 +350,73 @@ export class SellersService {
       id: updatedSeller.id,
       status: updatedSeller.status,
       statusUpdatedAt: updatedSeller.statusUpdatedAt,
+    };
+  }
+
+  async getSellerProduct(
+    sellerId: string,
+    productId: string,
+    userId?: string,
+  ) {
+    const seller = await this.sellerRepository.findById(sellerId, false);
+    if (!seller) throw new NotFoundException(`Seller not found`);
+
+    const product = await this.prismaService.prisma.product.findFirst({
+      where: { id: productId, sellerId },
+      select: {
+        id: true,
+        sellerId: true,
+        name: true,
+        description: true,
+        category: true,
+        unit: true,
+        price: true,
+        mrp: true,
+        image: true,
+        inStock: true,
+        isBestSeller: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+    if (!product) throw new NotFoundException(`Product not found`);
+
+    const [wishSet, notifySet] = userId
+      ? await Promise.all([
+          this.prismaService.prisma.userProductWishlist.findFirst({
+            where: { userId, productId },
+            select: { productId: true },
+          }),
+          this.prismaService.prisma.userProductNotify.findFirst({
+            where: { userId, productId },
+            select: { productId: true },
+          }),
+        ])
+      : [null, null];
+
+    return {
+      id: product.id,
+      sellerId: product.sellerId,
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      unit: product.unit,
+      price: Number(product.price),
+      mrp: product.mrp != null ? Number(product.mrp) : null,
+      discountPercent:
+        product.mrp != null && Number(product.mrp) > 0
+          ? Math.round(
+              ((Number(product.mrp) - Number(product.price)) /
+                Number(product.mrp)) *
+                100,
+            )
+          : null,
+      image: product.image,
+      inStock: product.inStock,
+      isBestSeller: product.isBestSeller,
+      metadata: product.metadata ?? null,
+      isWishlisted: userId ? !!wishSet : undefined,
+      notifyRequested: userId ? !!notifySet : undefined,
     };
   }
 
@@ -703,6 +787,7 @@ export class SellersService {
         image: dto.image ?? null,
         inStock: dto.inStock ?? true,
         isBestSeller: dto.isBestSeller ?? false,
+        metadata: dto.metadata != null ? (dto.metadata as Prisma.InputJsonValue) : undefined,
       },
     });
   }
@@ -728,8 +813,8 @@ export class SellersService {
     if (dto.mrp !== undefined) updateData.mrp = dto.mrp;
     if (dto.image !== undefined) updateData.image = dto.image;
     if (dto.inStock !== undefined) updateData.inStock = dto.inStock;
-    if (dto.isBestSeller !== undefined)
-      updateData.isBestSeller = dto.isBestSeller;
+    if (dto.isBestSeller !== undefined) updateData.isBestSeller = dto.isBestSeller;
+    if (dto.metadata !== undefined) updateData.metadata = dto.metadata as Prisma.InputJsonValue;
 
     return this.prismaService.prisma.product.update({
       where: { id: productId },

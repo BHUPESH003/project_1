@@ -27,9 +27,9 @@ export const ORDER_STATE_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     OrderStatus.SELLER_REJECTED,
     OrderStatus.USER_CANCELLED,
   ],
-  SELLER_ACCEPTED: [OrderStatus.PREPARING, OrderStatus.USER_CANCELLED],
-  PREPARING: [OrderStatus.READY_FOR_PICKUP, OrderStatus.USER_CANCELLED],
-  READY_FOR_PICKUP: [OrderStatus.PICKED_UP, OrderStatus.USER_CANCELLED],
+  SELLER_ACCEPTED: [OrderStatus.PREPARING],
+  PREPARING: [OrderStatus.READY_FOR_PICKUP],
+  READY_FOR_PICKUP: [OrderStatus.PICKED_UP],
   PICKED_UP: [OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED],
   DELIVERED: [], // Terminal state
 

@@ -362,51 +362,81 @@ export class CheckoutService {
       itemsBySeller.get(item.sellerId)!.push(item);
     }
 
-    const createdOrders: any[] = [];
-    for (const sellerInput of body.sellers) {
-      const sp = sellerPricingMap.get(sellerInput.sellerId)!;
-      const sellerItems = itemsBySeller.get(sellerInput.sellerId)!;
+    // Create all seller orders in parallel — eliminates O(n) sequential DB round-trips.
+    const createdOrders = await Promise.all(
+      body.sellers.map((sellerInput) => {
+        const sp = sellerPricingMap.get(sellerInput.sellerId)!;
+        const sellerItems = itemsBySeller.get(sellerInput.sellerId)!;
 
-      const orderPayload = {
-        items: sellerItems.map((it) => ({
-          productId: it.productId,
-          name: it.product?.name ?? (it.payload as any)?.productName ?? 'Item',
-          quantity: it.quantity,
-          price: Number(it.product?.price ?? it.priceAtAdd ?? 0),
-          cartItemId: it.id,
-          payload: it.payload,
-        })),
-        billing: {
-          subtotal: sp.subtotal,
-          discountAmount: sp.discountAmount,
-          total: sp.total,
-        },
-        delivery: {
-          quotationId: sellerInput.quotationId,
-          deliveryFeeRupees: sellerInput.deliveryFeeRupees,
-          estimatedMinutes: sellerInput.estimatedMinutes,
-          vehicleType: sellerInput.vehicleType,
-        },
-        dropLatitude: address.latitude,
-        dropLongitude: address.longitude,
-        dropAddress: address.addressLine,
-      };
+        const orderPayload = {
+          items: sellerItems.map((it) => ({
+            productId: it.productId,
+            name: it.product?.name ?? (it.payload as any)?.productName ?? 'Item',
+            quantity: it.quantity,
+            price: Number(it.product?.price ?? it.priceAtAdd ?? 0),
+            cartItemId: it.id,
+            payload: it.payload,
+          })),
+          billing: {
+            subtotal: sp.subtotal,
+            discountAmount: sp.discountAmount,
+            total: sp.total,
+          },
+          delivery: {
+            quotationId: sellerInput.quotationId,
+            deliveryFeeRupees: sellerInput.deliveryFeeRupees,
+            estimatedMinutes: sellerInput.estimatedMinutes,
+            vehicleType: sellerInput.vehicleType,
+          },
+          dropLatitude: address.latitude,
+          dropLongitude: address.longitude,
+          dropAddress: address.addressLine,
+        };
 
-      const order = await this.ordersService.create(userId, {
-        sellerId: sellerInput.sellerId,
-        categoryId: sellerItems[0]?.product?.category ?? 'generic',
-        orderPayload,
-      } as any);
-
-      createdOrders.push(order);
-    }
-
-    // Phase 2.3: clear purchased items for all ordered sellers
-    await this.cartService.removeItemsBySeller(
-      userId,
-      body.sellers.map((s) => s.sellerId),
+        return this.ordersService.create(userId, {
+          sellerId: sellerInput.sellerId,
+          categoryId: sellerItems[0]?.product?.category ?? 'generic',
+          orderPayload,
+        } as any);
+      }),
     );
 
+    // Cart is cleared only after successful payment in verifyMultiPayment,
+    // so a cancelled/failed payment does not wipe the user's cart.
+
     return { orders: createdOrders, count: createdOrders.length };
+  }
+
+  async createMultiPaymentIntent(userId: string, orderIds: string[], provider?: string, payDeliveryFee?: boolean[]) {
+    return this.ordersService.createMultiPaymentIntent(userId, orderIds, provider, payDeliveryFee);
+  }
+
+  async verifyMultiPayment(
+    userId: string,
+    orderIds: string[],
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    payDeliveryFee?: boolean[],
+  ) {
+    const result = await this.ordersService.verifyMultiPayment(userId, orderIds, razorpayPaymentId, razorpayOrderId, payDeliveryFee);
+
+    // Clear the user's cart now that payment is confirmed. Best-effort — a
+    // failure here must never roll back an already-verified payment.
+    try {
+      const orders = await this.prisma.prisma.order.findMany({
+        where: { id: { in: orderIds }, userId },
+        select: { sellerId: true },
+      });
+      const sellerIds = [...new Set(
+        orders.map((o) => o.sellerId).filter(Boolean) as string[],
+      )];
+      if (sellerIds.length) {
+        await this.cartService.removeItemsBySeller(userId, sellerIds);
+      }
+    } catch {
+      // Cart clearing failure is non-fatal — payment is already verified.
+    }
+
+    return result;
   }
 }

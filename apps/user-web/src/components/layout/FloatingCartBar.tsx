@@ -10,7 +10,7 @@ export function FloatingCartBar() {
   const { pathname } = useLocation()
   const { data: cart } = useCart()
 
-  const hiddenRoutes = ['/cart', '/checkout', '/payment']
+  const hiddenRoutes = ['/cart', '/checkout', '/payment', '/orders']
   const hidden = hiddenRoutes.some((r) => pathname.startsWith(r))
 
   const count = cart?.items.reduce((s, it) => s + (it.quantity || 1), 0) ?? 0

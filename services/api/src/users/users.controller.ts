@@ -19,6 +19,7 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '@/common/guards';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { UpdateAddressDto } from './dto/update-address.dto';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 
 /**
@@ -74,6 +75,21 @@ export class UsersController {
     @Body() dto: CreateAddressDto,
   ) {
     return this.usersService.addAddress(req.user.id, dto);
+  }
+
+  @Patch('me/addresses/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a saved address (receiver info, address line)' })
+  @ApiParam({ name: 'id', description: 'Address ID' })
+  @ApiResponse({ status: 200, description: 'Address updated' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
+  updateAddress(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+    @Body() dto: UpdateAddressDto,
+  ) {
+    return this.usersService.updateAddress(req.user.id, id, dto);
   }
 
   @Delete('me/addresses/:id')

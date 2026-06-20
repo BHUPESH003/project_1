@@ -59,4 +59,10 @@ export class UpdateProductDto {
   @IsBoolean()
   @IsOptional()
   isBestSeller?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Flexible attribute bag for dynamic product detail page',
+  })
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

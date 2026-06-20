@@ -84,4 +84,48 @@ export class CheckoutController {
   async placeMultiOrder(@Req() req: any, @Body() body: PlaceMultiOrderDto) {
     return this.checkoutService.placeMultiSellerOrder(req.user.id, body);
   }
+
+  @Post('payment-intent')
+  @ApiOperation({
+    summary: 'Create a single consolidated payment intent for all orders',
+    description:
+      'Creates one Razorpay order covering the total across all provided orders. ' +
+      'All orders must be in SELLER_SELECTED state and belong to the authenticated user.',
+  })
+  @ApiResponse({ status: 201, description: 'Payment intent created' })
+  async createPaymentIntent(
+    @Req() req: any,
+    @Body() body: { orderIds: string[]; provider?: string; payDeliveryFee?: boolean[] },
+  ) {
+    return this.checkoutService.createMultiPaymentIntent(
+      req.user.id, body.orderIds, body.provider, body.payDeliveryFee,
+    );
+  }
+
+  @Post('verify-payment')
+  @ApiOperation({
+    summary: 'Verify consolidated payment and settle all orders',
+    description:
+      'Polls Razorpay to confirm payment capture, then marks all orders as PAID in one call.',
+  })
+  @ApiResponse({ status: 201, description: 'Payment verified and orders settled' })
+  async verifyPayment(
+    @Req() req: any,
+    @Body()
+    body: {
+      orderIds: string[];
+      razorpay_payment_id: string;
+      razorpay_order_id: string;
+      razorpay_signature: string;
+      payDeliveryFee?: boolean[];
+    },
+  ) {
+    return this.checkoutService.verifyMultiPayment(
+      req.user.id,
+      body.orderIds,
+      body.razorpay_payment_id,
+      body.razorpay_order_id,
+      body.payDeliveryFee,
+    );
+  }
 }

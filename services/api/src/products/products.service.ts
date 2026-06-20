@@ -9,6 +9,59 @@ import { PrismaService } from '@/prisma/prisma.service';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Browse all in-stock products, optionally filtered by seller category
+   * and/or product sub-category. Sorted newest-first so recently-added
+   * items surface first.
+   */
+  async browse(params: { categoryId?: string; subCategory?: string }) {
+    const products = await this.prisma.prisma.product.findMany({
+      where: {
+        inStock: true,
+        ...(params.subCategory ? { category: params.subCategory } : {}),
+        ...(params.categoryId
+          ? {
+              seller: {
+                categories: { some: { categoryId: params.categoryId } },
+              },
+            }
+          : {}),
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            shopName: true,
+            rating: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 60,
+    });
+
+    return products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      category: p.category,
+      unit: p.unit,
+      price: Number(p.price),
+      mrp: p.mrp != null ? Number(p.mrp) : null,
+      image: p.image,
+      inStock: p.inStock,
+      isBestSeller: p.isBestSeller,
+      createdAt: p.createdAt,
+      seller: {
+        id: p.seller.id,
+        shopName: p.seller.shopName,
+        rating: p.seller.rating != null ? Number(p.seller.rating) : null,
+        isOnline: (p.seller.status as string) === 'ONLINE',
+      },
+    }));
+  }
+
   async getDeals(lat?: number, lng?: number, limit = 10) {
     const products = await this.prisma.prisma.product.findMany({
       where: {

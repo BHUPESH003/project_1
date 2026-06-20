@@ -84,7 +84,15 @@ export function AddressSheet({
       toast.error('This address has no location set')
       return
     }
-    commit({ id: a.id, label: a.label, addressLine: a.addressLine, latitude: lat, longitude: lng })
+    commit({
+      id: a.id,
+      label: a.label,
+      addressLine: a.addressLine,
+      receiverName: a.receiverName,
+      receiverPhone: a.receiverPhone,
+      latitude: lat,
+      longitude: lng,
+    })
   }
 
   function savedIcon(label: string) {

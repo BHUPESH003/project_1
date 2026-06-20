@@ -33,7 +33,8 @@ export function SellerDetailPage() {
   const grouped = useMemo(() => {
     const map = new Map<string, Product[]>()
     for (const p of products.data ?? []) {
-      const key = p.category || 'Products'
+      // Use subCategory from metadata as a finer grouping if available
+      const key = (p.metadata?.subCategory as string | undefined) || p.category || 'Products'
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(p)
     }
@@ -156,7 +157,14 @@ export function SellerDetailPage() {
         ) : (
           grouped.map(([category, items]) => (
             <section key={category} className="mb-5">
-              <h2 className="mb-1 text-subhead font-bold uppercase tracking-wide text-text-3">{category}</h2>
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="text-subhead font-bold uppercase tracking-wide text-text-3">
+                  {category}
+                </h2>
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-text-3">
+                  {items.length > 99 ? '99+' : items.length}
+                </span>
+              </div>
               <div className="divide-y divide-border-faint">
                 {items.map((p) => (
                   <ProductRow

@@ -1,24 +1,36 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search as SearchIcon, X, SearchX, Store } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Search as SearchIcon, X, SearchX, Store, Clock } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import { SellerCard, SellerCardSkeleton } from '@/components/cards/SellerCard'
 import { Price } from '@/components/ui/Price'
 import { EmptyState, ErrorState } from '@/components/ui/States'
 import { useSearch } from '@/api/hooks/useSearch'
+import { useSearchStore } from '@/stores/searchStore'
 import { useDebounce } from '@/hooks/useDebounce'
 import { assetUrl } from '@/lib/format'
 
 export function SearchPage() {
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
+  const [sp] = useSearchParams()
+  // Pre-fill from ?q= when navigating from the compact header search bar
+  const [query, setQuery] = useState(() => sp.get('q') ?? '')
   const debounced = useDebounce(query, 300)
   const { data, isFetching, isError, refetch } = useSearch(debounced)
+
+  const { recentSearches, addSearch, removeSearch, clearSearches } = useSearchStore()
 
   const hasQuery = debounced.trim().length >= 2
   const sellers = data?.sellers ?? []
   const products = data?.products ?? []
   const noResults = hasQuery && !isFetching && sellers.length === 0 && products.length === 0
+
+  // Save to recent searches when results come back for a query
+  useEffect(() => {
+    if (hasQuery && data && (sellers.length > 0 || products.length > 0)) {
+      addSearch(debounced.trim())
+    }
+  }, [debounced, data, hasQuery, sellers.length, products.length, addSearch])
 
   return (
     <div className="px-5 pb-28 pt-3">
@@ -37,7 +49,45 @@ export function SearchPage() {
         onChange={(e) => setQuery(e.target.value)}
       />
 
-      {!hasQuery && (
+      {/* Recent searches — shown only when search box is empty */}
+      {!hasQuery && recentSearches.length > 0 && (
+        <section className="mt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-subhead font-bold text-text">Recent Searches</h2>
+            <button
+              type="button"
+              onClick={clearSearches}
+              className="text-caption font-semibold text-primary tap"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {recentSearches.map((s) => (
+              <div key={s} className="flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQuery(s)}
+                  className="flex items-center gap-1.5 text-caption text-text tap"
+                >
+                  <Clock size={12} className="shrink-0 text-text-3" />
+                  {s}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSearch(s)}
+                  className="ml-1 text-text-3 tap"
+                  aria-label={`Remove ${s}`}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!hasQuery && recentSearches.length === 0 && (
         <EmptyState
           icon={<SearchIcon size={32} />}
           title="Find anything nearby"

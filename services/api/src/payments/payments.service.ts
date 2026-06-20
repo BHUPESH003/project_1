@@ -11,7 +11,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PaymentStatus, OrderStatus } from '@repo/types';
+import { PaymentStatus, OrderStatus, PaymentMethod } from '@repo/types';
 import { PaymentRepository } from './repositories/payment.repository';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import { OrderStateMachineService } from '@/orders/state-machine';
@@ -660,6 +660,170 @@ export class PaymentsService {
       status: isProcessed ? PaymentStatus.REFUNDED : payment.status,
       message: `Refund ${(refundStatus || 'updated').toLowerCase()}`,
     };
+  }
+
+  /**
+   * Create a bare Razorpay payment intent for a specific amount without
+   * checking for existing payment records. Used for delivery-fee top-up
+   * payments where the order already has a settled payment record.
+   */
+  async createRawPaymentIntent(
+    orderId: string,
+    amount: number,
+    customerPhone: string,
+    customerName?: string,
+  ): Promise<CreatePaymentResponse & { orderIds: string[] }> {
+    if (amount <= 0) throw new BadRequestException('Amount must be greater than 0');
+    const provider = this.providerRegistry.getDefaultProvider();
+    const paymentIntent = await provider.createPayment({
+      orderId,
+      amount,
+      method: PaymentMethod.UPI,
+      customerPhone,
+      customerName,
+    });
+    return {
+      payment_id: '',
+      order_id: orderId,
+      amount,
+      status: PaymentStatus.PENDING,
+      payment_intent: paymentIntent.paymentIntent,
+      orderIds: [orderId],
+    };
+  }
+
+  /**
+   * Create a single consolidated payment intent for multiple orders.
+   *
+   * Produces one Razorpay order for the total amount, then persists one
+   * Payment record per order — all sharing the same gatewayOrderId.
+   * This lets the user pay once for a multi-seller cart.
+   */
+  async createMultiPayment(
+    orderPayments: { orderId: string; amount: number }[],
+    customerPhone: string,
+    customerName?: string,
+    providerName?: string,
+  ): Promise<CreatePaymentResponse & { orderIds: string[] }> {
+    const orderIds = orderPayments.map((op) => op.orderId);
+    const totalAmount = orderPayments.reduce((s, op) => s + op.amount, 0);
+
+    if (totalAmount <= 0) {
+      throw new BadRequestException('Total amount must be greater than 0');
+    }
+
+    // Idempotency: reject if any order already has a pending payment.
+    const existing = await Promise.all(
+      orderIds.map((id) => this.paymentRepository.findByOrderId(id)),
+    );
+    const alreadyExists = existing.find((p) => p != null);
+    if (alreadyExists) {
+      throw new BadRequestException(
+        `Payment already initiated for order ${alreadyExists.orderId}`,
+      );
+    }
+
+    const provider = providerName
+      ? this.providerRegistry.getProvider(providerName)
+      : this.providerRegistry.getDefaultProvider();
+
+    // One Razorpay order for the consolidated total.
+    const paymentIntent = await provider.createPayment({
+      orderId: orderIds[0],
+      amount: totalAmount,
+      method: PaymentMethod.UPI,
+      customerPhone,
+      customerName,
+    });
+
+    // One payment record per order, all sharing the same gatewayOrderId.
+    const payments = await Promise.all(
+      orderPayments.map(({ orderId, amount }) =>
+        this.paymentRepository.create({
+          orderId,
+          amount,
+          method: PaymentMethod.UPI,
+          gatewayName: provider.getProviderName(),
+          gatewayOrderId: paymentIntent.gatewayOrderId,
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Multi-order payment intent created — ${orderIds.length} orders, ` +
+        `total ₹${totalAmount}, gateway order ${paymentIntent.gatewayOrderId}`,
+    );
+
+    return {
+      payment_id: payments[0].id,
+      order_id: orderIds[0],
+      amount: totalAmount,
+      status: PaymentStatus.PENDING,
+      payment_intent: paymentIntent.paymentIntent,
+      orderIds,
+    };
+  }
+
+  /**
+   * Verify and settle a multi-order Razorpay payment.
+   *
+   * Polls Razorpay once, then marks all linked payment records SUCCESS
+   * and transitions every order to PAID via the state machine.
+   */
+  async verifyMultiOrderPayment(
+    orderIds: string[],
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+  ): Promise<{ success: boolean; orderIds: string[] }> {
+    const provider = this.providerRegistry.getProvider('razorpay');
+
+    const verification = await provider.verifyPayment({
+      orderId: orderIds[0],
+      gatewayOrderId: razorpayOrderId,
+      gatewayPaymentId: razorpayPaymentId,
+    });
+
+    if (verification.status !== PaymentStatus.SUCCESS) {
+      throw new BadRequestException(
+        `Payment not yet captured (status: ${verification.status})`,
+      );
+    }
+
+    await Promise.all(
+      orderIds.map(async (orderId) => {
+        const payment = await this.paymentRepository.findByOrderId(orderId);
+        if (!payment) {
+          this.logger.warn(`No payment record for order ${orderId} during multi-verify`);
+          return;
+        }
+        if (payment.status === PaymentStatus.SUCCESS) {
+          this.logger.log(`Order ${orderId} already PAID — idempotent`);
+          return;
+        }
+
+        await this.paymentRepository.update(payment.id, {
+          status: PaymentStatus.SUCCESS,
+          gatewayPaymentId: razorpayPaymentId,
+          paidAt: new Date(),
+        });
+
+        const order = await this.orderRepository.findById(orderId, false);
+        if (order?.status === OrderStatus.SELLER_SELECTED) {
+          await this.stateMachine.transition({
+            orderId,
+            toState: OrderStatus.PAID,
+            triggeredBy: 'system',
+            reason: `Multi-order payment verified (payment: ${razorpayPaymentId})`,
+          });
+        }
+      }),
+    );
+
+    this.logger.log(
+      `Multi-order payment settled — ${orderIds.length} orders, payment ${razorpayPaymentId}`,
+    );
+
+    return { success: true, orderIds };
   }
 
   /**

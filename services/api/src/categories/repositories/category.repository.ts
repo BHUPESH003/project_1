@@ -136,6 +136,27 @@ export class CategoryRepository implements IBaseRepository<CategoryEntity> {
   }
 
   /**
+   * Return distinct product.category strings from products whose sellers
+   * serve the given category. Used to build the subcategory chip rail.
+   */
+  async findProductCategories(
+    categoryId: string,
+  ): Promise<{ name: string; count: number }[]> {
+    const groups = await this.prismaService.prisma.product.groupBy({
+      by: ['category'],
+      where: {
+        inStock: true,
+        seller: {
+          categories: { some: { categoryId } },
+        },
+      },
+      _count: { category: true },
+      orderBy: { _count: { category: 'desc' } },
+    });
+    return groups.map((g) => ({ name: g.category, count: g._count.category }));
+  }
+
+  /**
    * Map Prisma category to CategoryEntity
    * Converts Prisma enum to our custom enum type
    */

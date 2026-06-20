@@ -1,0 +1,11 @@
+{
+  "name": "@repo/icons",
+  "version": "0.0.1",
+  "description": "Hyperlocal brand icon system — 24×24 currentColor stroke paths",
+  "main": "src/index.tsx",
+  "types": "src/index.d.ts",
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

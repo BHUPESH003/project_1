@@ -65,4 +65,11 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   isBestSeller?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Flexible attribute bag for dynamic product detail page (veg, highlights, specs, variants, nutrition, etc.)',
+    example: { veg: true, highlights: ['Melted Cheese', 'Golden Corn'] },
+  })
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

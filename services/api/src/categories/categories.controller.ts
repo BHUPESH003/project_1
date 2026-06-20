@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 
 /**
@@ -38,6 +38,16 @@ export class CategoriesController {
   @Get()
   findAll() {
     return this.categoriesService.findAll();
+  }
+
+  /**
+   * GET /v1/categories/:id/subcategories
+   * Returns distinct product category strings from sellers who serve this
+   * category — used to populate the subcategory chip rail on the home screen.
+   */
+  @Get(':id/subcategories')
+  findSubcategories(@Param('id') id: string) {
+    return this.categoriesService.findSubcategories(id);
   }
 
   // ❌ REMOVED: create() - Categories are config-driven, not API-created

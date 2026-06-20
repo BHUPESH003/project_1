@@ -561,6 +561,41 @@ export class OrdersController {
     return this.ordersService.markReady(id, req.user.id);
   }
 
+  // ─── Delivery fee late-payment ────────────────────────────────────────────
+
+  @Post(':id/pay-delivery-fee')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create payment intent for unpaid delivery fee' })
+  createDeliveryFeeIntent(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.ordersService.createDeliveryFeeIntent(id, req.user.id);
+  }
+
+  @Post(':id/verify-delivery-payment')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify delivery-fee payment and mark order deliveryFeePaid' })
+  verifyDeliveryFeePayment(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+    @Body()
+    body: {
+      razorpay_payment_id: string;
+      razorpay_order_id: string;
+      razorpay_signature: string;
+    },
+  ) {
+    return this.ordersService.verifyDeliveryFeePayment(
+      id,
+      req.user.id,
+      body.razorpay_payment_id,
+      body.razorpay_order_id,
+    );
+  }
+
   // ❌ REMOVED: findAll() - Too broad, violates role-based filtering
   // ❌ REMOVED: update() - Generic updates bypass state machine
   // ❌ REMOVED: remove() - Orders never deleted, only admin cancel

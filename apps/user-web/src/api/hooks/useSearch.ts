@@ -12,7 +12,7 @@ import type { SearchResults, Seller } from '@/api/types'
  */
 function normalizeSearch(res: unknown): SearchResults {
   if (!res || typeof res !== 'object') return { sellers: [], products: [] }
-  const r = res as { shops?: any[]; sellers?: any[]; products?: any[] }
+  const r = res as { shops?: unknown[]; sellers?: unknown[]; products?: unknown[] }
   const rawSellers = r.sellers ?? r.shops ?? []
   const sellers = rawSellers.map((s) => ({
     id: s.id ?? s.seller_id ?? '',

@@ -47,6 +47,8 @@ export class UsersService {
       addressLine: a.addressLine,
       latitude: a.latitude,
       longitude: a.longitude,
+      receiverName: a.receiverName,
+      receiverPhone: a.receiverPhone,
       createdAt: a.createdAt,
     }));
   }
@@ -61,6 +63,25 @@ export class UsersService {
       receiverName: dto.receiverName,
       receiverPhone: dto.receiverPhone,
     });
+    return {
+      id: a.id,
+      label: a.label,
+      addressLine: a.addressLine,
+      latitude: a.latitude,
+      longitude: a.longitude,
+      receiverName: a.receiverName,
+      receiverPhone: a.receiverPhone,
+      createdAt: a.createdAt,
+    };
+  }
+
+  async updateAddress(
+    userId: string,
+    addressId: string,
+    dto: { label?: string; addressLine?: string; receiverName?: string | null; receiverPhone?: string | null },
+  ) {
+    const a = await this.userAddressRepository.update(addressId, userId, dto);
+    if (!a) throw new NotFoundException('Address not found');
     return {
       id: a.id,
       label: a.label,
