@@ -4,13 +4,14 @@ import { apiPost } from '@/api/client'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
   const raw = atob(base64)
-  const arr = new Uint8Array(raw.length)
+  const buf = new ArrayBuffer(raw.length)
+  const arr = new Uint8Array(buf)
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
-  return arr
+  return buf
 }
 
 /**
@@ -43,7 +44,7 @@ export function useWebPush() {
           existing ??
           (await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+            applicationServerKey: urlBase64ToArrayBuffer(VAPID_PUBLIC_KEY),
           }))
 
         if (cancelled) return
