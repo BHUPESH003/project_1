@@ -30,6 +30,9 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { GetPayoutsDto } from './dto/get-payouts.dto';
 import { ProcessPayoutDto } from './dto/process-payout.dto';
 import { RejectPayoutDto } from './dto/reject-payout.dto';
+import { SendNotificationDto, NotificationTarget } from './dto/send-notification.dto';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { PrismaService } from '@/prisma/prisma.service';
 
 /**
  * Admin Controller - MVP Scope
@@ -58,6 +61,8 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly analyticsService: AdminAnalyticsService,
     private readonly bannersService: BannersService,
+    private readonly notificationsService: NotificationsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -380,6 +385,61 @@ export class AdminController {
     @Request() req: { user: { id: string } },
   ) {
     return this.adminService.rejectPayout(id, dto, req.user.id);
+  }
+
+  // ─── Notifications ────────────────────────────────────────────────────────
+
+  /**
+   * POST /admin/notifications/push
+   * Send a push/in-app notification to a single user or broadcast to all users.
+   */
+  @Post('notifications/push')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send notification to a user or broadcast to all users' })
+  async pushNotification(@Body() dto: SendNotificationDto) {
+    if (dto.target === NotificationTarget.USER) {
+      if (!dto.userId) {
+        return { sent: 0, error: 'userId is required for target=user' };
+      }
+      await this.notificationsService.persistNotification(
+        dto.userId,
+        dto.type,
+        dto.title,
+        dto.body,
+      );
+      await this.notificationsService.sendPushNotification(
+        dto.userId,
+        dto.title,
+        dto.body,
+      );
+      return { sent: 1, target: 'user', userId: dto.userId };
+    }
+
+    // Broadcast — fan out to all regular users
+    const users = await this.prisma.prisma.user.findMany({
+      where: { role: 'USER' },
+      select: { id: true },
+    });
+
+    await Promise.allSettled(
+      users.map(async (u: { id: string }) => {
+        await this.notificationsService.persistNotification(
+          u.id,
+          dto.type,
+          dto.title,
+          dto.body,
+        );
+        await this.notificationsService.sendPushNotification(
+          u.id,
+          dto.title,
+          dto.body,
+        );
+      }),
+    );
+
+    return { sent: users.length, target: 'broadcast' };
   }
 }
 

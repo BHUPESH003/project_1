@@ -108,6 +108,19 @@ export async function createMultiPaymentIntent(
   return { paymentData } as PaymentIntent
 }
 
+/**
+ * Best-effort: cancel orders whose payment failed or was dismissed.
+ * Orders are created before the Razorpay modal opens (SELLER_SELECTED state),
+ * so a failed/dismissed payment must explicitly cancel them to avoid ghost orders.
+ * Uses Promise.allSettled so a partial failure doesn't block the error path.
+ */
+export async function cancelOrdersAfterPaymentFailure(orderIds: string[]): Promise<void> {
+  if (!orderIds.length) return
+  await Promise.allSettled(
+    orderIds.map((id) => apiPost(`/orders/${id}/cancel`, { reason: 'Payment failed or was cancelled' })),
+  )
+}
+
 /** POST /checkout/verify-payment — settle all orders after a single Razorpay payment. */
 export function verifyMultiPayment(
   orderIds: string[],

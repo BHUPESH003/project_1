@@ -7,6 +7,7 @@ import {
   Grid3x3,
   BarChart3,
   Wallet,
+  Bell,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { to: '/categories', label: 'Categories', icon: Grid3x3 },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/payouts', label: 'Payouts', icon: Wallet },
+  { to: '/notifications', label: 'Notifications', icon: Bell },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -43,7 +45,7 @@ export function Sidebar() {
     <aside
       className={cn(
         'flex shrink-0 flex-col bg-sidebar text-sidebar-text transition-[width] duration-200',
-        collapsed ? 'w-[60px]' : 'w-[240px]',
+        collapsed ? 'w-15' : 'w-60',
       )}
     >
       {/* Brand */}
@@ -90,7 +92,7 @@ export function Sidebar() {
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-primary" />
+                        <span className="absolute left-0 top-1/2 h-5 w-0.75 -translate-y-1/2 rounded-r bg-primary" />
                       )}
                       <Icon size={19} className="shrink-0" />
                       {!collapsed && <span className="truncate">{item.label}</span>}

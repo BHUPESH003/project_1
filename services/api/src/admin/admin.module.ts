@@ -11,6 +11,7 @@ import { DeliveryModule } from '@/delivery/delivery.module';
 import { PaymentsModule } from '@/payments/payments.module';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { BannersModule } from '@/banners/banners.module';
+import { NotificationsModule } from '@/notifications/notifications.module';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 
 @Module({
@@ -23,6 +24,7 @@ import { JwtAuthGuard, RolesGuard } from '@/common/guards';
     PaymentsModule, // For PaymentRepository
     PrismaModule, // For AdminAuditService
     BannersModule, // For admin banner CRUD
+    NotificationsModule, // For admin push notification endpoint
   ],
   controllers: [AdminController],
   providers: [

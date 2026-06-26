@@ -134,10 +134,33 @@ model User {
   productWishlist UserProductWishlist[]
   productNotify   UserProductNotify[]
   conversations   Conversation[]
+  notifications   Notification[]
+  devices         UserDevice[]
 
   @@index([phone])
   @@index([role])
   @@map("users")
+}
+
+// ========================================
+// USER DEVICE MODEL — Web Push (VAPID) subscriptions
+// ========================================
+// Stores browser PushSubscription data for Web Push (VAPID) notifications.
+// One user can have multiple subscribed browsers/devices.
+
+model UserDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique // PushSubscription.endpoint — unique per browser
+  p256dhKey String   // PushSubscription.keys.p256dh
+  authKey   String   // PushSubscription.keys.auth
+  platform  String   @default("web") // always 'web' for now
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("user_devices")
 }
 
 // ========================================
@@ -434,6 +457,7 @@ model Order {
   delivery           Delivery?
   deliveryQuotations DeliveryQuotation[]
   files              File[]
+  notifications      Notification[]
 
   @@index([userId])
   @@index([sellerId])
@@ -917,6 +941,34 @@ model Message {
 
   @@index([conversationId])
   @@map("messages")
+}
+
+// ========================================
+// NOTIFICATION MODEL
+// ========================================
+model Notification {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ORDER_UPDATE | MARKETING | SYSTEM
+  type    String
+  title   String
+  body    String
+
+  // Optional link to the triggering order
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // Extra provider data (e.g. deep-link action)
+  data    Json?
+
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 // ========================================

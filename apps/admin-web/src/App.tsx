@@ -20,6 +20,7 @@ import { BannerFormPage } from '@/pages/banners/BannerFormPage'
 import { CategoriesPage } from '@/pages/CategoriesPage'
 import { PayoutsPage } from '@/pages/PayoutsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { NotificationsPage } from '@/pages/NotificationsPage'
 
 // Analytics pulls in Recharts (~400 KB) — load it on demand.
 const AnalyticsPage = lazy(() =>
@@ -65,6 +66,7 @@ export default function App() {
                 }
               />
               <Route path="/payouts" element={<PayoutsPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>

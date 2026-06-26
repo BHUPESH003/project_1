@@ -156,6 +156,19 @@ async function bootstrap() {
     })();
   });
 
+  // Pre-warm the Neon serverless connection before accepting traffic.
+  // Neon pauses after ~5 min of inactivity; the first query after a pause takes
+  // 2-3 s to resume, causing the whole first burst of requests to fail.
+  // Sending a trivial query here blocks startup until Neon is ready.
+  try {
+    const { PrismaService } = await import('@/prisma/prisma.service');
+    const prismaService = app.get(PrismaService);
+    await prismaService.prisma.$queryRaw`SELECT 1`;
+    logger.log('Neon DB pre-warmed ✓');
+  } catch (e) {
+    logger.warn(`DB pre-warm failed (proceeding anyway): ${(e as Error).message}`);
+  }
+
   // Start server
   const port = configService.get<number>('PORT', 3000);
   // Bind to all interfaces so the Fly.io proxy (and any container runtime) can

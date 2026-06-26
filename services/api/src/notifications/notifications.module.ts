@@ -5,9 +5,11 @@ import { NotificationProviderRegistry } from './providers/notification-provider.
 import { FirebaseProvider } from './providers/firebase/firebase.provider';
 import { TwilioNotificationProvider } from './providers/twilio/twilio-notification.provider';
 import { UsersModule } from '@/users/users.module';
+import { PrismaModule } from '@/prisma/prisma.module';
+import { AuthModule } from '@/auth/auth.module';
 
 @Module({
-  imports: [UsersModule], // For UserRepository
+  imports: [PrismaModule, UsersModule, AuthModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,

@@ -1,54 +1,59 @@
-import { Controller } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
 
-/**
- * Notifications Controller - MVP Scope
- *
- * ⚠️ NO NOTIFICATION ENDPOINTS IN API CONTRACT v1
- *
- * Notifications in MVP:
- * - Real-time updates via WebSocket/SSE (not REST)
- * - Push notifications via Firebase/OneSignal
- * - SMS notifications for critical updates
- *
- * This module handles:
- * - Sending notifications (internal service)
- * - Notification delivery status tracking (internal)
- * - NOT a user-facing REST API
- *
- * Notification triggers:
- * - Order status changes → notify user
- * - New order → notify seller
- * - Delivery updates → notify user
- *
- * Removed:
- * - All REST CRUD operations
- * - Notification inbox (not in MVP, handled by apps natively)
- * - Mark as read (not in MVP)
- * - Notification history (not in MVP)
- */
-@Controller('internal/notifications')
+@ApiTags('Notifications')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  // ❌ ALL ENDPOINTS REMOVED
-  // Notifications are event-driven, triggered by order state changes
-  // Handled internally via NotificationsService
-  // No REST API exposure in MVP
+  /** GET /notifications?page=1&limit=20 */
+  @Get()
+  @ApiOperation({ summary: 'Get notification inbox' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getNotifications(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.notificationsService.getUserNotifications(
+      req.user.id,
+      page ? parseInt(page, 10) : 1,
+      limit ? Math.min(parseInt(limit, 10), 50) : 20,
+    );
+  }
 
-  // TODO: In future, may add:
-  // - GET /v1/notifications (user inbox)
-  // - POST /v1/notifications/:id/read (mark as read)
-  // - WebSocket endpoint for real-time updates
+  /** GET /notifications/unread-count */
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Get unread notification count' })
+  async getUnreadCount(@Req() req: any) {
+    const count = await this.notificationsService.getUnreadCount(req.user.id);
+    return { count };
+  }
+
+  /** PATCH /notifications/read-all */
+  @Patch('read-all')
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  markAllRead(@Req() req: any) {
+    return this.notificationsService.markAllAsRead(req.user.id);
+  }
+
+  /** PATCH /notifications/:id/read */
+  @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark a notification as read' })
+  markRead(@Req() req: any, @Param('id') id: string) {
+    return this.notificationsService.markAsRead(req.user.id, id);
+  }
 }
-
-/**
- * MVP CHECK:
- * Q: Does every remaining endpoint directly support the MVP order flow or ops safety?
- * A: N/A - No REST endpoints. Notifications are internal service calls only.
- *
- * Notifications are triggered by:
- * - OrderService on state transitions
- * - PaymentService on payment events
- * - DeliveryService on delivery updates
- */

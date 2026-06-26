@@ -1,18 +1,19 @@
 /**
- * Firebase Cloud Messaging (FCM) Provider
+ * Web Push Provider (replaces Firebase FCM for web PWA notifications)
  *
- * Push notification provider using Firebase Cloud Messaging.
- * Handles sending push notifications to Android and iOS devices.
+ * Uses the VAPID protocol (RFC 8030) via the `web-push` library.
+ * Queries user_devices for stored browser PushSubscriptions and delivers
+ * directly to the browser's push service — no Firebase SDK on the client.
  *
  * CRITICAL RULES:
  * - Failures are logged, not thrown (notifications are non-critical)
- * - Provider-specific logic is isolated here
- * - No Firebase-specific fields leak outside this adapter
+ * - Expired/invalid subscriptions are silently removed from DB (410 Gone)
  */
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as admin from 'firebase-admin';
+import * as webpush from 'web-push';
+import { PrismaService } from '@/prisma/prisma.service';
 import {
   NotificationProvider,
   PushNotificationRequest,
@@ -21,64 +22,28 @@ import {
   SmsNotificationResponse,
 } from '../notification-provider.interface';
 
-/**
- * Firebase Configuration
- */
-interface FirebaseConfig {
-  projectId: string;
-  privateKey: string;
-  clientEmail: string;
-  apiKey?: string; // Optional for REST API
-}
-
-/**
- * Firebase Configuration
- */
-interface FirebaseConfig {
-  projectId: string;
-  privateKey: string;
-  clientEmail: string;
-  apiKey?: string; // Optional for REST API
-}
-
 @Injectable()
 export class FirebaseProvider implements NotificationProvider, OnModuleInit {
   private readonly logger = new Logger(FirebaseProvider.name);
-  private readonly config: FirebaseConfig;
-  private firebaseApp!: admin.app.App;
 
-  constructor(private readonly configService: ConfigService) {
-    // Load Firebase configuration from environment
-    this.config = {
-      projectId:
-        this.configService.get<string>('FIREBASE_PROJECT_ID') || 'stub-project',
-      privateKey:
-        this.configService.get<string>('FIREBASE_PRIVATE_KEY') || 'stub-key',
-      clientEmail:
-        this.configService.get<string>('FIREBASE_CLIENT_EMAIL') ||
-        'stub@example.com',
-      apiKey: this.configService.get<string>('FIREBASE_API_KEY'),
-    };
-
-    this.logger.log(
-      `FirebaseProvider initialized (project: ${this.config.projectId})`,
-    );
-  }
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async onModuleInit() {
-    // Initialize Firebase Admin SDK
-    if (!admin.apps.length) {
-      this.firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: this.config.projectId,
-          privateKey: this.config.privateKey.replace(/\\n/g, '\n'),
-          clientEmail: this.config.clientEmail,
-        }),
-        projectId: this.config.projectId,
-      });
-      this.logger.log('Firebase Admin SDK initialized successfully');
+    const publicKey = this.configService.get<string>('VAPID_PUBLIC_KEY', '');
+    const privateKey = this.configService.get<string>('VAPID_PRIVATE_KEY', '');
+    const subject = this.configService.get<string>(
+      'VAPID_SUBJECT',
+      'mailto:admin@example.com',
+    );
+
+    if (publicKey && privateKey) {
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+      this.logger.log('Web Push VAPID details configured');
     } else {
-      this.firebaseApp = admin.app();
+      this.logger.warn('VAPID keys not set — web push will be skipped');
     }
   }
 
@@ -89,82 +54,66 @@ export class FirebaseProvider implements NotificationProvider, OnModuleInit {
   async sendPush(
     request: PushNotificationRequest,
   ): Promise<PushNotificationResponse> {
-    this.logger.log(
-      `Sending push notification via Firebase to user ${request.userId}`,
-    );
+    this.logger.log(`Sending web push to user ${request.userId}`);
 
     try {
-      // Get FCM token for user
-      const fcmToken = await this.getUserFcmToken(request.userId);
-      if (!fcmToken) {
-        this.logger.warn(`No FCM token found for user ${request.userId}`);
-        return {
-          success: false,
-          error: 'No FCM token available for user',
-        };
+      const devices = await this.prisma.prisma.userDevice.findMany({
+        where: { userId: request.userId, platform: 'web' },
+      });
+
+      if (devices.length === 0) {
+        this.logger.warn(`No web push subscriptions for user ${request.userId}`);
+        return { success: false, error: 'No web push subscription for user' };
       }
 
-      // Send push notification via Firebase Admin SDK
-      const message: admin.messaging.Message = {
-        notification: {
-          title: request.title,
-          body: request.body,
-        },
-        data: request.data
-          ? Object.fromEntries(
-              Object.entries(request.data).map(([k, v]) => [k, String(v)]),
-            )
-          : {},
-        token: fcmToken,
-      };
+      const payload = JSON.stringify({
+        title: request.title,
+        body: request.body,
+        data: request.data ?? {},
+      });
 
-      const response = await admin.messaging().send(message);
+      const results = await Promise.allSettled(
+        devices.map(async (d) => {
+          const subscription: webpush.PushSubscription = {
+            endpoint: d.endpoint,
+            keys: { p256dh: d.p256dhKey, auth: d.authKey },
+          };
 
+          try {
+            await webpush.sendNotification(subscription, payload);
+          } catch (err: unknown) {
+            const httpErr = err as { statusCode?: number };
+            if (httpErr?.statusCode === 410 || httpErr?.statusCode === 404) {
+              // Subscription expired or gone — remove it
+              await this.prisma.prisma.userDevice.delete({
+                where: { id: d.id },
+              });
+              this.logger.log(`Removed stale subscription for device ${d.id}`);
+            }
+            throw err;
+          }
+        }),
+      );
+
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
       this.logger.log(
-        `Firebase push notification sent successfully to user ${request.userId}, messageId: ${response}`,
+        `Web push: ${succeeded}/${devices.length} succeeded for user ${request.userId}`,
       );
 
-      return {
-        success: true,
-        messageId: response,
-      };
+      return { success: succeeded > 0, messageId: `sent:${succeeded}` };
     } catch (error) {
-      // Log error but don't throw - notifications are non-critical
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to send Firebase push notification to user ${request.userId}:`,
-        errorMessage,
-      );
-
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Web push failed for user ${request.userId}: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
   async sendSms(
     request: SmsNotificationRequest,
   ): Promise<SmsNotificationResponse> {
-    // Firebase does not support SMS - return failure
     this.logger.warn(
-      `FirebaseProvider does not support SMS. Requested SMS to ${request.phoneNumber}`,
+      `WebPushProvider does not support SMS for ${request.phoneNumber}`,
     );
-
-    return {
-      success: false,
-      error: 'Firebase does not support SMS notifications',
-    };
-  }
-
-  /**
-   * Get FCM token for user (stubbed for MVP)
-   * TODO: Sprint 4 - Implement token storage/retrieval
-   */
-  private async getUserFcmToken(userId: string): Promise<string> {
-    // TODO: Retrieve FCM token from database
-    // For MVP, return stub token
-    return `fcm-token-${userId}`;
+    return { success: false, error: 'Use TwilioProvider for SMS' };
   }
 }

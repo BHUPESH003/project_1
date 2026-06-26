@@ -27,9 +27,9 @@ export class LocationService {
     country?: string;
   }> {
     // Placeholder: return a stub. Wire GOOGLE_GEOCODING_API_KEY or similar when ready.
-    const useGoogle = this.configService.get<string>(
-      'GOOGLE_GEOCODING_API_KEY',
-    );
+    const useGoogle =
+      this.configService.get<string>('GOOGLE_PLACES_API_KEY') ??
+      this.configService.get<string>('GOOGLE_GEOCODING_API_KEY');
     if (useGoogle) {
       try {
         const res = await fetch(
@@ -80,13 +80,13 @@ export class LocationService {
     latitude?: number;
     longitude?: number;
   }>> {
-    const useGoogle = this.configService.get<string>(
-      'GOOGLE_GEO_API_KEY', // Changed to match common naming
-    );
+    const useGoogle =
+      this.configService.get<string>('GOOGLE_PLACES_API_KEY') ??
+      this.configService.get<string>('GOOGLE_GEO_API_KEY');
     if (useGoogle) {
       try {
         const res = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${useGoogle}`,
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&components=country:in&key=${useGoogle}`,
         );
         const data = await res.json();
         if (data.status === 'OK') {
@@ -136,7 +136,9 @@ export class LocationService {
     longitude: number;
     address: string;
   } | null> {
-    const useGoogle = this.configService.get<string>('GOOGLE_GEO_API_KEY');
+    const useGoogle =
+      this.configService.get<string>('GOOGLE_PLACES_API_KEY') ??
+      this.configService.get<string>('GOOGLE_GEO_API_KEY');
     if (useGoogle && !placeId.startsWith('mock-id-')) {
       try {
         const res = await fetch(

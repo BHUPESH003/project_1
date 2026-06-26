@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/api/client'
 import { qk } from '@/lib/constants'
-import type { Seller, SellersQuery, Product } from '@/api/types'
+import type { Seller, SellersQuery, Product, UnverifiedSeller } from '@/api/types'
 
 const PAGE_SIZE = 10
 
@@ -90,6 +90,21 @@ export function useNewSellers(lat?: number, lng?: number) {
     queryKey: [...qk.newSellers, lat, lng],
     queryFn: async () => normalizeSellers(await apiGet<unknown>('/sellers/new', { params: { lat, lng } })),
     staleTime: 60_000,
+  })
+}
+
+/** GET /discovery/sellers — returns nearby unverified (Google Places) sellers not yet on the platform. */
+export function useDiscoverySellers(lat?: number, lng?: number, category?: string) {
+  return useQuery({
+    queryKey: ['discovery', lat, lng, category],
+    queryFn: async () => {
+      const res = await apiGet<{ sellers: (Seller | UnverifiedSeller)[] }>('/discovery/sellers', {
+        params: { lat, lng, category, limit: 10 },
+      })
+      return (res.sellers ?? []).filter((s): s is UnverifiedSeller => (s as UnverifiedSeller).source === 'google_places')
+    },
+    enabled: lat != null && lng != null,
+    staleTime: 5 * 60_000,
   })
 }
 

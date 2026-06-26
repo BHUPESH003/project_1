@@ -1,7 +1,8 @@
-/* Hyperlocal PWA service worker — minimal runtime caching.
+/* Hyperlocal PWA service worker — minimal runtime caching + Web Push.
    - API requests (/api/*) and non-GET: always network, never cached.
    - Navigations: network-first, fall back to cached shell when offline.
-   - Same-origin static assets: stale-while-revalidate. */
+   - Same-origin static assets: stale-while-revalidate.
+   - Push events: show a notification via the Notification API. */
 const CACHE = 'hyperlocal-v1'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
@@ -19,6 +20,40 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim()),
   )
 })
+
+// ─── Push notifications ─────────────────────────────────────────────────────
+
+self.addEventListener('push', (event) => {
+  let data = { title: 'New notification', body: '' }
+  try {
+    data = event.data ? event.data.json() : data
+  } catch {
+    data.body = event.data ? event.data.text() : ''
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      data: data.data ?? {},
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url && 'focus' in client) return client.focus()
+      }
+      if (clients.openWindow) return clients.openWindow('/')
+    }),
+  )
+})
+
+// ─── Fetch caching ──────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', (event) => {
   const { request } = event

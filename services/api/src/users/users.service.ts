@@ -3,12 +3,14 @@ import { UserRepository } from './repositories/user.repository';
 import { UserAddressRepository } from './repositories/user-address.repository';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly userAddressRepository: UserAddressRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   async getMe(userId: string) {
@@ -129,5 +131,26 @@ export class UsersService {
       orderUpdates: u.notificationOrderUpdates,
       promotions: u.notificationPromotions,
     };
+  }
+
+  async registerWebPushSubscription(
+    userId: string,
+    endpoint: string,
+    p256dhKey: string,
+    authKey: string,
+  ) {
+    await this.prisma.prisma.userDevice.upsert({
+      where: { endpoint },
+      create: { userId, endpoint, p256dhKey, authKey, platform: 'web' },
+      update: { userId, p256dhKey, authKey },
+    });
+    return { registered: true };
+  }
+
+  async unregisterWebPushSubscription(userId: string, endpoint: string) {
+    await this.prisma.prisma.userDevice.deleteMany({
+      where: { userId, endpoint },
+    });
+    return { unregistered: true };
   }
 }

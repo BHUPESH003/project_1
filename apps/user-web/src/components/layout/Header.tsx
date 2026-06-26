@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Bell, ChevronDown, MapPin, Mic, Search, User, ArrowLeft } from 'lucide-react'
+import { Bell, ChevronDown, MapPin, Search, User, ArrowLeft } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAddressStore } from '@/stores/addressStore'
 import { useDiscoveryStore } from '@/stores/discoveryStore'
 import { useSearchStore } from '@/stores/searchStore'
+import { useUnreadCount } from '@/api/hooks/useNotifications'
+import { NotificationsSheet } from '@/components/sheets/NotificationsSheet'
 import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/cn'
 
@@ -12,15 +14,12 @@ export function Header({ onOpenAddress }: { onOpenAddress: () => void }) {
   const { pathname } = useLocation()
 
   if (pathname === '/') return <HomeHeader onOpenAddress={onOpenAddress} />
-  // Seller detail has its own floating back + favourite buttons overlaid on the hero.
-  // Rendering the AppShell header there would create a duplicate back button.
   if (pathname.startsWith('/sellers/')) return null
   return <CompactHeader navigate={navigate} />
 }
 
 // ─── Route metadata ───────────────────────────────────────────────────────────
 
-/** Tab routes show no back button (they are the root of their nav tree). */
 const TAB_ROUTES = new Set(['/', '/search', '/profile'])
 
 function isTabRoute(pathname: string) {
@@ -33,13 +32,10 @@ function CompactHeader({ navigate }: { navigate: ReturnType<typeof useNavigate> 
   const { pathname } = useLocation()
   const isTab = isTabRoute(pathname)
   const openSearch = useSearchStore((s) => s.openSearch)
-
-  // Local state for the expand-then-open animation
   const [expanding, setExpanding] = useState(false)
 
   function handleSearchTap() {
     setExpanding(true)
-    // Brief expansion delay before opening the overlay for a smoother feel
     setTimeout(() => {
       setExpanding(false)
       openSearch()
@@ -52,7 +48,6 @@ function CompactHeader({ navigate }: { navigate: ReturnType<typeof useNavigate> 
         className="flex items-center gap-2 px-3 pb-3"
         style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
       >
-        {/* Left — back button (hidden on tab routes) */}
         {!isTab && (
           <button
             type="button"
@@ -64,7 +59,6 @@ function CompactHeader({ navigate }: { navigate: ReturnType<typeof useNavigate> 
           </button>
         )}
 
-        {/* Center — tappable search bar; expands briefly then opens the overlay */}
         <button
           type="button"
           onClick={handleSearchTap}
@@ -77,12 +71,7 @@ function CompactHeader({ navigate }: { navigate: ReturnType<typeof useNavigate> 
           <span className="flex-1 truncate text-body text-text-3">Search…</span>
         </button>
 
-        {/* Right — profile icon */}
-        <IconButton
-          variant="ghost"
-          aria-label="Profile"
-          onClick={() => navigate('/profile')}
-        >
+        <IconButton variant="ghost" aria-label="Profile" onClick={() => navigate('/profile')}>
           <User size={20} />
         </IconButton>
       </div>
@@ -92,18 +81,16 @@ function CompactHeader({ navigate }: { navigate: ReturnType<typeof useNavigate> 
 
 // ─── Home hero header ─────────────────────────────────────────────────────────
 
-/**
- * Home hero header — brand-teal gradient band carrying the live delivery ETA,
- * the address selector, account actions, and the search entry point. The ETA is
- * published by HomePage via the discovery store (the nearest available seller's
- * estimated delivery time); it falls back to the plain "deliver to" label.
- */
 function HomeHeader({ onOpenAddress }: { onOpenAddress: () => void }) {
   const navigate = useNavigate()
   const address = useAddressStore((s) => s.selectedAddress)
   const eta = useDiscoveryStore((s) => s.nearestEtaMins)
   const openSearch = useSearchStore((s) => s.openSearch)
+  const unreadCount = useUnreadCount()
   const hasEta = eta != null && !!address
+  const [notifOpen, setNotifOpen] = useState(false)
+
+  const unread = unreadCount.data ?? 0
 
   return (
     <header
@@ -136,10 +123,15 @@ function HomeHeader({ onOpenAddress }: { onOpenAddress: () => void }) {
           )}
         </button>
 
-        <HeroIconButton aria-label="Notifications" onClick={() => navigate('/orders')}>
+        <HeroIconButton aria-label="Notifications" onClick={() => setNotifOpen(true)}>
           <Bell size={20} />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ring-2 ring-[color-mix(in_srgb,var(--teal-600)_70%,transparent)]" />
+          {unread > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold leading-none text-on-accent ring-2 ring-[color-mix(in_srgb,var(--teal-600)_70%,transparent)] mono-num">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
         </HeroIconButton>
+
         <HeroIconButton aria-label="Profile" onClick={() => navigate('/profile')}>
           <User size={20} />
         </HeroIconButton>
@@ -152,8 +144,9 @@ function HomeHeader({ onOpenAddress }: { onOpenAddress: () => void }) {
       >
         <Search size={20} className="text-text-2" />
         <span className="flex-1 text-body">Search printing, gifts, groceries…</span>
-        <Mic size={20} className="text-primary" />
       </button>
+
+      <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
     </header>
   )
 }

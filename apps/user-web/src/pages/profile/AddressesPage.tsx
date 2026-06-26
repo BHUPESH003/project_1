@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Home as HomeIcon, Store, MapPin, Trash2, Plus } from 'lucide-react'
 import { useAddresses, useCreateAddress, useDeleteAddress } from '@/api/hooks/useUser'
-import { AddressSheet } from '@/components/sheets/AddressSheet'
+import { AddressOverlay } from '@/components/sheets/AddressOverlay'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/States'
@@ -95,7 +95,7 @@ export function AddressesPage() {
         </Button>
       )}
 
-      <AddressSheet open={sheetOpen} onOpenChange={setSheetOpen} onCommit={handleCommit} />
+      <AddressOverlay open={sheetOpen} onOpenChange={setSheetOpen} requireDetails onCommit={handleCommit} />
     </div>
   )
 }

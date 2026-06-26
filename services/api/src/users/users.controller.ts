@@ -129,6 +129,38 @@ export class UsersController {
   ) {
     return this.usersService.updateNotificationPreferences(req.user.id, dto);
   }
+
+  @Post('me/push-subscription')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Register browser web push subscription (VAPID)' })
+  @ApiResponse({ status: 201, description: 'Subscription registered' })
+  registerPushSubscription(
+    @Request() req: { user: { id: string } },
+    @Body() body: { endpoint: string; p256dhKey: string; authKey: string },
+  ) {
+    return this.usersService.registerWebPushSubscription(
+      req.user.id,
+      body.endpoint,
+      body.p256dhKey,
+      body.authKey,
+    );
+  }
+
+  @Delete('me/push-subscription')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unregister browser web push subscription' })
+  @ApiResponse({ status: 200, description: 'Subscription removed' })
+  unregisterPushSubscription(
+    @Request() req: { user: { id: string } },
+    @Body() body: { endpoint: string },
+  ) {
+    return this.usersService.unregisterWebPushSubscription(
+      req.user.id,
+      body.endpoint,
+    );
+  }
 }
 
 /**

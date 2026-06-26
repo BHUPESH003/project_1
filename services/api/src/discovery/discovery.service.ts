@@ -216,6 +216,7 @@ export class DiscoveryService {
 
   private getApiKey(): string {
     return (
+      this.configService.get<string>('GOOGLE_PLACES_API_KEY') ??
       this.configService.get<string>('GOOGLE_MAPS_API_KEY') ??
       this.configService.get<string>('GOOGLE_GEOCODING_API_KEY') ??
       ''

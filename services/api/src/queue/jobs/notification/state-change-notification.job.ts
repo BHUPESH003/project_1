@@ -91,11 +91,19 @@ export class StateChangeNotificationJob extends WorkerHost {
       // Get NotificationService (lazy load to avoid circular dependency)
       const notificationService = await this.getNotificationService();
 
-      // Send all notification intents
+      // Persist to DB + send push/SMS for each intent
       const results = await Promise.allSettled(
-        intents.map((intent) =>
-          notificationService.sendNotificationIntent(intent),
-        ),
+        intents.map(async (intent) => {
+          // Only persist user-facing (non-seller) notifications for the inbox
+          await notificationService.persistNotification(
+            intent.userId,
+            'ORDER_UPDATE',
+            intent.title,
+            intent.body,
+            { orderId, data: intent.data },
+          );
+          return notificationService.sendNotificationIntent(intent);
+        }),
       );
 
       // Log results

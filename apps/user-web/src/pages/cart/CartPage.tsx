@@ -16,7 +16,7 @@ import {
   verifyMultiPayment,
 } from "@/api/hooks/useCheckout";
 import { useCreateAddress } from "@/api/hooks/useUser";
-import { AddressSheet } from "@/components/sheets/AddressSheet";
+import { AddressOverlay } from "@/components/sheets/AddressOverlay";
 import { AddressCompleteSheet } from "@/components/sheets/AddressCompleteSheet";
 import { DeliveryOptionsSheet } from "@/components/sheets/DeliveryOptionsSheet";
 import { BillSummarySheet } from "@/components/sheets/BillSummarySheet";
@@ -562,7 +562,7 @@ export function CartPage() {
       )}
 
       {/* Sheets */}
-      <AddressSheet open={addressOpen} onOpenChange={setAddressOpen} />
+      <AddressOverlay open={addressOpen} onOpenChange={setAddressOpen} />
       <AddressCompleteSheet
         open={addressCompleteOpen}
         onClose={() => setAddressCompleteOpen(false)}

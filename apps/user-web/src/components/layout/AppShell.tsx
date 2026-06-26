@@ -3,12 +3,13 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
 import { FloatingCartBar } from './FloatingCartBar'
-import { AddressSheet } from '@/components/sheets/AddressSheet'
+import { AddressOverlay } from '@/components/sheets/AddressOverlay'
 import { SearchOverlay } from '@/components/sheets/SearchOverlay'
 import { useAuthStore } from '@/stores/authStore'
 import { useAddressStore } from '@/stores/addressStore'
 import { useCart } from '@/api/hooks/useCart'
 import { useMultiCheckout } from '@/api/hooks/useCheckout'
+import { useWebPush } from '@/hooks/useWebPush'
 
 /**
  * Pre-fetches delivery quotes as soon as the user has items in their cart and a
@@ -31,6 +32,9 @@ export function AppShell() {
   const address = useAddressStore((s) => s.selectedAddress)
   const [addressOpen, setAddressOpen] = useState(false)
 
+  // Subscribe browser to web push after auth
+  useWebPush()
+
   // Auth gate.
   useEffect(() => {
     if (!isAuthed) navigate('/login', { replace: true })
@@ -52,7 +56,7 @@ export function AppShell() {
       </main>
       <FloatingCartBar />
       <BottomNav />
-      <AddressSheet open={addressOpen} onOpenChange={setAddressOpen} dismissible={!!address} />
+      <AddressOverlay open={addressOpen} onOpenChange={setAddressOpen} dismissible={!!address} />
       <SearchOverlay />
       <CheckoutPrefetcher />
     </div>

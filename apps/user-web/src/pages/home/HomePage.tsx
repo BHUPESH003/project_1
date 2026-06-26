@@ -6,10 +6,11 @@ import { CategoryStatus } from '@repo/types'
 import { useAddressStore } from '@/stores/addressStore'
 import { useDiscoveryStore } from '@/stores/discoveryStore'
 import { useBanners, useCategories } from '@/api/hooks/useCatalog'
-import { useAvailableSellers } from '@/api/hooks/useSellers'
+import { useAvailableSellers, useDiscoverySellers } from '@/api/hooks/useSellers'
 import { BannerCarousel } from '@/components/cards/BannerCarousel'
 import { SubcategoryBanner } from '@/components/home/SubcategoryBanner'
 import { SellerCard, SellerCardSkeleton } from '@/components/cards/SellerCard'
+import { UnverifiedSellerCard } from '@/components/cards/UnverifiedSellerCard'
 import {
   FilterSheet,
   DEFAULT_SELLER_FILTERS,
@@ -35,6 +36,9 @@ export function HomePage() {
 
   const banners = useBanners()
   const categories = useCategories()
+  const discovery = useDiscoverySellers(lat, lng, category)
+  const unverified = discovery.data ?? []
+
   const sellers = useAvailableSellers({
     lat,
     lng,
@@ -242,6 +246,20 @@ export function HomePage() {
           </>
         )}
       </div>
+
+      {/* Nearby but not yet on platform */}
+      {unverified.length > 0 && (
+        <div className="mt-8">
+          <p className="mb-3 text-caption font-bold uppercase tracking-wide text-text-3">
+            Also nearby — not yet on Pelocal
+          </p>
+          <div className="space-y-4">
+            {unverified.map((s) => (
+              <UnverifiedSellerCard key={s.placeId} seller={s} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} value={filters} onApply={setFilters} />
     </motion.div>

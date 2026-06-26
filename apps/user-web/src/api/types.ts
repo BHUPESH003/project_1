@@ -83,6 +83,44 @@ export interface AutocompleteResult {
   longitude?: number
 }
 
+/* ---- Notifications ---- */
+export type NotificationType = 'ORDER_UPDATE' | 'MARKETING' | 'SYSTEM'
+
+export interface AppNotification {
+  id: ID
+  userId: ID
+  type: NotificationType
+  title: string
+  body: string
+  orderId: ID | null
+  data: Record<string, unknown> | null
+  read: boolean
+  createdAt: string
+}
+
+export interface NotificationsPage {
+  items: AppNotification[]
+  total: number
+  page: number
+  limit: number
+  hasMore: boolean
+}
+
+/* ---- Discovery (unverified / Google Places sellers) ---- */
+export interface UnverifiedSeller {
+  source: 'google_places'
+  verified: false
+  placeId: string
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+  rating: number | null
+  openNow: boolean | null
+  photoUrl: string | null
+  actions: string[]
+}
+
 /* ---- Subcategories (product category strings grouped per seller-category) ---- */
 export interface Subcategory {
   name: string

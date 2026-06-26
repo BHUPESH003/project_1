@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, MapPin, ChevronDown, Lock, Info, Truck, Store } from 'lucide-react'
-import { useMultiCheckout, usePlaceMultiOrder, createMultiPaymentIntent, verifyMultiPayment } from '@/api/hooks/useCheckout'
+import { useMultiCheckout, usePlaceMultiOrder, createMultiPaymentIntent, verifyMultiPayment, cancelOrdersAfterPaymentFailure } from '@/api/hooks/useCheckout'
 import { useCreateAddress } from '@/api/hooks/useUser'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/States'
-import { AddressSheet } from '@/components/sheets/AddressSheet'
+import { AddressOverlay } from '@/components/sheets/AddressOverlay'
 import { PaymentProcessing } from '@/pages/payment/PaymentProcessing'
 import { useAddressStore } from '@/stores/addressStore'
 import { getErrorMessage } from '@/api/client'
@@ -76,10 +76,15 @@ export function CheckoutPage() {
     return null
   }
 
+  // Track orders that were created so we can cancel them if payment fails.
+  // A ref avoids re-renders and is accessible inside the catch block.
+  const pendingOrderIds = useRef<string[]>([])
+
   async function pay() {
     if (!allSelected || !address?.id) return
     setProcessingTotal(productTotal)
     setProcessing(true)
+    pendingOrderIds.current = []
     try {
       const orderIds = await placeOrder.mutateAsync({
         deliveryAddressId: address.id,
@@ -97,12 +102,21 @@ export function CheckoutPage() {
 
       if (!orderIds.length) throw new Error('No orders were created')
 
+      // Record IDs before opening Razorpay — if payment is dismissed or fails,
+      // the catch block will cancel these orders so they don't stay as ghost
+      // SELLER_SELECTED orders indefinitely.
+      pendingOrderIds.current = orderIds
+
       const intent = await createMultiPaymentIntent(orderIds)
       const rzp = await openRazorpay(intent)
       await verifyMultiPayment(orderIds, rzp)
 
+      pendingOrderIds.current = []
       navigate('/payment/success', { state: { orderIds, amount: productTotal }, replace: true })
     } catch (e) {
+      // Cancel any orders that were created but whose payment was not completed.
+      await cancelOrdersAfterPaymentFailure(pendingOrderIds.current)
+      pendingOrderIds.current = []
       setProcessing(false)
       navigate('/payment/failure', { state: { reason: getErrorMessage(e, 'Payment was not completed') }, replace: true })
     }
@@ -247,7 +261,7 @@ export function CheckoutPage() {
         </div>
       )}
 
-      <AddressSheet open={addressOpen} onOpenChange={setAddressOpen} />
+      <AddressOverlay open={addressOpen} onOpenChange={setAddressOpen} />
       {processing && <PaymentProcessing amount={processingTotal} />}
     </div>
   )
