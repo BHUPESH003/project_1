@@ -5,6 +5,7 @@ import { BottomNav } from './BottomNav'
 import { FloatingCartBar } from './FloatingCartBar'
 import { AddressOverlay } from '@/components/sheets/AddressOverlay'
 import { SearchOverlay } from '@/components/sheets/SearchOverlay'
+import { PushPermissionBanner } from '@/components/PushPermissionBanner'
 import { useAuthStore } from '@/stores/authStore'
 import { useAddressStore } from '@/stores/addressStore'
 import { useCart } from '@/api/hooks/useCart'
@@ -32,8 +33,7 @@ export function AppShell() {
   const address = useAddressStore((s) => s.selectedAddress)
   const [addressOpen, setAddressOpen] = useState(false)
 
-  // Subscribe browser to web push after auth
-  useWebPush()
+  const { permissionState, requestAndSubscribe } = useWebPush()
 
   // Auth gate.
   useEffect(() => {
@@ -50,6 +50,9 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
+      {permissionState === 'default' && (
+        <PushPermissionBanner onEnable={requestAndSubscribe} />
+      )}
       <Header onOpenAddress={() => setAddressOpen(true)} />
       <main className="relative flex-1">
         <Outlet />
