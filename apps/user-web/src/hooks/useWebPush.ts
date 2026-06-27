@@ -14,14 +14,20 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   return buf
 }
 
-const isSupported =
-  typeof window !== 'undefined' &&
+// Whether the browser can show notifications at all
+const notifSupported = typeof window !== 'undefined' && 'Notification' in window
+
+// Whether the browser can receive server-sent push (needs SW + PushManager + VAPID key)
+const pushSupported =
+  notifSupported &&
   'serviceWorker' in navigator &&
   'PushManager' in window &&
-  'Notification' in window
+  !!VAPID_PUBLIC_KEY
 
-async function subscribeAndRegister(): Promise<boolean> {
-  if (!isSupported || !VAPID_PUBLIC_KEY) return false
+// Registers the browser's PushSubscription with our backend.
+// Only called after permission is already granted.
+async function subscribeAndRegister(): Promise<void> {
+  if (!pushSupported || !VAPID_PUBLIC_KEY) return
   const registration = await navigator.serviceWorker.ready
   const existing = await registration.pushManager.getSubscription()
   const sub =
@@ -39,14 +45,14 @@ async function subscribeAndRegister(): Promise<boolean> {
     p256dhKey: keys.p256dh,
     authKey: keys.auth,
   })
-  return true
 }
 
 /**
  * Returns:
- *  - `permissionState` — current Notification.permission or 'unsupported'
- *  - `requestAndSubscribe` — call this from a user-gesture handler (button click)
- *    to show the browser permission dialog then subscribe
+ *  - `permissionState` — 'default' | 'granted' | 'denied' | 'unsupported'
+ *  - `requestAndSubscribe` — must be called from a user-click handler so the
+ *    browser accepts the permission prompt; always shows the OS dialog regardless
+ *    of whether the VAPID key is configured
  */
 export function useWebPush() {
   const isAuthed = useAuthStore((s) => s.isAuthenticated)
@@ -54,28 +60,27 @@ export function useWebPush() {
 
   const [permissionState, setPermissionState] = useState<
     NotificationPermission | 'unsupported'
-  >(() => {
-    if (!isSupported) return 'unsupported'
-    return Notification.permission
-  })
+  >(() => (notifSupported ? Notification.permission : 'unsupported'))
 
-  // Auto-subscribe silently when permission was already granted in a previous session
+  // Re-register silently on login when the user already granted permission before
   useEffect(() => {
     if (!isAuthed || autoSubscribed.current) return
-    if (!isSupported || !VAPID_PUBLIC_KEY) return
     if (Notification.permission !== 'granted') return
-
     autoSubscribed.current = true
     subscribeAndRegister().catch(() => {})
   }, [isAuthed])
 
-  // Call from a button click — shows the OS permission dialog, then subscribes
+  /**
+   * Trigger this from a button onClick.
+   * 1. Shows the native OS permission dialog (always, even without VAPID key).
+   * 2. If granted and VAPID is configured, registers the push subscription.
+   */
   const requestAndSubscribe = useCallback(async () => {
-    if (!isSupported || !VAPID_PUBLIC_KEY) return
+    if (!notifSupported) return
     const result = await Notification.requestPermission()
     setPermissionState(result)
     if (result === 'granted') {
-      await subscribeAndRegister().catch(() => {})
+      subscribeAndRegister().catch(() => {})
     }
   }, [])
 
