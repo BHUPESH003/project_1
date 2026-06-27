@@ -74,6 +74,17 @@ export function SellerAlertProvider({ isOnline }: { isOnline: boolean }) {
     }
   }, [paidOrders, isOnline, soundEnabled, triggerAlert])
 
+  // When a NEW_ORDER push arrives while this tab is open, the service worker
+  // posts to BroadcastChannel so we can play the chime without a polling cycle.
+  useEffect(() => {
+    if (!('BroadcastChannel' in window)) return
+    const ch = new BroadcastChannel('seller-push')
+    ch.onmessage = (e: MessageEvent<{ type: string }>) => {
+      if (e.data?.type === 'NEW_ORDER' && soundEnabled) playAlertChime()
+    }
+    return () => ch.close()
+  }, [soundEnabled])
+
   // Stop the title flash once the seller returns to the tab.
   useEffect(() => {
     function onVisible() {

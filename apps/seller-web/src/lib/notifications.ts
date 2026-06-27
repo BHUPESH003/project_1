@@ -17,23 +17,39 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
-/** Show a system notification for a new order (only useful when backgrounded). */
+/**
+ * Show a system notification for a new order.
+ * Uses the service worker registration when available (reliable in all browsers
+ * including when the tab is hidden); falls back to new Notification() for
+ * environments without a registered SW.
+ */
 export function showOrderNotification(body: string) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready
+      .then((reg) =>
+        reg.showNotification('🔔 New Order!', {
+          body,
+          icon: '/icon.svg',
+          tag: 'new-order',
+          renotify: true,
+          requireInteraction: true,
+        } as NotificationOptions),
+      )
+      .catch(() => {})
+    return
+  }
+
+  // Fallback (no SW yet — first load before SW activates)
   try {
     const n = new Notification('🔔 New Order!', {
       body,
       icon: '/icon.svg',
       tag: 'new-order',
-      renotify: true,
     } as NotificationOptions)
-    n.onclick = () => {
-      window.focus()
-      n.close()
-    }
-  } catch {
-    /* some browsers throw if constructed outside a SW — ignore */
-  }
+    n.onclick = () => { window.focus(); n.close() }
+  } catch { /* ignore */ }
 }
 
 /** Flash the tab title until cleared. */

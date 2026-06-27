@@ -262,14 +262,20 @@ export class OrderStateMachineService {
     triggeredBy: string,
     reason?: string,
   ): Promise<void> {
-    // Fetch userId + sellerId once; both are needed by multiple side effects.
+    // Fetch userId + seller once; both are needed by multiple side effects.
+    // sellerUserId is the seller's User-entity ID (needed for push-token lookup).
     let userId: string | undefined;
     let sellerId: string | undefined;
+    let sellerUserId: string | undefined;
 
     try {
       const order = await this.prisma.prisma.order.findUnique({
         where: { id: orderId },
-        select: { userId: true, sellerId: true },
+        select: {
+          userId: true,
+          sellerId: true,
+          seller: { select: { userId: true } },
+        },
       });
       if (!order) {
         this.logger.warn(
@@ -279,6 +285,7 @@ export class OrderStateMachineService {
       }
       userId = order.userId;
       sellerId = order.sellerId ?? undefined;
+      sellerUserId = order.seller?.userId ?? undefined;
     } catch (error) {
       this.logger.error(
         `Failed to fetch order ${orderId} context for side effects (${toState}):`,
@@ -295,7 +302,7 @@ export class OrderStateMachineService {
           fromState,
           toState,
           userId,
-          sellerId,
+          sellerUserId, // seller's User ID — needed for push-token lookup
           triggeredBy,
         );
       } catch (error) {

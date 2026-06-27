@@ -55,8 +55,21 @@ function chime() {
 /** Start the repeating alert chime (until {@link stopAlertChime}). */
 export function playAlertChime() {
   stopAlertChime()
-  chime()
-  loopTimer = setInterval(chime, 1500)
+  const ctx = getCtx()
+  if (!ctx) return
+
+  const start = () => {
+    chime()
+    loopTimer = setInterval(chime, 1500)
+  }
+
+  // AudioContext is auto-suspended when the tab loses focus. Resume it first
+  // so the chime plays even if the seller returns to a hidden tab.
+  if (ctx.state === 'suspended') {
+    void ctx.resume().then(start).catch(() => {})
+  } else {
+    start()
+  }
 }
 
 /** Silence the alert chime. */

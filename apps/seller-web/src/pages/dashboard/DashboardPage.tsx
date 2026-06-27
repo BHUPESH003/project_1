@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/api/client'
 import { toast } from '@/stores/toastStore'
 import { unlockAudio } from '@/lib/audio'
 import { requestNotificationPermission } from '@/lib/notifications'
+import { useWebPush } from '@/hooks/useWebPush'
 import { useAlertStore } from '@/stores/alertStore'
 import type { SellerOrderSummary } from '@/types/api'
 
@@ -62,6 +63,7 @@ export function DashboardPage() {
   const { data: seller } = useSellerProfile()
   const setStatus = useSetStatus()
   const setAudioUnlocked = useAlertStore((s) => s.setAudioUnlocked)
+  const { requestAndSubscribe } = useWebPush()
 
   const { data: orders, isLoading, error, refetch } = useSellerOrders(undefined, {
     pollMs: ACTIVE_POLL_MS,
@@ -105,9 +107,10 @@ export function DashboardPage() {
   async function toggleOnline(next: boolean) {
     try {
       if (next) {
-        // Unlock audio + notifications inside this user gesture.
+        // Unlock audio + notifications + push subscription inside this user gesture.
         setAudioUnlocked(unlockAudio())
         void requestNotificationPermission()
+        void requestAndSubscribe()
       }
       await setStatus.mutateAsync(next ? SellerStatus.ONLINE : SellerStatus.OFFLINE)
       toast.success(next ? "You're online — accepting orders" : "You're offline")
