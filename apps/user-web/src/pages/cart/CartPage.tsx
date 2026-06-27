@@ -16,7 +16,6 @@ import {
   verifyMultiPayment,
 } from "@/api/hooks/useCheckout";
 import { useCreateAddress } from "@/api/hooks/useUser";
-import { AddressOverlay } from "@/components/sheets/AddressOverlay";
 import { AddressCompleteSheet } from "@/components/sheets/AddressCompleteSheet";
 import { DeliveryOptionsSheet } from "@/components/sheets/DeliveryOptionsSheet";
 import { BillSummarySheet } from "@/components/sheets/BillSummarySheet";
@@ -25,6 +24,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { PaymentProcessing } from "@/pages/payment/PaymentProcessing";
 import { useAddressStore } from "@/stores/addressStore";
+import { useAddressOverlayStore } from "@/stores/addressOverlayStore";
 import { getErrorMessage } from "@/api/client";
 import { openRazorpay } from "@/lib/razorpay";
 import { assetUrl, minutes, money, toNum } from "@/lib/format";
@@ -68,6 +68,7 @@ export function CartPage() {
   const qc = useQueryClient();
   const address = useAddressStore((s) => s.selectedAddress);
   const setAddress = useAddressStore((s) => s.setAddress);
+  const openAddressOverlay = useAddressOverlayStore((s) => s.open);
   const createAddress = useCreateAddress();
   const ensuring = useRef(false);
 
@@ -146,7 +147,6 @@ export function CartPage() {
     payDeliveryOnline[sellerId] !== false;
 
   // ── Sheet state ───────────────────────────────────────────────────────────
-  const [addressOpen, setAddressOpen] = useState(false);
   const [addressCompleteOpen, setAddressCompleteOpen] = useState(false);
   const [deliverySeller, setDeliverySeller] =
     useState<CheckoutSellerSummary | null>(null);
@@ -189,7 +189,7 @@ export function CartPage() {
   async function pay(completedAddress?: SelectedAddress) {
     const addr = completedAddress ?? address;
     if (!addr?.id) {
-      setAddressOpen(true);
+      openAddressOverlay();
       return;
     }
     // If receiver name is missing, prompt for full delivery details first.
@@ -252,7 +252,7 @@ export function CartPage() {
       {!isEmpty && (
         <button
           type="button"
-          onClick={() => setAddressOpen(true)}
+          onClick={openAddressOverlay}
           className="mb-4 flex items-center gap-2.5 rounded-xl border border-border bg-surface-2 px-4 py-3 text-left tap"
         >
           <Icon name="mappin" size={16} className="shrink-0 text-primary" />
@@ -435,7 +435,7 @@ export function CartPage() {
                   {!address?.id ? (
                     <button
                       type="button"
-                      onClick={() => setAddressOpen(true)}
+                      onClick={openAddressOverlay}
                       className="flex items-center gap-1.5 text-caption text-text-3 tap"
                     >
                       <Icon name="truck" size={13} />
@@ -443,8 +443,7 @@ export function CartPage() {
                     </button>
                   ) : checkout.isLoading || createAddress.isPending ? (
                     <Skeleton className="h-4 w-48 rounded" />
-                  ) : !checkoutSeller ||
-                    checkoutSeller.deliveryOptions.length === 0 ? (
+                  ) : !checkoutSeller || checkoutSeller.deliveryOptions.length === 0 ? (
                     <p className="text-caption text-text-3">
                       No delivery quotes available — you can pay delivery
                       separately.
@@ -562,7 +561,6 @@ export function CartPage() {
       )}
 
       {/* Sheets */}
-      <AddressOverlay open={addressOpen} onOpenChange={setAddressOpen} />
       <AddressCompleteSheet
         open={addressCompleteOpen}
         onClose={() => setAddressCompleteOpen(false)}

@@ -69,20 +69,19 @@ export class FavoritesService {
       s3Region: region ?? undefined,
     };
 
+    // Return a flat Seller-shaped object so the client can use it directly
+    // in SellerCard without unwrapping a nested `seller` property.
     return rows.map((r) => ({
-      sellerId: r.sellerId,
-      createdAt: r.createdAt,
-      seller: {
-        id: r.seller.id,
-        shopName: r.seller.shopName,
-        address: r.seller.address,
-        status: r.seller.status,
-        imagePath: r.seller.imagePath,
-        imageUrl: buildAssetUrl(r.seller.imagePath, opt),
-        rating: r.seller.rating != null ? Number(r.seller.rating) : null,
-        latitude: r.seller.latitude,
-        longitude: r.seller.longitude,
-      },
+      id: r.seller.id,
+      shopName: r.seller.shopName,
+      address: r.seller.address,
+      status: r.seller.status,
+      imagePath: r.seller.imagePath,
+      imageUrl: buildAssetUrl(r.seller.imagePath, opt),
+      rating: r.seller.rating != null ? Number(r.seller.rating) : null,
+      latitude: r.seller.latitude,
+      longitude: r.seller.longitude,
+      isFavorite: true,
     }));
   }
 

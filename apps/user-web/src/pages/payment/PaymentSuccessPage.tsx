@@ -1,11 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Check, ChevronRight, Receipt } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Bell, Check, ChevronRight, Receipt, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { qk } from '@/lib/constants'
 import { money } from '@/lib/format'
+import { useWebPush } from '@/hooks/useWebPush'
 
 export function PaymentSuccessPage() {
   const navigate = useNavigate()
@@ -13,6 +14,9 @@ export function PaymentSuccessPage() {
   const qc = useQueryClient()
   const state = location.state as { orderIds?: string[]; amount?: number } | null
   const orderIds = state?.orderIds ?? []
+  const { permissionState, requestAndSubscribe } = useWebPush()
+  const [promptDismissed, setPromptDismissed] = useState(false)
+  const showNotifPrompt = permissionState === 'default' && !promptDismissed
 
   // Cart was cleared server-side on order placement — refresh local caches.
   useEffect(() => {
@@ -38,6 +42,43 @@ export function PaymentSuccessPage() {
       {state?.amount != null && (
         <p className="mt-1 text-title-lg font-bold text-success mono-num">{money(state.amount)} paid</p>
       )}
+
+      <AnimatePresence>
+        {showNotifPrompt && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="mt-6 w-full rounded-xl border border-primary/20 bg-primary-soft px-4 py-3 text-left"
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-white">
+                <Bell size={16} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-subhead font-semibold text-text">Stay updated on your order</p>
+                <p className="mt-0.5 text-caption text-text-2">Enable notifications so we can tell you when your order is accepted, prepared, and delivered.</p>
+                <button
+                  className="mt-2 text-caption font-semibold text-primary"
+                  onClick={async () => {
+                    await requestAndSubscribe()
+                    setPromptDismissed(true)
+                  }}
+                >
+                  Enable notifications
+                </button>
+              </div>
+              <button
+                className="shrink-0 text-text-3"
+                onClick={() => setPromptDismissed(true)}
+                aria-label="Dismiss"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {orderIds.length > 0 && (
         <div className="mt-6 w-full space-y-2">

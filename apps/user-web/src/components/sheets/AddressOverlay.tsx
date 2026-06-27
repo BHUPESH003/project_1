@@ -210,7 +210,7 @@ export function AddressOverlay({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 24 }}
                 transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-                className="fixed bottom-0 left-1/2 top-0 z-50 flex w-full max-w-107.5 -translate-x-1/2 flex-col bg-bg"
+                className="fixed bottom-0 left-1/2 top-0 z-100 flex w-full max-w-107.5 -translate-x-1/2 flex-col bg-bg"
               >
                 {step === 'list' && (
                   <ListStep

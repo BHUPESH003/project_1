@@ -31,24 +31,34 @@ export function unlockAudio(): boolean {
   return ctx.state !== 'suspended'
 }
 
-/** Play a single two-note chime. */
+/** Play a single three-note chime. */
 function chime() {
   const ctx = getCtx()
   if (!ctx || ctx.state === 'suspended') return
   const now = ctx.currentTime
-  const notes = [880, 1174.66] // A5 → D6
+
+  // Run all oscillators through a compressor so we can push gain without clipping.
+  const compressor = ctx.createDynamicsCompressor()
+  compressor.threshold.setValueAtTime(-6, now)
+  compressor.knee.setValueAtTime(3, now)
+  compressor.ratio.setValueAtTime(6, now)
+  compressor.attack.setValueAtTime(0.001, now)
+  compressor.release.setValueAtTime(0.15, now)
+  compressor.connect(ctx.destination)
+
+  const notes = [880, 1174.66, 1318.51] // A5 → D6 → E6 (bright major feel)
   notes.forEach((freq, i) => {
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'
     osc.frequency.value = freq
-    const start = now + i * 0.18
+    const start = now + i * 0.16
     gain.gain.setValueAtTime(0.0001, start)
-    gain.gain.exponentialRampToValueAtTime(0.5, start + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32)
-    osc.connect(gain).connect(ctx.destination)
+    gain.gain.exponentialRampToValueAtTime(0.9, start + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35)
+    osc.connect(gain).connect(compressor)
     osc.start(start)
-    osc.stop(start + 0.34)
+    osc.stop(start + 0.37)
   })
 }
 

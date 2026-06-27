@@ -65,27 +65,36 @@ self.addEventListener('push', (event) => {
 
   const isNewOrder = data.data?.type === 'NEW_ORDER'
 
-  event.waitUntil(
-    Promise.all([
-      self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: '/icon.svg',
-        badge: '/icon.svg',
-        tag: isNewOrder ? 'new-order' : 'seller-notif',
-        renotify: isNewOrder, // ring again even if a notification with same tag exists
-        requireInteraction: isNewOrder, // stay on screen until dismissed
-        data: data.data ?? {},
-      }),
-      // Wake any open seller tab so it can play the audio chime
-      isNewOrder
-        ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-            const ch = new BroadcastChannel('seller-push')
-            ch.postMessage({ type: 'NEW_ORDER', payload: data.data })
-            ch.close()
-          })
-        : Promise.resolve(),
-    ]),
-  )
+  event.waitUntil((async () => {
+    // Always show the notification so the OS makes a sound and it appears in the
+    // notification tray — this is also required before openWindow() can be called.
+    await self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: isNewOrder ? 'new-order' : 'seller-notif',
+      renotify: isNewOrder,
+      requireInteraction: isNewOrder,
+      data: data.data ?? {},
+    })
+
+    if (isNewOrder) {
+      // Wake any open seller tab for the in-app audio chime.
+      const ch = new BroadcastChannel('seller-push')
+      ch.postMessage({ type: 'NEW_ORDER', payload: data.data })
+      ch.close()
+
+      // Bring the seller app to the front so the seller sees the new order immediately.
+      const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      if (windowClients.length > 0) {
+        // App is already open — focus it.
+        await windowClients[0].focus()
+      } else {
+        // App is closed — open a new tab (allowed because we showed a notification above).
+        if (self.clients.openWindow) await self.clients.openWindow('/')
+      }
+    }
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

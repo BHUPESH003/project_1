@@ -17,8 +17,10 @@ import { OrderStatus } from '@repo/types';
  * Represents what notification should be sent
  */
 export interface NotificationIntent {
-  /** Notification type */
+  /** Delivery method */
   type: 'PUSH' | 'SMS' | 'BOTH';
+  /** Notification category — used to gate against user preferences */
+  category: 'ORDER_UPDATE' | 'MARKETING' | 'SYSTEM';
   /** Recipient user ID */
   userId: string;
   /** Notification title */
@@ -54,6 +56,7 @@ export function getNotificationIntents(
       if (sellerId) {
         intents.push({
           type: 'PUSH',
+          category: 'ORDER_UPDATE',
           userId: sellerId,
           title: 'New Order Received',
           body: `You have a new order #${orderId.substring(0, 8)}. Please accept or reject.`,
@@ -67,6 +70,7 @@ export function getNotificationIntents(
       // Notify user: Order confirmed
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Confirmed',
         body: `Your order #${orderId.substring(0, 8)} has been confirmed. Waiting for seller acceptance.`,
@@ -81,6 +85,7 @@ export function getNotificationIntents(
       // Notify user: Order accepted
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Accepted',
         body: `Your order #${orderId.substring(0, 8)} has been accepted by the seller.`,
@@ -95,6 +100,7 @@ export function getNotificationIntents(
       // Notify user: Seller is preparing the order
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Being Prepared',
         body: `Your order #${orderId.substring(0, 8)} is being prepared. We'll notify you when it's ready.`,
@@ -109,6 +115,7 @@ export function getNotificationIntents(
       // Notify user: Order rejected
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Rejected',
         body: `Your order #${orderId.substring(0, 8)} was rejected. You can select a different seller.`,
@@ -124,6 +131,7 @@ export function getNotificationIntents(
       // Notify user: Order ready
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Ready',
         body: `Your order #${orderId.substring(0, 8)} is ready for pickup. Delivery has been assigned.`,
@@ -138,6 +146,7 @@ export function getNotificationIntents(
       // Notify user: Order picked up
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Picked Up',
         body: `Your order #${orderId.substring(0, 8)} has been picked up and is on the way.`,
@@ -152,6 +161,7 @@ export function getNotificationIntents(
       // Notify user: Order delivered
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Delivered',
         body: `Your order #${orderId.substring(0, 8)} has been delivered successfully.`,
@@ -164,6 +174,7 @@ export function getNotificationIntents(
       if (sellerId) {
         intents.push({
           type: 'PUSH',
+          category: 'ORDER_UPDATE',
           userId: sellerId,
           title: 'Order Completed',
           body: `Order #${orderId.substring(0, 8)} has been delivered successfully.`,
@@ -179,6 +190,7 @@ export function getNotificationIntents(
       // Notify user: Order expired
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Order Expired',
         body: `Your order #${orderId.substring(0, 8)} has expired. You can create a new order.`,
@@ -198,6 +210,7 @@ export function getNotificationIntents(
       if (sellerId) {
         intents.push({
           type: 'PUSH',
+          category: 'ORDER_UPDATE',
           userId: sellerId,
           title: 'Order Cancelled',
           body: `Order #${orderId.substring(0, 8)} was cancelled by the customer.`,
@@ -213,6 +226,7 @@ export function getNotificationIntents(
       // Notify user: Delivery failed
       intents.push({
         type: 'PUSH',
+          category: 'ORDER_UPDATE',
         userId,
         title: 'Delivery Failed',
         body: `Delivery for order #${orderId.substring(0, 8)} failed. Please contact support.`,
@@ -226,6 +240,7 @@ export function getNotificationIntents(
       if (sellerId) {
         intents.push({
           type: 'PUSH',
+          category: 'ORDER_UPDATE',
           userId: sellerId,
           title: 'Delivery Failed',
           body: `Delivery for order #${orderId.substring(0, 8)} failed.`,

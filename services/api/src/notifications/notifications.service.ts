@@ -127,11 +127,32 @@ export class NotificationsService {
 
   async sendNotificationIntent(intent: {
     type: 'PUSH' | 'SMS' | 'BOTH';
+    category?: NotificationType;
     userId: string;
     title: string;
     body: string;
     data?: Record<string, unknown>;
   }): Promise<boolean> {
+    // Respect user notification preferences before sending.
+    if (intent.category === 'ORDER_UPDATE' || intent.category === 'MARKETING') {
+      try {
+        const user = await this.userRepository.findById(intent.userId);
+        if (user) {
+          if (intent.category === 'ORDER_UPDATE' && !user.notificationOrderUpdates) {
+            this.logger.log(`Skipping ORDER_UPDATE push for user ${intent.userId} (disabled)`);
+            return false;
+          }
+          if (intent.category === 'MARKETING' && !user.notificationPromotions) {
+            this.logger.log(`Skipping MARKETING push for user ${intent.userId} (disabled)`);
+            return false;
+          }
+        }
+      } catch (e) {
+        // Preference check failed — send anyway (fail-open for notifications)
+        this.logger.warn(`Could not read prefs for user ${intent.userId}, sending anyway`);
+      }
+    }
+
     let success = false;
     if (intent.type === 'PUSH' || intent.type === 'BOTH') {
       success = (await this.sendPushNotification(intent.userId, intent.title, intent.body, intent.data)) || success;

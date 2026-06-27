@@ -409,11 +409,13 @@ export class AdminController {
         dto.title,
         dto.body,
       );
-      await this.notificationsService.sendPushNotification(
-        dto.userId,
-        dto.title,
-        dto.body,
-      );
+      await this.notificationsService.sendNotificationIntent({
+        type: 'PUSH',
+        category: dto.type as 'ORDER_UPDATE' | 'MARKETING' | 'SYSTEM',
+        userId: dto.userId,
+        title: dto.title,
+        body: dto.body,
+      });
       return { sent: 1, target: 'user', userId: dto.userId };
     }
 
@@ -431,11 +433,13 @@ export class AdminController {
           dto.title,
           dto.body,
         );
-        await this.notificationsService.sendPushNotification(
-          u.id,
-          dto.title,
-          dto.body,
-        );
+        await this.notificationsService.sendNotificationIntent({
+          type: 'PUSH',
+          category: dto.type as 'ORDER_UPDATE' | 'MARKETING' | 'SYSTEM',
+          userId: u.id,
+          title: dto.title,
+          body: dto.body,
+        });
       }),
     );
 

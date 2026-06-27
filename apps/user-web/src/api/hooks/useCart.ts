@@ -55,11 +55,32 @@ export function useCartCount(): number {
 export function useAddToCart() {
   const qc = useQueryClient()
   return useMutation({
-    // The backend derives the seller from productId and rejects a `sellerId`
-    // field (forbidNonWhitelisted), so strip it from the request body.
     mutationFn: ({ productId, quantity, payload }: AddCartItemInput) =>
       apiPost<CartItem>('/cart/items', { productId, quantity, payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.cart }),
+
+    onMutate: async ({ productId, quantity = 1, payload, sellerId }) => {
+      await qc.cancelQueries({ queryKey: qk.cart })
+      const prev = qc.getQueryData<Cart>(qk.cart)
+      qc.setQueryData<Cart>(qk.cart, (old) => {
+        if (!old) return old
+        // Avoid duplicate temp items for the same product
+        if (old.items.some((i) => i.productId === productId)) return old
+        const tempItem: CartItem = {
+          id: `temp-${productId ?? Date.now()}`,
+          sellerId: sellerId ?? '',
+          productId: productId ?? null,
+          quantity,
+          payload: payload ?? {},
+          priceAtAdd: 0,
+        }
+        return { ...old, items: [...old.items, tempItem] }
+      })
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(qk.cart, ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
   })
 }
 
@@ -68,7 +89,27 @@ export function useUpdateCartItem() {
   return useMutation({
     mutationFn: ({ id, quantity, payload }: { id: string; quantity?: number; payload?: Record<string, unknown> }) =>
       apiPatch<CartItem>(`/cart/items/${id}`, { quantity, payload }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.cart }),
+
+    onMutate: async ({ id, quantity }) => {
+      await qc.cancelQueries({ queryKey: qk.cart })
+      const prev = qc.getQueryData<Cart>(qk.cart)
+      if (quantity !== undefined) {
+        qc.setQueryData<Cart>(qk.cart, (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            items: old.items.map((item) =>
+              item.id === id ? { ...item, quantity } : item,
+            ),
+          }
+        })
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(qk.cart, ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
   })
 }
 
@@ -76,7 +117,20 @@ export function useRemoveCartItem() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/cart/items/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.cart }),
+
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: qk.cart })
+      const prev = qc.getQueryData<Cart>(qk.cart)
+      qc.setQueryData<Cart>(qk.cart, (old) => {
+        if (!old) return old
+        return { ...old, items: old.items.filter((item) => item.id !== id) }
+      })
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(qk.cart, ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
   })
 }
 

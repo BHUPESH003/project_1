@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
@@ -8,6 +8,7 @@ import { SearchOverlay } from '@/components/sheets/SearchOverlay'
 import { PushPermissionBanner } from '@/components/PushPermissionBanner'
 import { useAuthStore } from '@/stores/authStore'
 import { useAddressStore } from '@/stores/addressStore'
+import { useAddressOverlayStore } from '@/stores/addressOverlayStore'
 import { useCart } from '@/api/hooks/useCart'
 import { useMultiCheckout } from '@/api/hooks/useCheckout'
 import { useWebPush } from '@/hooks/useWebPush'
@@ -31,7 +32,7 @@ export function AppShell() {
   const navigate = useNavigate()
   const isAuthed = useAuthStore((s) => s.isAuthenticated)
   const address = useAddressStore((s) => s.selectedAddress)
-  const [addressOpen, setAddressOpen] = useState(false)
+  const { isOpen: addressOpen, open: openAddress, close: closeAddress } = useAddressOverlayStore()
 
   const { permissionState, requestAndSubscribe } = useWebPush()
 
@@ -42,9 +43,8 @@ export function AppShell() {
 
   // Address-first discovery: force selection on first launch.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isAuthed && !address) setAddressOpen(true)
-  }, [isAuthed, address])
+    if (isAuthed && !address) openAddress()
+  }, [isAuthed, address, openAddress])
 
   if (!isAuthed) return null
 
@@ -53,13 +53,17 @@ export function AppShell() {
       {permissionState === 'default' && (
         <PushPermissionBanner onEnable={requestAndSubscribe} />
       )}
-      <Header onOpenAddress={() => setAddressOpen(true)} />
+      <Header onOpenAddress={openAddress} />
       <main className="relative flex-1">
         <Outlet />
       </main>
       <FloatingCartBar />
       <BottomNav />
-      <AddressOverlay open={addressOpen} onOpenChange={setAddressOpen} dismissible={!!address} />
+      <AddressOverlay
+        open={addressOpen}
+        onOpenChange={(o) => { if (!o) closeAddress() }}
+        dismissible={!!address}
+      />
       <SearchOverlay />
       <CheckoutPrefetcher />
     </div>

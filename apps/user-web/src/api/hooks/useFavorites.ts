@@ -11,9 +11,21 @@ export function useFavorites() {
     queryKey: qk.favorites,
     queryFn: async () => {
       const res = await apiGet<unknown>('/favorites')
-      if (Array.isArray(res)) return res as Seller[]
-      if (res && typeof res === 'object' && 'sellers' in res) return (res as { sellers: Seller[] }).sellers ?? []
-      return [] as Seller[]
+      const rows = Array.isArray(res)
+        ? res
+        : res && typeof res === 'object' && 'sellers' in res
+          ? (res as { sellers: unknown[] }).sellers ?? []
+          : []
+
+      // Backend returns { sellerId, seller: { id, shopName, ... } }[].
+      // Flatten to Seller[] so SellerCard gets the shape it expects.
+      return rows.map((r: unknown) => {
+        const row = r as Record<string, unknown>
+        const nested = row.seller as Partial<Seller> | undefined
+        // Already flat (future-proofing) or nested
+        const base = nested ?? (row as Partial<Seller>)
+        return { ...base, isFavorite: true } as Seller
+      })
     },
     enabled: isAuthed,
     staleTime: 60_000,
@@ -26,6 +38,53 @@ export function useToggleFavorite() {
   return useMutation({
     mutationFn: ({ sellerId, isFavorite }: { sellerId: string; isFavorite: boolean }) =>
       isFavorite ? apiDelete(`/favorites/${sellerId}`) : apiPost(`/favorites/${sellerId}`),
+
+    onMutate: async ({ sellerId, isFavorite }) => {
+      await qc.cancelQueries({ queryKey: qk.favorites })
+
+      const prevFavs = qc.getQueryData<Seller[]>(qk.favorites)
+
+      // Optimistically update the favorites list
+      qc.setQueryData<Seller[]>(qk.favorites, (old = []) => {
+        if (isFavorite) {
+          // Removing from favourites
+          return old.filter((s) => s.id !== sellerId)
+        } else {
+          // Adding — mark as favourite in the list if it's already there
+          const exists = old.some((s) => s.id === sellerId)
+          if (exists) return old.map((s) => (s.id === sellerId ? { ...s, isFavorite: true } : s))
+          return old
+        }
+      })
+
+      // Also flip isFavorite on any cached seller detail / seller list entries
+      for (const key of qc.getQueryCache().getAll()) {
+        const k = key.queryKey
+        if (
+          (Array.isArray(k) && (k[0] === 'sellers' || k[0] === 'seller')) ||
+          (Array.isArray(k) && k.includes('seller') && k.includes(sellerId))
+        ) {
+          qc.setQueryData(k, (old: unknown) => {
+            if (!old) return old
+            if (Array.isArray(old)) {
+              return (old as Seller[]).map((s) =>
+                s.id === sellerId ? { ...s, isFavorite: !isFavorite } : s,
+              )
+            }
+            const s = old as Seller
+            if (s.id === sellerId) return { ...s, isFavorite: !isFavorite }
+            return old
+          })
+        }
+      }
+
+      return { prevFavs }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevFavs !== undefined) qc.setQueryData(qk.favorites, ctx.prevFavs)
+    },
+
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.favorites })
       qc.invalidateQueries({ queryKey: ['sellers'] })

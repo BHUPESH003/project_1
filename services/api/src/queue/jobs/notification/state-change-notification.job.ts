@@ -102,7 +102,7 @@ export class StateChangeNotificationJob extends WorkerHost {
             intent.body,
             { orderId, data: intent.data },
           );
-          return notificationService.sendNotificationIntent(intent);
+          return notificationService.sendNotificationIntent({ ...intent, category: intent.category });
         }),
       );
 
